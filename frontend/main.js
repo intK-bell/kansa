@@ -34,6 +34,7 @@ const state = {
   openAccordions: new Set(),
   restoreScrollY: null,
   season: 'spring',
+  isUploading: false,
 };
 
 const SEASONS = new Set(['spring', 'summer', 'autumn', 'winter']);
@@ -275,6 +276,7 @@ const els = {
   folderDetailTitle: document.querySelector('#folder-detail-title'),
   photoFiles: document.querySelector('#photo-files'),
   uploadBtn: document.querySelector('#upload-btn'),
+  uploadLoading: document.querySelector('#upload-loading'),
   exportBtn: document.querySelector('#export-btn'),
   photoList: document.querySelector('#photo-list'),
   errorBox: document.querySelector('#error-box'),
@@ -342,6 +344,53 @@ function showToast(message) {
   }, 2500);
 }
 
+async function fetchMe() {
+  return api('/me', { method: 'GET' });
+}
+
+async function saveDisplayName(displayName) {
+  return api('/me/display-name', {
+    method: 'PUT',
+    body: JSON.stringify({ displayName }),
+  });
+}
+
+async function ensureDisplayName() {
+  const me = await fetchMe();
+  if (me.displayName) {
+    state.userName = me.displayName;
+    return;
+  }
+
+  while (true) {
+    const seeded = me.fallbackName || state.userName || '';
+    const next = window.prompt('表示名を入力してください。', seeded);
+    if (next === null) continue;
+    const displayName = next.trim();
+    if (!displayName) {
+      window.alert('表示名は必須です。');
+      continue;
+    }
+    await saveDisplayName(displayName);
+    state.userName = displayName;
+    showToast('表示名を設定しました。');
+    return;
+  }
+}
+
+function setUploadLoading(isLoading) {
+  state.isUploading = isLoading;
+  if (els.uploadBtn) {
+    els.uploadBtn.disabled = isLoading;
+  }
+  if (els.photoFiles) {
+    els.photoFiles.disabled = isLoading;
+  }
+  if (els.uploadLoading) {
+    els.uploadLoading.classList.toggle('hidden', !isLoading);
+  }
+}
+
 function asMessage(error) {
   if (!error) return 'unknown error';
   if (typeof error === 'string') return error;
@@ -389,6 +438,7 @@ async function initUser() {
     state.userKey = claims.sub;
     state.userName =
       claims['cognito:username'] || claims.name || claims.email || claims.preferred_username || 'unknown';
+    await ensureDisplayName();
     if (roomName && roomPassword) {
       state.roomName = roomName;
       state.roomPassword = roomPassword;
@@ -601,37 +651,43 @@ async function loadPhotos() {
 }
 
 async function uploadFiles() {
+  if (state.isUploading) return;
   const files = Array.from(els.photoFiles.files || []);
   if (!files.length) return;
 
-  for (const file of files) {
-    const up = await api(`/folders/${state.selectedFolder.folderId}/photos/upload-url`, {
-      method: 'POST',
-      body: JSON.stringify({ fileName: file.name, contentType: file.type || 'image/jpeg' }),
-    });
-
-    let putRes;
-    try {
-      putRes = await fetch(up.uploadUrl, {
-        method: 'PUT',
-        headers: { 'content-type': file.type || 'image/jpeg' },
-        body: file,
+  setUploadLoading(true);
+  try {
+    for (const file of files) {
+      const up = await api(`/folders/${state.selectedFolder.folderId}/photos/upload-url`, {
+        method: 'POST',
+        body: JSON.stringify({ fileName: file.name, contentType: file.type || 'image/jpeg' }),
       });
-    } catch (error) {
-      throw new Error(`画像アップロード通信エラー: ${asMessage(error)}`);
-    }
-    if (!putRes.ok) {
-      throw new Error(`画像アップロード失敗(${putRes.status})`);
+
+      let putRes;
+      try {
+        putRes = await fetch(up.uploadUrl, {
+          method: 'PUT',
+          headers: { 'content-type': file.type || 'image/jpeg' },
+          body: file,
+        });
+      } catch (error) {
+        throw new Error(`画像アップロード通信エラー: ${asMessage(error)}`);
+      }
+      if (!putRes.ok) {
+        throw new Error(`画像アップロード失敗(${putRes.status})`);
+      }
+
+      await api(`/folders/${state.selectedFolder.folderId}/photos`, {
+        method: 'POST',
+        body: JSON.stringify({ photoId: up.photoId, s3Key: up.s3Key, fileName: file.name }),
+      });
     }
 
-    await api(`/folders/${state.selectedFolder.folderId}/photos`, {
-      method: 'POST',
-      body: JSON.stringify({ photoId: up.photoId, s3Key: up.s3Key, fileName: file.name }),
-    });
+    els.photoFiles.value = '';
+    await loadPhotos();
+  } finally {
+    setUploadLoading(false);
   }
-
-  els.photoFiles.value = '';
-  await loadPhotos();
 }
 
 async function loadComments(photoId) {
@@ -852,10 +908,27 @@ if (els.signupBtn) {
 }
 
 if (els.resetUserBtn) {
-  els.resetUserBtn.onclick = () => {
-    showToast('ユーザー名変更はCognito側で管理してください。');
+  els.resetUserBtn.onclick = safeAction(async () => {
+    const current = state.userName || '';
+    const next = window.prompt('新しい表示名を入力してください。', current);
+    if (next === null) {
+      closeMenu();
+      return;
+    }
+    const displayName = next.trim();
+    if (!displayName) {
+      window.alert('表示名は必須です。');
+      closeMenu();
+      return;
+    }
+    await saveDisplayName(displayName);
+    state.userName = displayName;
+    if (els.currentName) {
+      els.currentName.textContent = state.userName;
+    }
+    showToast('表示名を更新しました。');
     closeMenu();
-  };
+  }, 'ユーザー名変更');
 }
 
 if (els.logoutBtn) {
@@ -971,7 +1044,10 @@ els.createFolderBtn.onclick = safeAction(async () => {
   await selectFolderById(created.folderId);
 }, 'フォルダ作成');
 
-els.uploadBtn.onclick = safeAction(uploadFiles, '写真アップロード');
+els.uploadBtn.onclick = safeAction(async () => {
+  if (state.isUploading) return;
+  await uploadFiles();
+}, '写真アップロード');
 
 els.exportBtn.onclick = safeAction(async () => {
   if (!state.selectedFolder) return;

@@ -34,6 +34,22 @@ Parameters:
     Type: String
     Default: https://main.dn65vena62q5z.amplifyapp.com
     Description: Cognito app client logout URL
+  CognitoLocalCallbackUrl:
+    Type: String
+    Default: http://localhost:5173
+    Description: Local development callback URL
+  CognitoLocalLogoutUrl:
+    Type: String
+    Default: http://localhost:5173
+    Description: Local development logout URL
+  CognitoLocalCallbackUrlAlt:
+    Type: String
+    Default: http://127.0.0.1:5173
+    Description: Alternate local development callback URL
+  CognitoLocalLogoutUrlAlt:
+    Type: String
+    Default: http://127.0.0.1:5173
+    Description: Alternate local development logout URL
 
 Resources:
   UserPool:
@@ -76,8 +92,12 @@ Resources:
         - profile
       CallbackURLs:
         - !Ref CognitoCallbackUrl
+        - !Ref CognitoLocalCallbackUrl
+        - !Ref CognitoLocalCallbackUrlAlt
       LogoutURLs:
         - !Ref CognitoLogoutUrl
+        - !Ref CognitoLocalLogoutUrl
+        - !Ref CognitoLocalLogoutUrlAlt
       ExplicitAuthFlows:
         - ALLOW_REFRESH_TOKEN_AUTH
         - ALLOW_USER_SRP_AUTH
@@ -211,6 +231,18 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /rooms/enter
             Method: POST
+        GetMe:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /me
+            Method: GET
+        UpdateDisplayName:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /me/display-name
+            Method: PUT
         ListPhotos:
           Type: HttpApi
           Properties:

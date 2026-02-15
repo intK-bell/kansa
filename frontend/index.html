@@ -29,20 +29,22 @@
               <option value="winter">冬</option>
             </select>
             <button id="toggle-theme-btn" type="button">ダークモード切替</button>
-            <button id="logout-btn" type="button" class="danger">ログアウト</button>
             <button id="reset-user-btn" type="button">ユーザー名変更</button>
-            <button id="leave-room-btn" type="button" class="danger">退室</button>
+            <button id="leave-room-btn" type="button" class="danger">退出</button>
+            <button id="logout-btn" type="button" class="danger">ログアウト</button>
           </div>
         </div>
       </div>
 
       <section id="user-setup" class="card hidden">
-        <h2>サインイン</h2>
-        <p>Cognitoでログインしてください。</p>
         <div class="row">
           <button id="login-btn">ログイン</button>
           <button id="signup-btn" type="button">新規登録</button>
         </div>
+        <p class="auth-footnote">
+          ※ 本アプリの多要素認証は汎用の認証アプリを使用します。<br />
+          新規登録前に、 Microsoft Authenticator / Google Authenticatorなどをインストールください。
+        </p>
       </section>
 
       <section id="room-setup" class="card hidden">
@@ -95,6 +97,7 @@
           <div class="row">
             <input id="photo-files" type="file" accept="image/*" multiple />
             <button id="upload-btn">複数アップロード</button>
+            <span id="upload-loading" class="upload-loading hidden">アップロード中...</span>
             <button id="export-btn">PowerPoint出力</button>
           </div>
           <div id="photo-list" class="photo-grid"></div>
@@ -104,6 +107,6 @@
 
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
     <script src="./config.js?v=20260215-1"></script>
-    <script src="./main.js?v=20260215-2" type="module"></script>
+    <script src="./main.js?v=20260215-3" type="module"></script>
   </body>
 </html>

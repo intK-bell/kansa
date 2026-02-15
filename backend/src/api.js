@@ -40,27 +40,97 @@ function auditLog(entry) {
   );
 }
 
-function getUser(event) {
+function getUserIdentity(event) {
   const claims = event?.requestContext?.authorizer?.jwt?.claims || null;
   if (claims && claims.sub) {
-    const userName =
+    const fallbackName =
       claims['cognito:username'] || claims.name || claims.email || claims.preferred_username || 'unknown';
-    return { userKey: claims.sub, userName };
+    return { userKey: claims.sub, fallbackName, fromCognito: true };
   }
 
   const headers = event.headers || {};
   const userKey = headers['x-user-key'] || headers['X-User-Key'];
   const rawUserName = headers['x-user-name'] || headers['X-User-Name'] || 'unknown';
-  let userName = rawUserName;
+  let fallbackName = rawUserName;
   try {
-    userName = decodeURIComponent(rawUserName);
+    fallbackName = decodeURIComponent(rawUserName);
   } catch (_) {
-    userName = rawUserName;
+    fallbackName = rawUserName;
   }
   if (!userKey) {
     throw new Error('MISSING_USER_KEY');
   }
-  return { userKey, userName };
+  return { userKey, fallbackName, fromCognito: false };
+}
+
+function normalizeDisplayName(rawValue) {
+  const value = String(rawValue || '').trim();
+  if (!value) return '';
+  if (value.length > 40) throw new Error('INVALID_DISPLAY_NAME_LENGTH');
+  return value;
+}
+
+async function ensureUserProfile(identity) {
+  const key = { PK: `USER#${identity.userKey}`, SK: 'PROFILE' };
+  const existingRes = await ddb.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: key,
+    })
+  );
+  if (existingRes.Item) return existingRes.Item;
+
+  const now = new Date().toISOString();
+  const newItem = {
+    ...key,
+    type: 'user_profile',
+    userKey: identity.userKey,
+    displayName: '',
+    cognitoName: identity.fallbackName || '',
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  try {
+    await ddb.send(
+      new PutCommand({
+        TableName: TABLE_NAME,
+        Item: newItem,
+        ConditionExpression: 'attribute_not_exists(PK) and attribute_not_exists(SK)',
+      })
+    );
+    return newItem;
+  } catch (_) {
+    const retryRes = await ddb.send(
+      new GetCommand({
+        TableName: TABLE_NAME,
+        Key: key,
+      })
+    );
+    return retryRes.Item || newItem;
+  }
+}
+
+async function getUser(event) {
+  const identity = getUserIdentity(event);
+  if (!identity.fromCognito) {
+    return {
+      userKey: identity.userKey,
+      userName: identity.fallbackName || 'unknown',
+      displayName: identity.fallbackName || '',
+      fallbackName: identity.fallbackName || 'unknown',
+    };
+  }
+
+  const profile = await ensureUserProfile(identity);
+  const displayName = normalizeDisplayName(profile.displayName || '');
+  const fallbackName = identity.fallbackName || 'unknown';
+  return {
+    userKey: identity.userKey,
+    userName: displayName || fallbackName,
+    displayName,
+    fallbackName,
+  };
 }
 
 function decodeText(value) {
@@ -192,6 +262,50 @@ async function enterRoom(event) {
   const roomPassword = (body.roomPassword || '').trim();
   const room = await resolveRoom(roomName, roomPassword);
   return json(200, room);
+}
+
+async function getMe(user) {
+  return json(200, {
+    userKey: user.userKey,
+    displayName: user.displayName || '',
+    fallbackName: user.fallbackName || user.userName || 'unknown',
+  });
+}
+
+async function updateDisplayName(event, user, ctx) {
+  const body = JSON.parse(event.body || '{}');
+  const displayName = normalizeDisplayName(body.displayName || '');
+  if (!displayName) return badRequest('displayName is required');
+
+  const now = new Date().toISOString();
+  await ddb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `USER#${user.userKey}`, SK: 'PROFILE' },
+      UpdateExpression:
+        'SET #type = if_not_exists(#type, :type), userKey = if_not_exists(userKey, :userKey), displayName = :displayName, updatedAt = :updatedAt, createdAt = if_not_exists(createdAt, :createdAt), cognitoName = if_not_exists(cognitoName, :cognitoName)',
+      ExpressionAttributeNames: {
+        '#type': 'type',
+      },
+      ExpressionAttributeValues: {
+        ':type': 'user_profile',
+        ':userKey': user.userKey,
+        ':displayName': displayName,
+        ':updatedAt': now,
+        ':createdAt': now,
+        ':cognitoName': user.fallbackName || '',
+      },
+    })
+  );
+
+  auditLog({
+    requestId: ctx.requestId,
+    action: 'user.display_name.update',
+    actor: user.userKey,
+    actorName: displayName,
+    result: 'success',
+  });
+  return json(200, { ok: true, displayName });
 }
 
 async function listFolders(room) {
@@ -759,11 +873,14 @@ exports.handler = async (event) => {
     const isRoomCreate = method === 'POST' && path === '/rooms/create';
     const isRoomEnter = method === 'POST' && path === '/rooms/enter';
     let room = null;
-    const user = getUser(event);
+    const user = await getUser(event);
 
     const p = event.pathParameters || {};
     const body = event.body ? JSON.parse(event.body) : {};
     const ctx = { requestId: event.requestContext?.requestId || null };
+
+    if (method === 'GET' && path === '/me') return await getMe(user);
+    if (method === 'PUT' && path === '/me/display-name') return await updateDisplayName(event, user, ctx);
 
     if (isRoomCreate) return await createRoom(event, user, ctx);
     if (isRoomEnter) return await enterRoom(event);
@@ -828,6 +945,9 @@ exports.handler = async (event) => {
     }
     if (error.message === 'INVALID_ROOM') {
       return json(403, { message: 'invalid room credentials' });
+    }
+    if (error.message === 'INVALID_DISPLAY_NAME_LENGTH') {
+      return badRequest('displayName must be 40 characters or fewer');
     }
     console.error(error);
     return json(500, { message: 'internal server error' });
