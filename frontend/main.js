@@ -19,7 +19,7 @@ const COGNITO_DOMAIN = normalizeCognitoDomain(
 const COGNITO_CLIENT_ID =
   window.localStorage.getItem('kansa_cognito_client_id') || APP_CONFIG.cognitoClientId || '';
 const COGNITO_REDIRECT_URI =
-  window.localStorage.getItem('kansa_cognito_redirect_uri') || APP_CONFIG.cognitoRedirectUri || window.location.origin;
+  APP_CONFIG.cognitoRedirectUri || window.localStorage.getItem('kansa_cognito_redirect_uri') || window.location.origin;
 
 const state = {
   userKey: null,
@@ -112,11 +112,22 @@ function clearAuth() {
   state.userName = null;
 }
 
+function supportsPkce() {
+  return Boolean(window.crypto && window.crypto.subtle && typeof window.crypto.subtle.digest === 'function');
+}
+
 function randomString(length = 64) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
-  const bytes = new Uint8Array(length);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => chars[b % chars.length]).join('');
+  if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
+    const bytes = new Uint8Array(length);
+    window.crypto.getRandomValues(bytes);
+    return Array.from(bytes, (b) => chars[b % chars.length]).join('');
+  }
+  let out = '';
+  for (let i = 0; i < length; i += 1) {
+    out += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return out;
 }
 
 async function sha256(text) {
@@ -139,18 +150,24 @@ async function startLogin() {
     throw new Error('Cognito設定が不足しています。config.jsを確認してください。');
   }
   const stateVal = randomString(32);
-  const verifier = randomString(64);
-  const challenge = base64UrlEncode(await sha256(verifier));
   localStorage.setItem('kansa_oauth_state', stateVal);
-  localStorage.setItem('kansa_oauth_code_verifier', verifier);
   const authUrl = new URL(`https://${COGNITO_DOMAIN}.auth.${COGNITO_REGION}.amazoncognito.com/oauth2/authorize`);
+  const usePkceHash = supportsPkce();
   authUrl.searchParams.set('response_type', 'code');
   authUrl.searchParams.set('client_id', COGNITO_CLIENT_ID);
   authUrl.searchParams.set('redirect_uri', COGNITO_REDIRECT_URI);
   authUrl.searchParams.set('scope', 'openid email profile');
   authUrl.searchParams.set('state', stateVal);
-  authUrl.searchParams.set('code_challenge_method', 'S256');
-  authUrl.searchParams.set('code_challenge', challenge);
+  const verifier = randomString(64);
+  localStorage.setItem('kansa_oauth_code_verifier', verifier);
+  if (usePkceHash) {
+    const challenge = base64UrlEncode(await sha256(verifier));
+    authUrl.searchParams.set('code_challenge_method', 'S256');
+    authUrl.searchParams.set('code_challenge', challenge);
+  } else {
+    authUrl.searchParams.set('code_challenge_method', 'plain');
+    authUrl.searchParams.set('code_challenge', verifier);
+  }
   window.location.href = authUrl.toString();
 }
 
@@ -159,17 +176,23 @@ async function startSignup() {
     throw new Error('Cognito設定が不足しています。config.jsを確認してください。');
   }
   const stateVal = randomString(32);
-  const verifier = randomString(64);
   localStorage.setItem('kansa_oauth_state', stateVal);
-  localStorage.setItem('kansa_oauth_code_verifier', verifier);
   const signupUrl = new URL(`https://${COGNITO_DOMAIN}.auth.${COGNITO_REGION}.amazoncognito.com/signup`);
+  const usePkceHash = supportsPkce();
   signupUrl.searchParams.set('state', stateVal);
   signupUrl.searchParams.set('client_id', COGNITO_CLIENT_ID);
   signupUrl.searchParams.set('response_type', 'code');
   signupUrl.searchParams.set('scope', 'openid email profile');
   signupUrl.searchParams.set('redirect_uri', COGNITO_REDIRECT_URI);
-  signupUrl.searchParams.set('code_challenge_method', 'S256');
-  signupUrl.searchParams.set('code_challenge', base64UrlEncode(await sha256(verifier)));
+  const verifier = randomString(64);
+  localStorage.setItem('kansa_oauth_code_verifier', verifier);
+  if (usePkceHash) {
+    signupUrl.searchParams.set('code_challenge_method', 'S256');
+    signupUrl.searchParams.set('code_challenge', base64UrlEncode(await sha256(verifier)));
+  } else {
+    signupUrl.searchParams.set('code_challenge_method', 'plain');
+    signupUrl.searchParams.set('code_challenge', verifier);
+  }
   window.location.href = signupUrl.toString();
 }
 
@@ -271,9 +294,6 @@ function setMenuActionVisibility(showActions) {
   if (els.leaveRoomBtn) {
     els.leaveRoomBtn.classList.toggle('hidden', !showActions);
   }
-  if (els.logoutBtn) {
-    els.logoutBtn.classList.toggle('hidden', !showActions);
-  }
 }
 
 function showError(message) {
@@ -350,6 +370,8 @@ function preserveCurrentView(photoId) {
 async function initUser() {
   initTheme();
   setMenuActionVisibility(false);
+  if (els.logoutBtn) els.logoutBtn.classList.add('hidden');
+  if (els.globalMenuWrap) els.globalMenuWrap.classList.add('hidden');
   if (!hasCognitoConfig()) {
     if (els.userSetup) els.userSetup.classList.remove('hidden');
     showError('Cognito設定が不足しています。config.jsにdomain/clientId/regionを設定してください。');
@@ -384,7 +406,13 @@ function showRoomSetup() {
   els.userSetup.classList.add('hidden');
   if (els.roomSetup) els.roomSetup.classList.remove('hidden');
   els.app.classList.add('hidden');
-  if (els.globalMenuWrap) els.globalMenuWrap.classList.add('hidden');
+  if (state.userKey) {
+    if (els.globalMenuWrap) els.globalMenuWrap.classList.remove('hidden');
+    if (els.logoutBtn) els.logoutBtn.classList.remove('hidden');
+  } else {
+    if (els.globalMenuWrap) els.globalMenuWrap.classList.add('hidden');
+    if (els.logoutBtn) els.logoutBtn.classList.add('hidden');
+  }
   setMenuActionVisibility(false);
   closeMenu();
 }
@@ -395,6 +423,7 @@ function showApp() {
   els.app.classList.remove('hidden');
   if (els.globalMenuWrap) els.globalMenuWrap.classList.remove('hidden');
   setMenuActionVisibility(true);
+  if (els.logoutBtn) els.logoutBtn.classList.remove('hidden');
   closeMenu();
   els.currentName.textContent = state.userName;
   if (els.currentRoom) els.currentRoom.textContent = state.roomName || '-';
