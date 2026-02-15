@@ -24,7 +24,7 @@ Parameters:
     Description: API Gateway default route burst limit
   CognitoDomainPrefix:
     Type: String
-    Default: photohub4kansa-auth-478860598832
+    Default: photohub4kansa
     Description: Unique Cognito hosted UI domain prefix
   CognitoCallbackUrl:
     Type: String
