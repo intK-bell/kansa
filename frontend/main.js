@@ -1435,7 +1435,7 @@ if (els.leaveRoomBtn) {
     try {
       const me = await api('/team/me', { method: 'GET' });
       if (me && me.isAdmin) {
-        window.alert('管理者は退出できません。チーム管理から「お部屋を削除（全データ）」を実行してください。');
+        window.alert('管理者は退出できません。お部屋管理から「お部屋を削除（全データ）」を実行してください。');
         closeMenu();
         return;
       }
@@ -1532,7 +1532,7 @@ if (els.teamAdminBtn && els.teamAdminCard) {
     closeMenu();
     setTeamAdminMode(!els.teamAdminCard.classList.contains('hidden'));
     await loadAdminPanel();
-  }, 'チーム管理');
+  }, 'お部屋管理');
 }
 
 if (els.teamAdminBackBtn && els.teamAdminCard) {
