@@ -15,3 +15,4 @@ confirm_changeset = false
 resolve_s3 = true
 s3_prefix = "kansa-backend"
 no_fail_on_empty_changeset = true
+parameter_overrides = "StripePrice1gbm=price_1T14PeQ3IwbMVZymWI18G04w StripePrice10gbm=price_1T14QoQ3IwbMVZymSvHMJ9HG StripePrice50gbm=price_1T14RSQ3IwbMVZymFTRxMzjI StripeCheckoutSuccessUrl=https://main.dn65vena62q5z.amplifyapp.com StripeCheckoutCancelUrl=https://main.dn65vena62q5z.amplifyapp.com"

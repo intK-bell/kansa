@@ -27,6 +27,12 @@ const state = {
   idToken: null,
   roomName: null,
   roomPassword: null,
+  teamRole: null,
+  isAdmin: false,
+  uploadBlocked: false,
+  billing: null,
+  ownerUserKey: null,
+  folderPasswordById: {},
   folders: [],
   folderUnreadMap: {},
   selectedFolder: null,
@@ -280,13 +286,26 @@ const els = {
   toggleThemeBtn: document.querySelector('#toggle-theme-btn'),
   seasonSelect: document.querySelector('#season-select'),
   resetUserBtn: document.querySelector('#reset-user-btn'),
+  teamAdminBtn: document.querySelector('#team-admin-btn'),
+  teamAdminCard: document.querySelector('#team-admin'),
+  billingBar: document.querySelector('#billing-bar'),
+  billingStatus: document.querySelector('#billing-status'),
+  purchase1Btn: document.querySelector('#purchase-1gbm'),
+  purchase10Btn: document.querySelector('#purchase-10gbm'),
+  purchase50Btn: document.querySelector('#purchase-50gbm'),
+  deleteTeamBtn: document.querySelector('#delete-team-btn'),
+  memberList: document.querySelector('#member-list'),
+  folderDeleteBtn: document.querySelector('#delete-folder-btn'),
   currentName: document.querySelector('#current-name'),
   currentRoom: document.querySelector('#current-room'),
   folderTitle: document.querySelector('#folder-title'),
+  folderPassword: document.querySelector('#folder-password'),
   createFolderBtn: document.querySelector('#create-folder-btn'),
   folderSelect: document.querySelector('#folder-select'),
   folderDetail: document.querySelector('#folder-detail'),
   folderDetailTitle: document.querySelector('#folder-detail-title'),
+  folderPasswordSet: document.querySelector('#folder-password-set'),
+  setFolderPasswordBtn: document.querySelector('#set-folder-password-btn'),
   photoFiles: document.querySelector('#photo-files'),
   uploadBtn: document.querySelector('#upload-btn'),
   uploadLoading: document.querySelector('#upload-loading'),
@@ -321,6 +340,55 @@ function clearError() {
   if (!els.errorBox) return;
   els.errorBox.textContent = '';
   els.errorBox.classList.add('hidden');
+}
+
+function formatBytes(bytes) {
+  const n = Number(bytes || 0);
+  const mib = 1024 * 1024;
+  const gib = 1024 * 1024 * 1024;
+  if (n >= gib) return `${(n / gib).toFixed(2)}GB`;
+  return `${Math.round(n / mib)}MB`;
+}
+
+function renderBillingBar() {
+  if (!els.billingBar) return;
+  if (!state.roomName || !state.billing) {
+    els.billingBar.classList.add('hidden');
+    els.billingBar.textContent = '';
+    return;
+  }
+
+  const b = state.billing;
+  const usage = formatBytes(b.usageBytes);
+  const free = formatBytes(b.freeBytes);
+  const freeRemainBytes = Math.max(0, Number(b.freeBytes || 0) - Number(b.usageBytes || 0));
+  const freeRemain = formatBytes(freeRemainBytes);
+  const gbm = Number(b.gbMonthEquivalent || 0).toFixed(2);
+  const days = b.estimatedDaysLeft === null ? '-' : Math.max(0, b.estimatedDaysLeft).toFixed(1);
+  const blocked = state.uploadBlocked;
+
+  const parts = [];
+  parts.push(`使用量: ${usage} / 無料: ${free}（残り ${freeRemain}）`);
+  parts.push(`追加残り: ${gbm} GB・月 相当`);
+  parts.push(`推定: ${days} 日`);
+  if (state.ownerUserKey && state.userKey) {
+    parts.push(state.ownerUserKey === state.userKey ? '作成者' : '参加者');
+  }
+  if (blocked) parts.push('アップロード停止中（残量不足）');
+  if (!blocked && Number(b.gbMonthEquivalent || 0) <= 0 && freeRemainBytes > 0) parts.push('無料枠で利用中');
+  if (state.isAdmin) parts.push('管理者');
+
+  els.billingBar.textContent = parts.join(' / ');
+  els.billingBar.classList.remove('hidden');
+}
+
+function setAdminUiVisibility() {
+  if (els.teamAdminBtn) els.teamAdminBtn.classList.toggle('hidden', !state.isAdmin);
+  if (els.folderDeleteBtn) els.folderDeleteBtn.classList.toggle('hidden', !state.isAdmin);
+  if (els.setFolderPasswordBtn) els.setFolderPasswordBtn.classList.toggle('hidden', !state.isAdmin);
+  if (!state.isAdmin) {
+    if (els.teamAdminCard) els.teamAdminCard.classList.add('hidden');
+  }
 }
 
 function applyTheme(theme) {
@@ -489,6 +557,9 @@ function showApp() {
   closeMenu();
   els.currentName.textContent = state.userName;
   if (els.currentRoom) els.currentRoom.textContent = state.roomName || '-';
+  loadTeamMe().then(() => {
+    if (els.uploadBtn) els.uploadBtn.disabled = Boolean(state.uploadBlocked);
+  });
   loadFolders();
 }
 
@@ -513,6 +584,12 @@ function headers(method = 'GET') {
     'x-user-name': safeUserName,
     ...roomHeaders,
   };
+}
+
+function folderPasswordHeader(folderId) {
+  const pw = state.folderPasswordById[folderId];
+  if (!pw) return {};
+  return { 'x-folder-password': encodeURIComponent(pw) };
 }
 
 async function api(path, options = {}) {
@@ -543,6 +620,82 @@ async function api(path, options = {}) {
   }
 
   return res.json();
+}
+
+async function loadTeamMe() {
+  try {
+    const data = await api('/team/me', { method: 'GET' });
+    state.teamRole = data.role || 'member';
+    state.isAdmin = Boolean(data.isAdmin);
+    state.uploadBlocked = Boolean(data.uploadBlocked);
+    state.billing = data.billing || null;
+    state.ownerUserKey = data.ownerUserKey || null;
+  } catch (error) {
+    // Keep the UI usable, but don't hide the failure.
+    showError(`チーム情報取得失敗: ${asMessage(error)}（バックエンド/フロントのデプロイ差分やキャッシュの可能性）`);
+    state.teamRole = null;
+    state.isAdmin = false;
+    state.uploadBlocked = false;
+    state.billing = null;
+    state.ownerUserKey = null;
+  }
+  setAdminUiVisibility();
+  renderBillingBar();
+}
+
+async function loadAdminPanel() {
+  if (!state.isAdmin) return;
+  if (!els.teamAdminCard || els.teamAdminCard.classList.contains('hidden')) return;
+
+  try {
+    const members = await api('/team/members', { method: 'GET' });
+    const items = members.items || [];
+    if (els.memberList) {
+      els.memberList.innerHTML = '';
+      if (!items.length) {
+        els.memberList.appendChild(el('div', { class: 'muted' }, 'メンバーがなかです'));
+      } else {
+        items.forEach((m) => {
+          const row = el('div', { class: 'member-row' });
+          const left = el('div', {}, `${m.userKey} / ${m.role} / ${m.status}`);
+          row.appendChild(left);
+
+          const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
+          const toggleBtn = el(
+            'button',
+            { type: 'button', class: m.status === 'disabled' ? '' : 'danger' },
+            m.status === 'disabled' ? '有効化' : '無効化'
+          );
+          toggleBtn.onclick = safeAction(async () => {
+            const nextStatus = m.status === 'disabled' ? 'active' : 'disabled';
+            await api(`/team/members/${encodeURIComponent(m.userKey)}`, {
+              method: 'PUT',
+              body: JSON.stringify({ status: nextStatus }),
+            });
+            await loadAdminPanel();
+          }, 'メンバー更新');
+          actions.appendChild(toggleBtn);
+          row.appendChild(actions);
+          els.memberList.appendChild(row);
+        });
+      }
+    }
+  } catch (error) {
+    if (els.memberList) {
+      els.memberList.innerHTML = '';
+      els.memberList.appendChild(el('div', { class: 'muted' }, `メンバー取得失敗: ${asMessage(error)}`));
+    }
+  }
+
+  if (els.billingStatus && state.billing) {
+    const b = state.billing;
+    const freeRemainBytes = Math.max(0, Number(b.freeBytes || 0) - Number(b.usageBytes || 0));
+    els.billingStatus.textContent = `使用量 ${formatBytes(b.usageBytes)} / 無料 ${formatBytes(
+      b.freeBytes
+    )}（残り ${formatBytes(freeRemainBytes)}） / 追加残り ${Number(
+      b.gbMonthEquivalent || 0
+    ).toFixed(2)} GB・月 相当 / 推定 ${b.estimatedDaysLeft === null ? '-' : Math.max(0, b.estimatedDaysLeft).toFixed(1)} 日`;
+  }
 }
 
 async function loadFolders() {
@@ -619,7 +772,8 @@ function renderFolders() {
     const option = document.createElement('option');
     option.value = folder.folderId;
     const unread = state.folderUnreadMap[folder.folderId];
-    option.textContent = `${folder.folderCode || 'F---'} ${folder.title}${unread ? ' ●新着' : ''}`;
+    const locked = Boolean(folder.hasPassword);
+    option.textContent = `${folder.folderCode || 'F---'} ${folder.title}${locked ? ' [鍵]' : ''}${unread ? ' ●新着' : ''}`;
     els.folderSelect.appendChild(option);
   });
 
@@ -629,6 +783,16 @@ function renderFolders() {
 }
 
 async function selectFolder(folder) {
+  if (folder.hasPassword && !state.folderPasswordById[folder.folderId]) {
+    const entered = window.prompt('このフォルダは鍵付きです。パスワードを入力してください。', '');
+    if (entered === null) return;
+    const pw = String(entered || '').trim();
+    if (!pw) {
+      showError('フォルダパスワードが必要です。');
+      return;
+    }
+    state.folderPasswordById[folder.folderId] = pw;
+  }
   state.selectedFolder = folder;
   els.folderDetail.classList.remove('hidden');
   els.folderDetailTitle.textContent = `フォルダ: ${folder.folderCode || 'F---'} ${folder.title}`;
@@ -647,11 +811,17 @@ async function selectFolderById(folderId) {
 }
 
 async function loadPhotos() {
-  const data = await api(`/folders/${state.selectedFolder.folderId}/photos`, { method: 'GET' });
+  const folderId = state.selectedFolder.folderId;
+  const data = await api(`/folders/${folderId}/photos`, {
+    method: 'GET',
+    headers: { ...folderPasswordHeader(folderId) },
+  });
   state.photos = data.items || [];
   await renderPhotos();
   await refreshFolderUnread([state.selectedFolder.folderId]);
   renderFolders();
+  await loadTeamMe();
+  if (els.uploadBtn) els.uploadBtn.disabled = Boolean(state.uploadBlocked);
   if (state.restoreScrollY !== null) {
     window.scrollTo(0, state.restoreScrollY);
     state.restoreScrollY = null;
@@ -714,8 +884,10 @@ async function uploadFiles() {
     };
 
     for (const file of files) {
-      const up = await api(`/folders/${state.selectedFolder.folderId}/photos/upload-url`, {
+      const folderId = state.selectedFolder.folderId;
+      const up = await api(`/folders/${folderId}/photos/upload-url`, {
         method: 'POST',
+        headers: { ...folderPasswordHeader(folderId) },
         body: JSON.stringify({ fileName: file.name, contentType: file.type || 'image/jpeg' }),
       });
 
@@ -750,8 +922,9 @@ async function uploadFiles() {
         }
       }
 
-      await api(`/folders/${state.selectedFolder.folderId}/photos`, {
+      await api(`/folders/${folderId}/photos`, {
         method: 'POST',
+        headers: { ...folderPasswordHeader(folderId) },
         body: JSON.stringify({
           photoId: up.photoId,
           originalS3Key: up.originalS3Key,
@@ -763,6 +936,15 @@ async function uploadFiles() {
 
     els.photoFiles.value = '';
     await loadPhotos();
+  } catch (error) {
+    const message = asMessage(error);
+    if (message.includes('APIエラー(402)')) {
+      await loadTeamMe();
+      if (els.uploadBtn) els.uploadBtn.disabled = Boolean(state.uploadBlocked);
+      showError('アップロード停止中です（残量不足）。管理者が容量チケットを追加するか、写真を削除してください。');
+      return;
+    }
+    throw error;
   } finally {
     setUploadLoading(false);
   }
@@ -774,7 +956,7 @@ async function loadComments(photoId) {
 }
 
 function canDelete(item) {
-  return item.createdBy === state.userKey;
+  return item.createdBy === state.userKey || state.isAdmin;
 }
 
 function formatDateTime(value) {
@@ -1047,19 +1229,31 @@ if (els.logoutBtn) {
 }
 
 if (els.leaveRoomBtn) {
-  els.leaveRoomBtn.onclick = () => {
+  els.leaveRoomBtn.onclick = safeAction(async () => {
+    // Best-effort: mark membership as left so the user can create a new room.
+    try {
+      await api('/team/leave', { method: 'POST' });
+    } catch (_) {
+      // Ignore; local "leave" still proceeds.
+    }
     localStorage.removeItem('kansa_room_name');
     localStorage.removeItem('kansa_room_password');
     state.roomName = null;
     state.roomPassword = null;
+    state.teamRole = null;
+    state.isAdmin = false;
+    state.uploadBlocked = false;
+    state.billing = null;
     state.selectedFolder = null;
     state.folders = [];
     state.photos = [];
     state.openAccordions.clear();
     state.restoreScrollY = null;
     els.folderDetail.classList.add('hidden');
+    renderBillingBar();
+    setAdminUiVisibility();
     showRoomSetup();
-  };
+  }, '退出');
 }
 
 els.createRoomBtn.onclick = async () => {
@@ -1089,7 +1283,11 @@ els.createRoomBtn.onclick = async () => {
   } catch (error) {
     const message = asMessage(error);
     if (message.includes('409')) {
-      window.alert('同じ部屋名は作成できません。別の部屋名にしてください。');
+      if (message.includes('already has a room')) {
+        window.alert('すでにお部屋を作成済みです（1人1部屋）。別のお部屋は作れません。');
+      } else {
+        window.alert('同じ部屋名は作成できません。別の部屋名にしてください。');
+      }
     } else {
       showError(`お部屋作成失敗: ${message}`);
     }
@@ -1115,7 +1313,12 @@ els.enterRoomBtn.onclick = async () => {
     localStorage.setItem('kansa_room_name', roomName);
     localStorage.setItem('kansa_room_password', roomPassword);
     showApp();
-  } catch (_) {
+  } catch (error) {
+    const message = asMessage(error);
+    if (message.includes('already in another room')) {
+      window.alert('他のお部屋に所属中のため入室できません。いったん退出してから入室してください。');
+      return;
+    }
     window.alert('お部屋名またはパスワードが違います。');
   }
 };
@@ -1123,8 +1326,13 @@ els.enterRoomBtn.onclick = async () => {
 els.createFolderBtn.onclick = safeAction(async () => {
   const title = els.folderTitle.value.trim();
   if (!title) return;
-  const created = await api('/folders', { method: 'POST', body: JSON.stringify({ title }) });
+  const folderPassword = String(els.folderPassword?.value || '').trim();
+  const created = await api('/folders', {
+    method: 'POST',
+    body: JSON.stringify({ title, folderPassword: folderPassword || null }),
+  });
   els.folderTitle.value = '';
+  if (els.folderPassword) els.folderPassword.value = '';
   showToast(`フォルダ：${created.title} を作成しました。`);
   await loadFolders();
   await selectFolderById(created.folderId);
@@ -1139,7 +1347,8 @@ els.exportBtn.onclick = safeAction(async () => {
   if (!state.selectedFolder) return;
   const preOpened = window.open('', '_blank');
   try {
-    const res = await api(`/folders/${state.selectedFolder.folderId}/export`, { method: 'POST' });
+    const folderId = state.selectedFolder.folderId;
+    const res = await api(`/folders/${folderId}/export`, { method: 'POST', headers: { ...folderPasswordHeader(folderId) } });
     if (preOpened) {
       preOpened.location.href = res.downloadUrl;
     } else {
@@ -1150,6 +1359,94 @@ els.exportBtn.onclick = safeAction(async () => {
     throw error;
   }
 }, 'PPT出力');
+
+if (els.teamAdminBtn && els.teamAdminCard) {
+  els.teamAdminBtn.onclick = safeAction(async () => {
+    els.teamAdminCard.classList.toggle('hidden');
+    closeMenu();
+    await loadAdminPanel();
+  }, 'チーム管理');
+}
+
+async function purchaseSku(sku) {
+  const returnUrl = window.location.origin + window.location.pathname;
+  const res = await api('/team/purchase/checkout', {
+    method: 'POST',
+    body: JSON.stringify({ sku, successUrl: returnUrl, cancelUrl: returnUrl }),
+  });
+  if (res && res.url) {
+    window.location.href = res.url;
+    return;
+  }
+  throw new Error('Stripe決済URLが取得できませんでした。');
+}
+
+if (els.purchase1Btn) els.purchase1Btn.onclick = safeAction(() => purchaseSku('1gbm'), '購入');
+if (els.purchase10Btn) els.purchase10Btn.onclick = safeAction(() => purchaseSku('10gbm'), '購入');
+if (els.purchase50Btn) els.purchase50Btn.onclick = safeAction(() => purchaseSku('50gbm'), '購入');
+
+if (els.deleteTeamBtn) {
+  els.deleteTeamBtn.onclick = safeAction(async () => {
+    const ok = window.confirm('このお部屋を削除すると、フォルダ/写真/コメント/課金情報も全て消えます。よかですか？');
+    if (!ok) return;
+    const ok2 = window.confirm('本当によかですか？（取り消せません）');
+    if (!ok2) return;
+    await api('/team/delete', { method: 'POST' });
+    window.alert('お部屋を削除しました。');
+
+    localStorage.removeItem('kansa_room_name');
+    localStorage.removeItem('kansa_room_password');
+    state.roomName = null;
+    state.roomPassword = null;
+    state.teamRole = null;
+    state.isAdmin = false;
+    state.uploadBlocked = false;
+    state.billing = null;
+    state.ownerUserKey = null;
+    state.selectedFolder = null;
+    state.folders = [];
+    state.photos = [];
+    state.openAccordions.clear();
+    state.restoreScrollY = null;
+    if (els.folderDetail) els.folderDetail.classList.add('hidden');
+    renderBillingBar();
+    setAdminUiVisibility();
+    showRoomSetup();
+  }, 'お部屋削除');
+}
+
+if (els.folderDeleteBtn) {
+  els.folderDeleteBtn.onclick = safeAction(async () => {
+    if (!state.selectedFolder) return;
+    const ok = window.confirm('このフォルダを削除すると、写真とコメントも消えます。よかですか？');
+    if (!ok) return;
+    const folderId = state.selectedFolder.folderId;
+    await api(`/folders/${folderId}`, { method: 'DELETE', headers: { ...folderPasswordHeader(folderId) } });
+    showToast('フォルダを削除しました。');
+    state.selectedFolder = null;
+    els.folderDetail.classList.add('hidden');
+    await loadFolders();
+    await loadTeamMe();
+  }, 'フォルダ削除');
+}
+
+if (els.setFolderPasswordBtn) {
+  els.setFolderPasswordBtn.onclick = safeAction(async () => {
+    if (!state.selectedFolder) return;
+    const folderId = state.selectedFolder.folderId;
+    const next = String(els.folderPasswordSet?.value || '').trim();
+    await api(`/folders/${folderId}/password`, {
+      method: 'PUT',
+      headers: { ...folderPasswordHeader(folderId) },
+      body: JSON.stringify({ folderPassword: next }),
+    });
+    if (next) state.folderPasswordById[folderId] = next;
+    else delete state.folderPasswordById[folderId];
+    if (els.folderPasswordSet) els.folderPasswordSet.value = '';
+    showToast('フォルダの鍵を更新しました。');
+    await loadFolders();
+  }, '鍵設定');
+}
 
 window.addEventListener('unhandledrejection', (event) => {
   showError(`予期しないエラー: ${asMessage(event.reason)}`);

@@ -12,6 +12,14 @@ Globals:
         TABLE_NAME: !Ref AuditTable
         PHOTO_BUCKET: !Ref PhotoBucket
         EXPORT_BUCKET: !Ref ExportBucket
+        STRIPE_SECRET_KEY: !Ref StripeSecretKey
+        STRIPE_PRICE_1GBM: !Ref StripePrice1gbm
+        STRIPE_PRICE_10GBM: !Ref StripePrice10gbm
+        STRIPE_PRICE_50GBM: !Ref StripePrice50gbm
+        STRIPE_CHECKOUT_SUCCESS_URL: !Ref StripeCheckoutSuccessUrl
+        STRIPE_CHECKOUT_CANCEL_URL: !Ref StripeCheckoutCancelUrl
+        STRIPE_WEBHOOK_SECRET: !Ref StripeWebhookSecret
+        STRIPE_ALLOWED_RETURN_ORIGINS: !Ref StripeAllowedReturnOrigins
 
 Parameters:
   ApiThrottleRateLimit:
@@ -58,6 +66,40 @@ Parameters:
     Type: Number
     Default: 180
     Description: CloudWatch Logs retention days for Lambda log groups
+  StripeSecretKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Stripe secret key (sk_live/sk_test)
+  StripeWebhookSecret:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: Stripe webhook signing secret (whsec_*)
+  StripePrice1gbm:
+    Type: String
+    Default: ""
+    Description: Stripe Price ID for 1GB-month (price_*)
+  StripePrice10gbm:
+    Type: String
+    Default: ""
+    Description: Stripe Price ID for 10GB-month (price_*)
+  StripePrice50gbm:
+    Type: String
+    Default: ""
+    Description: Stripe Price ID for 50GB-month (price_*)
+  StripeCheckoutSuccessUrl:
+    Type: String
+    Default: https://main.dn65vena62q5z.amplifyapp.com
+    Description: Stripe Checkout success URL (app page)
+  StripeCheckoutCancelUrl:
+    Type: String
+    Default: https://main.dn65vena62q5z.amplifyapp.com
+    Description: Stripe Checkout cancel URL (app page)
+  StripeAllowedReturnOrigins:
+    Type: String
+    Default: "http://localhost:5173,http://127.0.0.1:5173,https://main.dn65vena62q5z.amplifyapp.com"
+    Description: Comma-separated allowlist for dynamic Stripe return URL origins
 
 Resources:
   UserPool:
@@ -139,6 +181,7 @@ Resources:
           - x-user-name
           - x-room-name
           - x-room-password
+          - x-folder-password
         AllowMethods:
           - GET
           - POST
@@ -304,6 +347,67 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /folders/{folderId}/export
             Method: POST
+        DeleteFolder:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /folders/{folderId}
+            Method: DELETE
+        UpdateFolderPassword:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /folders/{folderId}/password
+            Method: PUT
+
+        TeamMe:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /team/me
+            Method: GET
+        TeamBilling:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /team/billing
+            Method: GET
+        TeamPurchase:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /team/purchase
+            Method: POST
+        TeamPurchaseCheckout:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /team/purchase/checkout
+            Method: POST
+        TeamMembers:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /team/members
+            Method: GET
+        TeamMemberUpdate:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /team/members/{userKey}
+            Method: PUT
+        TeamLeave:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /team/leave
+            Method: POST
+        TeamDelete:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /team/delete
+            Method: POST
 
   BackfillCodesFunction:
     Type: AWS::Serverless::Function
@@ -315,6 +419,43 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref AuditTable
+
+  UsageSweepFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: usage-sweep.handler
+      Timeout: 180
+      MemorySize: 512
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AuditTable
+      Events:
+        DailySweep:
+          Type: Schedule
+          Properties:
+            # JST 00:00 == UTC 15:00
+            Schedule: cron(0 15 * * ? *)
+
+  StripeWebhookFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: stripe-webhook.handler
+      Timeout: 30
+      MemorySize: 512
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AuditTable
+      Events:
+        StripeWebhook:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /stripe/webhook
+            Method: POST
+            Auth:
+              Authorizer: NONE
 
   AlertTopic:
     Type: AWS::SNS::Topic

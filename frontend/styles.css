@@ -582,6 +582,32 @@ button:disabled {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
 }
 
+.billing-bar {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+body.dark .billing-bar {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(20, 20, 20, 0.55);
+}
+
+.member-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+body.dark .member-row {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
 @media (max-width: 640px) {
   .container {
     padding: 14px;

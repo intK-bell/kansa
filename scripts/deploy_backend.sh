@@ -8,7 +8,28 @@ cd "$BACKEND_DIR"
 
 npm --prefix src install
 sam build
-sam deploy
+
+# Stripe secret values should not be committed to the repo.
+# Provide them via environment variables when deploying:
+#   STRIPE_SECRET_KEY=sk_test_... STRIPE_WEBHOOK_SECRET=whsec_... ./scripts/deploy_backend.sh
+STRIPE_SECRET_KEY_VALUE="${STRIPE_SECRET_KEY-}"
+STRIPE_WEBHOOK_SECRET_VALUE="${STRIPE_WEBHOOK_SECRET-}"
+
+if [[ -n "$STRIPE_SECRET_KEY_VALUE" && -n "$STRIPE_WEBHOOK_SECRET_VALUE" ]]; then
+  # Keep non-secret parameter_overrides from backend/samconfig.toml (e.g. Stripe price ids),
+  # and only inject secrets here. Passing --parameter-overrides overrides config values.
+  EXISTING_OVERRIDES="$(
+    sed -n 's/^parameter_overrides[[:space:]]*=[[:space:]]*"\(.*\)"[[:space:]]*$/\1/p' samconfig.toml \
+      | head -n 1
+  )"
+  sam deploy --parameter-overrides $EXISTING_OVERRIDES \
+    StripeSecretKey="$STRIPE_SECRET_KEY_VALUE" \
+    StripeWebhookSecret="$STRIPE_WEBHOOK_SECRET_VALUE"
+else
+  echo "[WARN] Stripe keys not provided. Deploying without Stripe secrets." 1>&2
+  echo "       Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET env vars to enable Stripe." 1>&2
+  sam deploy
+fi
 
 STACK_NAME="kansa-backend"
 API_URL="$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' --output text)"

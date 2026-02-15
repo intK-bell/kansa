@@ -29,6 +29,7 @@
               <option value="winter">冬</option>
             </select>
             <button id="toggle-theme-btn" type="button">ダークモード切替</button>
+            <button id="team-admin-btn" type="button" class="hidden">チーム管理</button>
             <button id="reset-user-btn" type="button">ユーザー名変更</button>
             <button id="leave-room-btn" type="button" class="danger">退出</button>
             <button id="logout-btn" type="button" class="danger">ログアウト</button>
@@ -77,12 +78,34 @@
 
         <div class="toolbar">
           <p id="error-box" class="muted hidden" style="color:#b91c1c;"></p>
+          <p id="billing-bar" class="billing-bar muted hidden"></p>
         </div>
+
+        <section id="team-admin" class="card hidden">
+          <h2>チーム管理（管理者）</h2>
+          <p id="billing-status" class="muted"></p>
+          <div class="row">
+            <button id="purchase-1gbm" type="button">+1GB・月 (¥1,000)</button>
+            <button id="purchase-10gbm" type="button">+10GB・月 (¥8,000)</button>
+            <button id="purchase-50gbm" type="button">+50GB・月 (¥35,000)</button>
+          </div>
+          <div class="row" style="margin-top:10px;">
+            <button id="delete-team-btn" type="button" class="danger">お部屋を削除（全データ）</button>
+          </div>
+          <h3 style="margin-top:14px;">メンバー</h3>
+          <div id="member-list"></div>
+          <p class="muted" style="margin-top:10px;">
+            ※ 使用量は、アップロード画像に加え、サムネイル等の自動生成データも含みます。
+          </p>
+        </section>
 
         <section class="card">
           <h2>フォルダ作成</h2>
-          <input id="folder-title" placeholder="〇〇工場_yyyymmdd" />
-          <button id="create-folder-btn">作成</button>
+          <div class="row">
+            <input id="folder-title" placeholder="〇〇工場_yyyymmdd" />
+            <input id="folder-password" placeholder="フォルダパスワード（任意）" type="password" />
+            <button id="create-folder-btn">作成</button>
+          </div>
         </section>
 
         <section class="card">
@@ -99,6 +122,11 @@
             <button id="upload-btn">複数アップロード</button>
             <span id="upload-loading" class="upload-loading hidden">アップロード中...</span>
             <button id="export-btn">PowerPoint出力</button>
+            <button id="delete-folder-btn" type="button" class="danger hidden">フォルダ削除</button>
+          </div>
+          <div class="row" style="margin-top:10px;">
+            <input id="folder-password-set" placeholder="フォルダパスワード（空で解除）" type="password" />
+            <button id="set-folder-password-btn" type="button" class="hidden">鍵を設定/解除</button>
           </div>
           <div id="photo-list" class="photo-grid"></div>
         </section>
@@ -106,7 +134,7 @@
     </main>
 
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
-    <script src="./config.js?v=20260215-1"></script>
-    <script src="./main.js?v=20260215-7" type="module"></script>
+    <script src="./config.js?v=20260215-2"></script>
+    <script src="./main.js?v=20260215-12" type="module"></script>
   </body>
 </html>
