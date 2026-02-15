@@ -248,6 +248,17 @@ select {
   max-width: 100%;
 }
 
+#folder-title {
+  width: 100%;
+  max-width: 100%;
+  display: block;
+  margin-bottom: 10px;
+}
+
+#create-folder-btn {
+  margin-top: 2px;
+}
+
 #user-setup input {
   display: block;
   margin-bottom: 10px;

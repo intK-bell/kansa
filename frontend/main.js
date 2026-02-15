@@ -756,14 +756,7 @@ els.exportBtn.onclick = safeAction(async () => {
   if (!state.selectedFolder) return;
   const preOpened = window.open('', '_blank');
   try {
-    const raw = await fetch(`${API_BASE}/folders/${state.selectedFolder.folderId}/export`, {
-      method: 'POST',
-    });
-    if (!raw.ok) {
-      const text = await raw.text();
-      throw new Error(`APIエラー(${raw.status}): ${text || 'unknown error'}`);
-    }
-    const res = await raw.json();
+    const res = await api(`/folders/${state.selectedFolder.folderId}/export`, { method: 'POST' });
     if (preOpened) {
       preOpened.location.href = res.downloadUrl;
     } else {
