@@ -478,10 +478,11 @@ async function listPhotos(folderId, room) {
 
   const withUrls = await Promise.all(
     hydrated.map(async (photo) => {
-      if (!photo.s3Key) return photo;
+      const keyForView = photo.previewKey || photo.s3Key;
+      if (!keyForView) return photo;
       const viewUrl = await getSignedUrl(
         s3,
-        new GetObjectCommand({ Bucket: PHOTO_BUCKET, Key: photo.s3Key }),
+        new GetObjectCommand({ Bucket: PHOTO_BUCKET, Key: keyForView }),
         { expiresIn: 600 }
       );
       return { ...photo, viewUrl };
@@ -506,20 +507,33 @@ async function createUploadUrl(folderId, body, room) {
   const contentType = body.contentType || 'image/jpeg';
   const extension = (body.fileName || 'image.jpg').split('.').pop();
   const photoId = randomUUID();
-  const key = `${folderId}/${photoId}.${extension}`;
+  const originalKey = `${folderId}/${photoId}.orig.${extension}`;
+  const previewKey = `${folderId}/${photoId}.preview.jpg`;
 
-  const cmd = new PutObjectCommand({
+  const originalCmd = new PutObjectCommand({
     Bucket: PHOTO_BUCKET,
-    Key: key,
+    Key: originalKey,
     ContentType: contentType,
   });
+  const previewCmd = new PutObjectCommand({
+    Bucket: PHOTO_BUCKET,
+    Key: previewKey,
+    ContentType: 'image/jpeg',
+  });
 
-  const uploadUrl = await getSignedUrl(s3, cmd, { expiresIn: 300 });
-  return json(200, { uploadUrl, photoId, s3Key: key });
+  const originalUploadUrl = await getSignedUrl(s3, originalCmd, { expiresIn: 300 });
+  const previewUploadUrl = await getSignedUrl(s3, previewCmd, { expiresIn: 300 });
+  return json(200, {
+    photoId,
+    originalUploadUrl,
+    previewUploadUrl,
+    originalS3Key: originalKey,
+    previewS3Key: previewKey,
+  });
 }
 
 async function finalizePhoto(folderId, body, user, room, ctx) {
-  if (!body.photoId || !body.s3Key) return badRequest('photoId and s3Key are required');
+  if (!body.photoId || !body.originalS3Key) return badRequest('photoId and originalS3Key are required');
   const folderRes = await ddb.send(
     new GetCommand({
       TableName: TABLE_NAME,
@@ -542,7 +556,8 @@ async function finalizePhoto(folderId, body, user, room, ctx) {
     folderCode,
     roomName: room.roomName,
     photoCode,
-    s3Key: body.s3Key,
+    s3Key: body.originalS3Key,
+    previewKey: body.previewS3Key || null,
     fileName: body.fileName || null,
     createdBy: user.userKey,
     createdByName: user.userName,
@@ -592,7 +607,8 @@ async function deletePhoto(photoId, user, room, ctx) {
   }
 
   await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: { PK: `PHOTO#${photoId}`, SK: 'META' } }));
-  await s3.send(new DeleteObjectCommand({ Bucket: PHOTO_BUCKET, Key: item.s3Key }));
+  if (item.s3Key) await s3.send(new DeleteObjectCommand({ Bucket: PHOTO_BUCKET, Key: item.s3Key }));
+  if (item.previewKey) await s3.send(new DeleteObjectCommand({ Bucket: PHOTO_BUCKET, Key: item.previewKey }));
   auditLog({
     requestId: ctx.requestId,
     action: 'photo.delete',

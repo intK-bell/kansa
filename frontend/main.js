@@ -665,6 +665,54 @@ async function uploadFiles() {
 
   setUploadLoading(true);
   try {
+    const resizeToJpeg = async (file, maxLongSide = 2048, quality = 0.82) => {
+      // Best-effort client-side resize; if anything fails, fall back to original.
+      let bitmap = null;
+      try {
+        if (window.createImageBitmap) {
+          bitmap = await window.createImageBitmap(file);
+        } else {
+          const url = URL.createObjectURL(file);
+          const img = new Image();
+          img.decoding = 'async';
+          img.src = url;
+          await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+          });
+          bitmap = img;
+          URL.revokeObjectURL(url);
+        }
+      } catch (_) {
+        return null;
+      }
+
+      const srcW = bitmap.width;
+      const srcH = bitmap.height;
+      if (!srcW || !srcH) return null;
+
+      const longSide = Math.max(srcW, srcH);
+      const scale = longSide > maxLongSide ? maxLongSide / longSide : 1;
+      const dstW = Math.max(1, Math.round(srcW * scale));
+      const dstH = Math.max(1, Math.round(srcH * scale));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = dstW;
+      canvas.height = dstH;
+      const ctx = canvas.getContext('2d', { alpha: false });
+      if (!ctx) return null;
+      ctx.drawImage(bitmap, 0, 0, dstW, dstH);
+
+      const blob = await new Promise((resolve) => {
+        canvas.toBlob(
+          (b) => resolve(b),
+          'image/jpeg',
+          quality
+        );
+      });
+      return blob || null;
+    };
+
     for (const file of files) {
       const up = await api(`/folders/${state.selectedFolder.folderId}/photos/upload-url`, {
         method: 'POST',
@@ -673,7 +721,7 @@ async function uploadFiles() {
 
       let putRes;
       try {
-        putRes = await fetch(up.uploadUrl, {
+        putRes = await fetch(up.originalUploadUrl, {
           method: 'PUT',
           headers: { 'content-type': file.type || 'image/jpeg' },
           body: file,
@@ -685,9 +733,31 @@ async function uploadFiles() {
         throw new Error(`画像アップロード失敗(${putRes.status})`);
       }
 
+      const resized = await resizeToJpeg(file, 2048, 0.82);
+      if (resized) {
+        let previewRes;
+        try {
+          previewRes = await fetch(up.previewUploadUrl, {
+            method: 'PUT',
+            headers: { 'content-type': 'image/jpeg' },
+            body: resized,
+          });
+        } catch (error) {
+          throw new Error(`リサイズ画像アップロード通信エラー: ${asMessage(error)}`);
+        }
+        if (!previewRes.ok) {
+          throw new Error(`リサイズ画像アップロード失敗(${previewRes.status})`);
+        }
+      }
+
       await api(`/folders/${state.selectedFolder.folderId}/photos`, {
         method: 'POST',
-        body: JSON.stringify({ photoId: up.photoId, s3Key: up.s3Key, fileName: file.name }),
+        body: JSON.stringify({
+          photoId: up.photoId,
+          originalS3Key: up.originalS3Key,
+          previewS3Key: resized ? up.previewS3Key : null,
+          fileName: file.name,
+        }),
       });
     }
 
