@@ -1,2 +1,11 @@
 .npm-cache/
+.DS_Store
+.backup/
+artifacts.zip
+dist/
+dist.zip
 
+# SAM / Node build artifacts
+backend/.aws-sam/
+backend/src/node_modules/
+backend/.DS_Store
