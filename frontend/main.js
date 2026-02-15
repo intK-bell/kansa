@@ -154,15 +154,22 @@ async function startLogin() {
   window.location.href = authUrl.toString();
 }
 
-function startSignup() {
+async function startSignup() {
   if (!hasCognitoConfig()) {
     throw new Error('Cognito設定が不足しています。config.jsを確認してください。');
   }
+  const stateVal = randomString(32);
+  const verifier = randomString(64);
+  localStorage.setItem('kansa_oauth_state', stateVal);
+  localStorage.setItem('kansa_oauth_code_verifier', verifier);
   const signupUrl = new URL(`https://${COGNITO_DOMAIN}.auth.${COGNITO_REGION}.amazoncognito.com/signup`);
+  signupUrl.searchParams.set('state', stateVal);
   signupUrl.searchParams.set('client_id', COGNITO_CLIENT_ID);
   signupUrl.searchParams.set('response_type', 'code');
   signupUrl.searchParams.set('scope', 'openid email profile');
   signupUrl.searchParams.set('redirect_uri', COGNITO_REDIRECT_URI);
+  signupUrl.searchParams.set('code_challenge_method', 'S256');
+  signupUrl.searchParams.set('code_challenge', base64UrlEncode(await sha256(verifier)));
   window.location.href = signupUrl.toString();
 }
 
@@ -175,7 +182,12 @@ async function completeLoginFromCallback() {
   const expectedState = localStorage.getItem('kansa_oauth_state');
   const verifier = localStorage.getItem('kansa_oauth_code_verifier');
   if (!expectedState || !verifier || returnedState !== expectedState) {
-    throw new Error('Cognitoログイン検証に失敗しました。');
+    localStorage.removeItem('kansa_oauth_state');
+    localStorage.removeItem('kansa_oauth_code_verifier');
+    url.searchParams.delete('code');
+    url.searchParams.delete('state');
+    window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+    return false;
   }
 
   const body = new URLSearchParams();
@@ -806,7 +818,7 @@ if (els.loginBtn) {
 
 if (els.signupBtn) {
   els.signupBtn.onclick = safeAction(async () => {
-    startSignup();
+    await startSignup();
   }, '新規登録');
 }
 
