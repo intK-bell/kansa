@@ -125,7 +125,12 @@ Resources:
         ThrottlingBurstLimit: !Ref ApiThrottleBurstLimit
       CorsConfiguration:
         AllowHeaders:
-          - "*"
+          - Authorization
+          - content-type
+          - x-user-key
+          - x-user-name
+          - x-room-name
+          - x-room-password
         AllowMethods:
           - GET
           - POST
@@ -133,7 +138,9 @@ Resources:
           - DELETE
           - OPTIONS
         AllowOrigins:
-          - "*"
+          - !Ref CognitoCallbackUrl
+          - !Ref CognitoLocalCallbackUrl
+          - !Ref CognitoLocalCallbackUrlAlt
 
   AuditTable:
     Type: AWS::DynamoDB::Table

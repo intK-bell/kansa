@@ -1,4 +1,5 @@
 const { randomUUID } = require('node:crypto');
+const { pbkdf2Sync, randomBytes, timingSafeEqual } = require('node:crypto');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const {
   DynamoDBDocumentClient,
@@ -30,6 +31,30 @@ const json = (statusCode, body) => ({
 });
 
 const badRequest = (message) => json(400, { message });
+
+function hashRoomPassword(password) {
+  const iterations = 120000;
+  const salt = randomBytes(16);
+  const hash = pbkdf2Sync(password, salt, iterations, 32, 'sha256');
+  return `pbkdf2$${iterations}$${salt.toString('base64')}$${hash.toString('base64')}`;
+}
+
+function verifyRoomPassword(password, stored) {
+  const value = String(stored || '');
+  if (!value.startsWith('pbkdf2$')) return false;
+  const parts = value.split('$');
+  if (parts.length !== 4) return false;
+  const iterations = Number(parts[1]);
+  if (!Number.isFinite(iterations) || iterations < 10000) return false;
+  const salt = Buffer.from(parts[2], 'base64');
+  const expected = Buffer.from(parts[3], 'base64');
+  const actual = pbkdf2Sync(password, salt, iterations, expected.length, 'sha256');
+  try {
+    return timingSafeEqual(actual, expected);
+  } catch (_) {
+    return false;
+  }
+}
 
 function auditLog(entry) {
   console.log(
@@ -177,8 +202,31 @@ async function resolveRoom(roomName, roomPassword) {
     })
   );
   const room = res.Item;
-  if (!room || room.password !== roomPassword) {
+  if (!room) throw new Error('INVALID_ROOM');
+
+  if (room.passwordHash) {
+    if (!verifyRoomPassword(roomPassword, room.passwordHash)) {
+      throw new Error('INVALID_ROOM');
+    }
+    return { roomName: room.roomName, roomId: room.roomId };
+  }
+
+  // Legacy: plain password. Accept it once, then migrate to hash.
+  if (room.password !== roomPassword) {
     throw new Error('INVALID_ROOM');
+  }
+  const migratedHash = hashRoomPassword(roomPassword);
+  try {
+    await ddb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: 'ORG#DEFAULT', SK: `ROOM#${roomName}` },
+        UpdateExpression: 'SET passwordHash = :h REMOVE password',
+        ExpressionAttributeValues: { ':h': migratedHash },
+      })
+    );
+  } catch (_) {
+    // Best-effort migration; auth still succeeds.
   }
   return { roomName: room.roomName, roomId: room.roomId };
 }
@@ -229,7 +277,7 @@ async function createRoom(event, user, ctx) {
     type: 'room',
     roomId,
     roomName,
-    password: roomPassword,
+    passwordHash: hashRoomPassword(roomPassword),
     createdBy: user.userKey,
     createdByName: user.userName,
     createdAt: now,
