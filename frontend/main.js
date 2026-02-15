@@ -39,13 +39,17 @@ const state = {
 
 const SEASONS = new Set(['spring', 'summer', 'autumn', 'winter']);
 
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+function el(tag, attrs = {}, text = null) {
+  const node = document.createElement(tag);
+  Object.entries(attrs || {}).forEach(([key, value]) => {
+    if (value === null || value === undefined) return;
+    if (key === 'class') node.className = value;
+    else if (key === 'dataset') Object.assign(node.dataset, value);
+    else if (key.startsWith('on') && typeof value === 'function') node[key] = value;
+    else node.setAttribute(key, String(value));
+  });
+  if (text !== null && text !== undefined) node.textContent = String(text);
+  return node;
 }
 
 function detectCurrentSeason() {
@@ -711,82 +715,84 @@ function formatDateTime(value) {
 async function renderPhotos() {
   els.photoList.innerHTML = '';
   for (const photo of state.photos) {
-    const card = document.createElement('div');
-    card.className = 'photo-card';
+    const card = el('div', { class: 'photo-card' });
 
-    const imgUrl = photo.viewUrl || '';
+    const img = el('img', { src: photo.viewUrl || '', alt: photo.fileName || photo.photoId });
+    card.appendChild(img);
+
+    const codeRow = el('div');
+    codeRow.appendChild(el('strong', {}, photo.photoCode || 'P---'));
+    card.appendChild(codeRow);
+
+    const titleRow = el('div');
+    const photoTitle = el('strong', { class: 'js-photo-title' }, photo.fileName || photo.photoId);
+    titleRow.appendChild(photoTitle);
+    card.appendChild(titleRow);
+
+    card.appendChild(el('div', { class: 'muted' }, `投稿: ${photo.createdByName}`));
+
+    const photoEditWrap = el('div', { class: 'inline-edit js-photo-edit-wrap hidden' });
+    if (canDelete(photo)) {
+      const actions = el('div', { class: 'comment-actions' });
+      const editPhotoBtn = el(
+        'button',
+        { class: 'icon-btn js-edit-photo', type: 'button', title: '写真名修正' },
+        '✎ 写真名'
+      );
+      const delBtn = el(
+        'button',
+        { class: 'icon-btn danger js-del-photo', type: 'button', title: '写真削除' },
+        '🗑'
+      );
+      actions.appendChild(editPhotoBtn);
+      actions.appendChild(delBtn);
+      card.appendChild(actions);
+    }
+    card.appendChild(photoEditWrap);
+
     const comments = await loadComments(photo.photoId);
     const latestIncomingCommentAt = getLatestIncomingCommentAt(comments);
     const unread = isUnread(photo.photoId, latestIncomingCommentAt);
 
-    card.innerHTML = `
-      <img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(photo.fileName || photo.photoId)}" />
-      <div><strong>${escapeHtml(photo.photoCode || 'P---')}</strong></div>
-      <div><strong class="js-photo-title">${escapeHtml(photo.fileName || photo.photoId)}</strong></div>
-      <div class="muted">投稿: ${escapeHtml(photo.createdByName)}</div>
-      ${
-        canDelete(photo)
-          ? `
-        <div class="comment-actions">
-          <button class="icon-btn js-edit-photo" type="button" title="写真名修正">✎ 写真名</button>
-          <button class="icon-btn danger js-del-photo" type="button" title="写真削除">🗑</button>
-        </div>
-      `
-          : ''
-      }
-      <div class="inline-edit js-photo-edit-wrap hidden"></div>
-      <details class="comments-accordion">
-        <summary class="comments-summary">
-          <span class="accordion-marker" aria-hidden="true">▶</span>
-          <span>コメント (${comments.length})</span>
-          ${unread ? '<span class="unread-badge">未読</span>' : ''}
-        </summary>
-        <div class="comments"></div>
-        <div class="row" style="margin-top:8px;">
-          <textarea class="js-comment-text" placeholder="コメント" rows="2" style="flex:1"></textarea>
-          <button class="js-add-comment">追加</button>
-        </div>
-      </details>
-      <div class="muted" style="margin-top: 6px;">
-        ${unread ? '未読コメントがあります' : '未読コメントなし'}
-      </div>
-    `;
+    const accordion = el('details', { class: 'comments-accordion' });
+    const summary = el('summary', { class: 'comments-summary' });
+    summary.appendChild(el('span', { class: 'accordion-marker', 'aria-hidden': 'true' }, '▶'));
+    summary.appendChild(el('span', {}, `コメント (${comments.length})`));
+    if (unread) summary.appendChild(el('span', { class: 'unread-badge' }, '未読'));
+    accordion.appendChild(summary);
 
-    const commentWrap = card.querySelector('.comments');
+    const commentWrap = el('div', { class: 'comments' });
     comments.forEach((comment) => {
       const stamp = comment.updatedAt ? '修正' : '投稿';
       const stampAt = comment.updatedAt || comment.createdAt;
-      const row = document.createElement('div');
-      row.className = 'comment';
-      row.innerHTML = `
-        <div class="comment-meta">
-          <span class="comment-meta-text">${escapeHtml(stamp)} ${escapeHtml(formatDateTime(stampAt))} ${escapeHtml(comment.createdByName)}</span>
-        </div>
-        <div class="comment-text">${escapeHtml(comment.text)}</div>
-      `;
+
+      const row = el('div', { class: 'comment' });
+      const meta = el('div', { class: 'comment-meta' });
+      meta.appendChild(
+        el('span', { class: 'comment-meta-text' }, `${stamp} ${formatDateTime(stampAt)} ${comment.createdByName}`)
+      );
+      row.appendChild(meta);
+      row.appendChild(el('div', { class: 'comment-text' }, comment.text));
 
       if (canDelete(comment)) {
-        const actions = document.createElement('div');
-        actions.className = 'comment-actions';
+        const actions = el('div', { class: 'comment-actions' });
+        const editBtn = el('button', { class: 'icon-btn', type: 'button', title: 'コメント修正' }, '✎');
+        const deleteBtn = el('button', { class: 'icon-btn danger', type: 'button', title: 'コメント削除' }, '🗑');
 
-        const editBtn = document.createElement('button');
-        editBtn.className = 'icon-btn';
-        editBtn.type = 'button';
-        editBtn.title = 'コメント修正';
-        editBtn.textContent = '✎';
         editBtn.onclick = async () => {
           if (row.querySelector('.js-comment-editor')) return;
-          const editor = document.createElement('div');
-          editor.className = 'inline-edit js-comment-editor';
-          editor.innerHTML = `
-            <textarea class="js-edit-text" rows="3" style="flex:1">${escapeHtml(comment.text)}</textarea>
-            <button class="js-save-edit" type="button">保存</button>
-            <button class="js-cancel-edit danger" type="button">取消</button>
-          `;
+          const editor = el('div', { class: 'inline-edit js-comment-editor' });
+          const ta = el('textarea', { class: 'js-edit-text', rows: '3', style: 'flex:1' });
+          ta.value = comment.text || '';
+          const saveBtn = el('button', { class: 'js-save-edit', type: 'button' }, '保存');
+          const cancelBtn = el('button', { class: 'js-cancel-edit danger', type: 'button' }, '取消');
+          editor.appendChild(ta);
+          editor.appendChild(saveBtn);
+          editor.appendChild(cancelBtn);
           row.appendChild(editor);
 
-          editor.querySelector('.js-save-edit').onclick = async () => {
-            const nextText = editor.querySelector('.js-edit-text').value.trim();
+          saveBtn.onclick = async () => {
+            const nextText = ta.value.trim();
             if (!nextText) return;
             preserveCurrentView(photo.photoId);
             await api(`/photos/${photo.photoId}/comments/${comment.commentId}`, {
@@ -796,16 +802,11 @@ async function renderPhotos() {
             await loadPhotos();
           };
 
-          editor.querySelector('.js-cancel-edit').onclick = () => {
+          cancelBtn.onclick = () => {
             editor.remove();
           };
         };
 
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'icon-btn danger';
-        deleteBtn.type = 'button';
-        deleteBtn.title = 'コメント削除';
-        deleteBtn.textContent = '🗑';
         deleteBtn.onclick = async () => {
           if (!window.confirm('このコメントを削除してよかですか？')) return;
           await api(`/photos/${photo.photoId}/comments/${comment.commentId}`, { method: 'DELETE' });
@@ -819,8 +820,20 @@ async function renderPhotos() {
 
       commentWrap.appendChild(row);
     });
+    accordion.appendChild(commentWrap);
 
-    const accordion = card.querySelector('.comments-accordion');
+    const addRow = el('div', { class: 'row', style: 'margin-top:8px;' });
+    const textArea = el('textarea', {
+      class: 'js-comment-text',
+      placeholder: 'コメント',
+      rows: '2',
+      style: 'flex:1',
+    });
+    const addBtn = el('button', { class: 'js-add-comment', type: 'button' }, '追加');
+    addRow.appendChild(textArea);
+    addRow.appendChild(addBtn);
+    accordion.appendChild(addRow);
+
     if (state.openAccordions.has(photo.photoId)) {
       accordion.open = true;
     }
@@ -828,7 +841,7 @@ async function renderPhotos() {
       if (accordion.open) {
         state.openAccordions.add(photo.photoId);
         markAsRead(photo.photoId, latestIncomingCommentAt);
-        const badge = accordion.querySelector('.unread-badge');
+        const badge = summary.querySelector('.unread-badge');
         if (badge) badge.remove();
       } else {
         state.openAccordions.delete(photo.photoId);
@@ -839,8 +852,6 @@ async function renderPhotos() {
       }
     });
 
-    const addBtn = card.querySelector('.js-add-comment');
-    const textArea = card.querySelector('.js-comment-text');
     addBtn.onclick = async () => {
       if (!textArea.value.trim()) return;
       state.openAccordions.add(photo.photoId);
@@ -854,20 +865,21 @@ async function renderPhotos() {
 
     const delBtn = card.querySelector('.js-del-photo');
     const editPhotoBtn = card.querySelector('.js-edit-photo');
-    const photoEditWrap = card.querySelector('.js-photo-edit-wrap');
-    const photoTitle = card.querySelector('.js-photo-title');
     if (editPhotoBtn) {
       editPhotoBtn.onclick = async () => {
         if (!photoEditWrap.classList.contains('hidden')) return;
         photoEditWrap.classList.remove('hidden');
-        photoEditWrap.innerHTML = `
-          <input class="js-photo-name-input" value="${escapeHtml(photo.fileName || '')}" />
-          <button class="js-photo-name-save" type="button">保存</button>
-          <button class="js-photo-name-cancel danger" type="button">取消</button>
-        `;
+        photoEditWrap.innerHTML = '';
+        const input = el('input', { class: 'js-photo-name-input' });
+        input.value = photo.fileName || '';
+        const saveBtn = el('button', { class: 'js-photo-name-save', type: 'button' }, '保存');
+        const cancelBtn = el('button', { class: 'js-photo-name-cancel danger', type: 'button' }, '取消');
+        photoEditWrap.appendChild(input);
+        photoEditWrap.appendChild(saveBtn);
+        photoEditWrap.appendChild(cancelBtn);
 
-        photoEditWrap.querySelector('.js-photo-name-save').onclick = async () => {
-          const nextFileName = photoEditWrap.querySelector('.js-photo-name-input').value.trim();
+        saveBtn.onclick = async () => {
+          const nextFileName = input.value.trim();
           if (!nextFileName) return;
           preserveCurrentView(photo.photoId);
           await api(`/photos/${photo.photoId}`, {
@@ -877,7 +889,7 @@ async function renderPhotos() {
           await loadPhotos();
         };
 
-        photoEditWrap.querySelector('.js-photo-name-cancel').onclick = () => {
+        cancelBtn.onclick = () => {
           photoEditWrap.classList.add('hidden');
           photoEditWrap.innerHTML = '';
           photoTitle.textContent = photo.fileName || photo.photoId;
@@ -893,6 +905,8 @@ async function renderPhotos() {
       };
     }
 
+    card.appendChild(accordion);
+    card.appendChild(el('div', { class: 'muted', style: 'margin-top: 6px;' }, unread ? '未読コメントがあります' : '未読コメントなし'));
     els.photoList.appendChild(card);
   }
 }
