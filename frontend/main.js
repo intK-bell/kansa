@@ -39,6 +39,15 @@ const state = {
 
 const SEASONS = new Set(['spring', 'summer', 'autumn', 'winter']);
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function detectCurrentSeason() {
   const month = new Date().getMonth() + 1;
   if (month >= 3 && month <= 5) return 'spring';
@@ -363,8 +372,7 @@ async function ensureDisplayName() {
   }
 
   while (true) {
-    const seeded = me.fallbackName || state.userName || '';
-    const next = window.prompt('表示名を入力してください。', seeded);
+    const next = window.prompt('表示名を入力してください。メニューからいつでも変更可能です。');
     if (next === null) continue;
     const displayName = next.trim();
     if (!displayName) {
@@ -483,36 +491,32 @@ function showApp() {
 function headers(method = 'GET') {
   const upper = String(method || 'GET').toUpperCase();
   const authHeader = state.idToken ? { Authorization: `Bearer ${state.idToken}` } : {};
-  if (upper === 'GET') {
-    return authHeader;
-  }
-  const safeUserName = encodeURIComponent(state.userName || 'unknown');
   const safeRoomName = encodeURIComponent(state.roomName || '');
   const safeRoomPassword = encodeURIComponent(state.roomPassword || '');
+  const roomHeaders =
+    state.roomName && state.roomPassword
+      ? {
+          'x-room-name': safeRoomName,
+          'x-room-password': safeRoomPassword,
+        }
+      : {};
+  if (upper === 'GET') return { ...authHeader, ...roomHeaders };
+  const safeUserName = encodeURIComponent(state.userName || 'unknown');
   return {
     ...authHeader,
     'content-type': 'application/json',
     'x-user-key': state.userKey,
     'x-user-name': safeUserName,
-    'x-room-name': safeRoomName,
-    'x-room-password': safeRoomPassword,
+    ...roomHeaders,
   };
 }
 
 async function api(path, options = {}) {
   clearError();
   const method = String(options.method || 'GET').toUpperCase();
-  const hasRoom = state.roomName && state.roomPassword;
-  let resolvedPath = path;
-  if (method === 'GET' && hasRoom && !path.startsWith('/rooms/')) {
-    const joiner = path.includes('?') ? '&' : '?';
-    resolvedPath =
-      `${path}${joiner}roomName=${encodeURIComponent(state.roomName)}` +
-      `&roomPassword=${encodeURIComponent(state.roomPassword)}`;
-  }
   let res;
   try {
-    res = await fetch(`${API_BASE}${resolvedPath}`, {
+    res = await fetch(`${API_BASE}${path}`, {
       ...options,
       headers: {
         ...(options.headers || {}),
@@ -710,18 +714,16 @@ async function renderPhotos() {
     const card = document.createElement('div');
     card.className = 'photo-card';
 
-    const imgUrl = PHOTO_BUCKET
-      ? `https://${PHOTO_BUCKET}.s3.amazonaws.com/${photo.s3Key}`
-      : '';
+    const imgUrl = photo.viewUrl || '';
     const comments = await loadComments(photo.photoId);
     const latestIncomingCommentAt = getLatestIncomingCommentAt(comments);
     const unread = isUnread(photo.photoId, latestIncomingCommentAt);
 
     card.innerHTML = `
-      <img src="${imgUrl}" alt="${photo.fileName || photo.photoId}" />
-      <div><strong>${photo.photoCode || 'P---'}</strong></div>
-      <div><strong class="js-photo-title">${photo.fileName || photo.photoId}</strong></div>
-      <div class="muted">投稿: ${photo.createdByName}</div>
+      <img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(photo.fileName || photo.photoId)}" />
+      <div><strong>${escapeHtml(photo.photoCode || 'P---')}</strong></div>
+      <div><strong class="js-photo-title">${escapeHtml(photo.fileName || photo.photoId)}</strong></div>
+      <div class="muted">投稿: ${escapeHtml(photo.createdByName)}</div>
       ${
         canDelete(photo)
           ? `
@@ -758,9 +760,9 @@ async function renderPhotos() {
       row.className = 'comment';
       row.innerHTML = `
         <div class="comment-meta">
-          <span class="comment-meta-text">${stamp} ${formatDateTime(stampAt)} ${comment.createdByName}</span>
+          <span class="comment-meta-text">${escapeHtml(stamp)} ${escapeHtml(formatDateTime(stampAt))} ${escapeHtml(comment.createdByName)}</span>
         </div>
-        <div class="comment-text">${comment.text}</div>
+        <div class="comment-text">${escapeHtml(comment.text)}</div>
       `;
 
       if (canDelete(comment)) {
@@ -777,7 +779,7 @@ async function renderPhotos() {
           const editor = document.createElement('div');
           editor.className = 'inline-edit js-comment-editor';
           editor.innerHTML = `
-            <textarea class="js-edit-text" rows="3" style="flex:1">${comment.text}</textarea>
+            <textarea class="js-edit-text" rows="3" style="flex:1">${escapeHtml(comment.text)}</textarea>
             <button class="js-save-edit" type="button">保存</button>
             <button class="js-cancel-edit danger" type="button">取消</button>
           `;
@@ -859,7 +861,7 @@ async function renderPhotos() {
         if (!photoEditWrap.classList.contains('hidden')) return;
         photoEditWrap.classList.remove('hidden');
         photoEditWrap.innerHTML = `
-          <input class="js-photo-name-input" value="${photo.fileName || ''}" />
+          <input class="js-photo-name-input" value="${escapeHtml(photo.fileName || '')}" />
           <button class="js-photo-name-save" type="button">保存</button>
           <button class="js-photo-name-cancel danger" type="button">取消</button>
         `;

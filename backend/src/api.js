@@ -5,6 +5,7 @@ const {
   QueryCommand,
   PutCommand,
   GetCommand,
+  BatchGetCommand,
   DeleteCommand,
   UpdateCommand,
 } = require('@aws-sdk/lib-dynamodb');
@@ -148,6 +149,12 @@ function isRoomMatch(itemRoomName, requestedRoomName) {
 
 function getRoomRequest(event, method) {
   const upper = String(method || 'GET').toUpperCase();
+  const headers = event.headers || {};
+  const fromHeaders = {
+    roomName: decodeText(headers['x-room-name'] || headers['X-Room-Name'] || ''),
+    roomPassword: decodeText(headers['x-room-password'] || headers['X-Room-Password'] || ''),
+  };
+  if (fromHeaders.roomName && fromHeaders.roomPassword) return fromHeaders;
   if (upper === 'GET') {
     const q = event.queryStringParameters || {};
     return {
@@ -155,12 +162,7 @@ function getRoomRequest(event, method) {
       roomPassword: decodeText(q.roomPassword || ''),
     };
   }
-
-  const headers = event.headers || {};
-  return {
-    roomName: decodeText(headers['x-room-name'] || headers['X-Room-Name'] || ''),
-    roomPassword: decodeText(headers['x-room-password'] || headers['X-Room-Password'] || ''),
-  };
+  return fromHeaders;
 }
 
 async function resolveRoom(roomName, roomPassword) {
@@ -308,6 +310,41 @@ async function updateDisplayName(event, user, ctx) {
   return json(200, { ok: true, displayName });
 }
 
+async function loadDisplayNameMap(userKeys) {
+  const uniqueKeys = Array.from(new Set((userKeys || []).filter(Boolean)));
+  if (!uniqueKeys.length) return {};
+
+  const requestItems = {
+    [TABLE_NAME]: {
+      Keys: uniqueKeys.map((userKey) => ({ PK: `USER#${userKey}`, SK: 'PROFILE' })),
+      ProjectionExpression: 'userKey, displayName',
+    },
+  };
+
+  const result = await ddb.send(
+    new BatchGetCommand({
+      RequestItems: requestItems,
+    })
+  );
+
+  const map = {};
+  const rows = result?.Responses?.[TABLE_NAME] || [];
+  rows.forEach((row) => {
+    const displayName = normalizeDisplayName(row.displayName || '');
+    if (row.userKey && displayName) {
+      map[row.userKey] = displayName;
+    }
+  });
+  return map;
+}
+
+function applyResolvedDisplayName(item, nameMap) {
+  if (!item || !item.createdBy) return item;
+  const resolved = nameMap[item.createdBy];
+  if (!resolved) return item;
+  return { ...item, createdByName: resolved };
+}
+
 async function listFolders(room) {
   const res = await ddb.send(
     new QueryCommand({
@@ -321,7 +358,9 @@ async function listFolders(room) {
     })
   );
   const items = (res.Items || []).filter((item) => isRoomMatch(item.roomName, room.roomName));
-  return json(200, { items });
+  const nameMap = await loadDisplayNameMap(items.map((item) => item.createdBy));
+  const hydrated = items.map((item) => applyResolvedDisplayName(item, nameMap));
+  return json(200, { items: hydrated });
 }
 
 async function createFolder(event, user, room, ctx) {
@@ -386,7 +425,22 @@ async function listPhotos(folderId, room) {
   );
 
   const items = (res.Items || []).filter((item) => isRoomMatch(item.roomName, room.roomName));
-  return json(200, { items });
+  const nameMap = await loadDisplayNameMap(items.map((item) => item.createdBy));
+  const hydrated = items.map((item) => applyResolvedDisplayName(item, nameMap));
+
+  const withUrls = await Promise.all(
+    hydrated.map(async (photo) => {
+      if (!photo.s3Key) return photo;
+      const viewUrl = await getSignedUrl(
+        s3,
+        new GetObjectCommand({ Bucket: PHOTO_BUCKET, Key: photo.s3Key }),
+        { expiresIn: 600 }
+      );
+      return { ...photo, viewUrl };
+    })
+  );
+
+  return json(200, { items: withUrls });
 }
 
 async function createUploadUrl(folderId, body, room) {
@@ -583,7 +637,9 @@ async function listComments(photoId, room) {
   );
 
   const items = (res.Items || []).filter((item) => isRoomMatch(item.roomName, room.roomName));
-  return json(200, { items });
+  const nameMap = await loadDisplayNameMap(items.map((item) => item.createdBy));
+  const hydrated = items.map((item) => applyResolvedDisplayName(item, nameMap));
+  return json(200, { items: hydrated });
 }
 
 async function createComment(photoId, body, user, room, ctx) {
@@ -821,9 +877,12 @@ async function exportFolder(folderId, user, room, ctx) {
       })
     );
 
-    const commentLines = (commentsRes.Items || []).map(
-      (c, idx) => `${idx + 1}. ${c.text} (${c.createdByName})`
-    );
+    const comments = commentsRes.Items || [];
+    const commentNameMap = await loadDisplayNameMap(comments.map((c) => c.createdBy));
+    const commentLines = comments.map((c, idx) => {
+      const createdByName = commentNameMap[c.createdBy] || c.createdByName || 'unknown';
+      return `${idx + 1}. ${c.text} (${createdByName})`;
+    });
 
     slide.addText(commentLines.length ? commentLines.join('\n') : 'コメントなし', {
       x: 9.2,

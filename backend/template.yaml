@@ -167,29 +167,15 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       PublicAccessBlockConfiguration:
-        BlockPublicAcls: false
-        BlockPublicPolicy: false
-        IgnorePublicAcls: false
-        RestrictPublicBuckets: false
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
       CorsConfiguration:
         CorsRules:
           - AllowedHeaders: ["*"]
             AllowedMethods: [GET, PUT, POST, DELETE]
             AllowedOrigins: ["*"]
-
-  PhotoBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref PhotoBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: PublicReadPhotos
-            Effect: Allow
-            Principal: "*"
-            Action:
-              - s3:GetObject
-            Resource: !Sub "${PhotoBucket.Arn}/*"
 
   ExportBucket:
     Type: AWS::S3::Bucket
