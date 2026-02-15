@@ -328,17 +328,31 @@ Resources:
       Protocol: email
       Endpoint: !Ref AlertEmail
 
-  ApiFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
+  LogRetentionFunction:
+    Type: AWS::Serverless::Function
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${ApiFunction}"
-      RetentionInDays: !Ref LogRetentionInDays
+      CodeUri: src/
+      Handler: log-retention.handler
+      Runtime: nodejs20.x
+      Timeout: 30
+      MemorySize: 128
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:DescribeLogGroups
+                - logs:PutRetentionPolicy
+              Resource: "*"
 
-  BackfillCodesFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
+  SetLogRetention:
+    Type: Custom::SetLogRetention
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${BackfillCodesFunction}"
+      ServiceToken: !GetAtt LogRetentionFunction.Arn
       RetentionInDays: !Ref LogRetentionInDays
+      LogGroupNames:
+        - !Sub "/aws/lambda/${ApiFunction}"
+        - !Sub "/aws/lambda/${BackfillCodesFunction}"
 
   ApiFunctionErrorsAlarm:
     Type: AWS::CloudWatch::Alarm
