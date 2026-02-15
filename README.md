@@ -79,5 +79,20 @@ cd /Users/aokikensaku/Documents/Devapps/kansa
 ## APIヘッダ
 APIは `Authorization: Bearer <Cognito ID Token>` を必須とします。
 
+## アラート通知（いつメールが来るか）
+本番ではSNSメール通知で以下のCloudWatch Alarmが発報した時にメールが届きます。
+注意: API Gatewayのスロットリングで `429` になっても、必ずしもこのメール通知に直結はしません（4XXのしきい値次第）。
+
+- `Lambda Errors`（5分間に1回以上）
+  - 例: Lambda内で例外が発生して `500 internal server error` を返した
+  - 例: DynamoDB/S3権限不足、SDKエラー、JSON parse失敗などで処理が落ちた
+- `Lambda Throttles`（5分間に1回以上）
+  - 例: 同時実行が上限に当たってLambdaがスロットルされた（大量アクセス時）
+- `API 5XXError`（5分間に1回以上）
+  - 例: Lambdaが `500` を返した、または統合エラーが発生した
+- `API 4XXError`（5分間に50回以上）
+  - 例: 不正な部屋名/パスワードで `403` が短時間に大量発生
+  - 例: 権限エラー `403` やリクエスト不備 `400` が短時間に集中
+
 ## 注意
 ルームパスワードはクライアント保持のため、漏えい時は同一ルームへのアクセスが可能です。定期変更とアクセス制限（WAF/IP制限）を併用してください。
