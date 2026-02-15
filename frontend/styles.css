@@ -240,6 +240,23 @@ select {
   color: var(--text);
 }
 
+#user-setup input,
+#room-setup input,
+#room-setup select,
+#room-setup textarea {
+  width: 100%;
+  max-width: 100%;
+}
+
+#user-setup input {
+  display: block;
+  margin-bottom: 10px;
+}
+
+#user-setup button {
+  margin-top: 2px;
+}
+
 button {
   border: 0;
   border-radius: 8px;
