@@ -117,6 +117,15 @@ function closeMenu() {
   }
 }
 
+function setMenuActionVisibility(showActions) {
+  if (els.resetUserBtn) {
+    els.resetUserBtn.classList.toggle('hidden', !showActions);
+  }
+  if (els.leaveRoomBtn) {
+    els.leaveRoomBtn.classList.toggle('hidden', !showActions);
+  }
+}
+
 function showError(message) {
   if (!els.errorBox) return;
   els.errorBox.textContent = message;
@@ -190,6 +199,7 @@ function preserveCurrentView(photoId) {
 
 function initUser() {
   initTheme();
+  setMenuActionVisibility(false);
   const userKey = localStorage.getItem('kansa_user_key');
   const userName = localStorage.getItem('kansa_user_name');
   const roomName = localStorage.getItem('kansa_room_name');
@@ -214,6 +224,7 @@ function showRoomSetup() {
   if (els.roomSetup) els.roomSetup.classList.remove('hidden');
   els.app.classList.add('hidden');
   if (els.globalMenuWrap) els.globalMenuWrap.classList.add('hidden');
+  setMenuActionVisibility(false);
   closeMenu();
 }
 
@@ -222,6 +233,7 @@ function showApp() {
   if (els.roomSetup) els.roomSetup.classList.add('hidden');
   els.app.classList.remove('hidden');
   if (els.globalMenuWrap) els.globalMenuWrap.classList.remove('hidden');
+  setMenuActionVisibility(true);
   closeMenu();
   els.currentName.textContent = state.userName;
   if (els.currentRoom) els.currentRoom.textContent = state.roomName || '-';
