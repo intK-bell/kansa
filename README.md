@@ -2,6 +2,10 @@
 
 localStorageベースの利用者管理で、写真アップロード・コメント・本人のみ削除・フォルダ単位PowerPoint出力を行う構成です。
 
+## License
+本リポジトリは `All rights reserved` です。  
+著作権者の事前書面許可なしに、利用・複製・改変・再配布を禁止します。詳細は `LICENSE` を参照してください。
+
 ## 構成
 - Frontend: `frontend/` (静的SPA)
 - Backend: `backend/` (AWS SAM: Lambda + API Gateway + DynamoDB + S3)
@@ -56,6 +60,7 @@ cd /Users/aokikensaku/Documents/Devapps/kansa
 
 本番値は `frontend/config.js` で設定できます（`apiBase`, `photoBucket`）。
 運用手順は `docs/production-ops.md` を参照してください。
+会社PCでの初期構築は `docs/company-pc-setup.md` を参照してください。
 
 ## 利用フロー
 1. 初回はニックネーム入力（`localStorage`に`user_key`と`user_name`保存）
