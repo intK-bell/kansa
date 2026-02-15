@@ -525,6 +525,9 @@ async function createUploadUrl(folderId, body, room) {
   const previewUploadUrl = await getSignedUrl(s3, previewCmd, { expiresIn: 300 });
   return json(200, {
     photoId,
+    // Backward compatibility for older frontends.
+    uploadUrl: originalUploadUrl,
+    s3Key: originalKey,
     originalUploadUrl,
     previewUploadUrl,
     originalS3Key: originalKey,
@@ -533,7 +536,9 @@ async function createUploadUrl(folderId, body, room) {
 }
 
 async function finalizePhoto(folderId, body, user, room, ctx) {
-  if (!body.photoId || !body.originalS3Key) return badRequest('photoId and originalS3Key are required');
+  const originalS3Key = body.originalS3Key || body.s3Key || null;
+  const previewS3Key = body.previewS3Key || null;
+  if (!body.photoId || !originalS3Key) return badRequest('photoId and originalS3Key are required');
   const folderRes = await ddb.send(
     new GetCommand({
       TableName: TABLE_NAME,
@@ -556,8 +561,8 @@ async function finalizePhoto(folderId, body, user, room, ctx) {
     folderCode,
     roomName: room.roomName,
     photoCode,
-    s3Key: body.originalS3Key,
-    previewKey: body.previewS3Key || null,
+    s3Key: originalS3Key,
+    previewKey: previewS3Key,
     fileName: body.fileName || null,
     createdBy: user.userKey,
     createdByName: user.userName,
