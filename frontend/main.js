@@ -154,6 +154,18 @@ async function startLogin() {
   window.location.href = authUrl.toString();
 }
 
+function startSignup() {
+  if (!hasCognitoConfig()) {
+    throw new Error('Cognito設定が不足しています。config.jsを確認してください。');
+  }
+  const signupUrl = new URL(`https://${COGNITO_DOMAIN}.auth.${COGNITO_REGION}.amazoncognito.com/signup`);
+  signupUrl.searchParams.set('client_id', COGNITO_CLIENT_ID);
+  signupUrl.searchParams.set('response_type', 'code');
+  signupUrl.searchParams.set('scope', 'openid email profile');
+  signupUrl.searchParams.set('redirect_uri', COGNITO_REDIRECT_URI);
+  window.location.href = signupUrl.toString();
+}
+
 async function completeLoginFromCallback() {
   const url = new URL(window.location.href);
   const code = url.searchParams.get('code');
@@ -204,6 +216,7 @@ const els = {
   app: document.querySelector('#app'),
   globalMenuWrap: document.querySelector('#global-menu-wrap'),
   loginBtn: document.querySelector('#login-btn'),
+  signupBtn: document.querySelector('#signup-btn'),
   logoutBtn: document.querySelector('#logout-btn'),
   createRoomName: document.querySelector('#create-room-name'),
   createRoomPassword: document.querySelector('#create-room-password'),
@@ -789,6 +802,12 @@ if (els.loginBtn) {
   els.loginBtn.onclick = safeAction(async () => {
     await startLogin();
   }, 'ログイン');
+}
+
+if (els.signupBtn) {
+  els.signupBtn.onclick = safeAction(async () => {
+    startSignup();
+  }, '新規登録');
 }
 
 if (els.resetUserBtn) {
