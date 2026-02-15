@@ -1,6 +1,6 @@
 # Kansa (監査写真コメントアプリ)
 
-localStorageベースの利用者管理で、写真アップロード・コメント・本人のみ削除・フォルダ単位PowerPoint出力を行う構成です。
+Cognito認証（MFA）で利用者を管理し、写真アップロード・コメント・本人のみ削除・フォルダ単位PowerPoint出力を行う構成です。
 
 ## License
 本リポジトリは `All rights reserved` です。  
@@ -62,6 +62,12 @@ cd /Users/aokikensaku/Documents/Devapps/kansa
 運用手順は `docs/production-ops.md` を参照してください。
 会社PCでの初期構築は `docs/company-pc-setup.md` を参照してください。
 
+### Cognito設定
+`backend` デプロイ後、CloudFormation Outputs の以下を `frontend/config.js` に設定してください。
+- `CognitoHostedUiDomain` からドメインプレフィックス
+- `CognitoUserPoolClientId`
+- リージョン（例: `ap-northeast-1`）
+
 ## 利用フロー
 1. 初回はニックネーム入力（`localStorage`に`user_key`と`user_name`保存）
 2. フォルダ作成（例: `〇〇工場_20260214`）
@@ -71,9 +77,7 @@ cd /Users/aokikensaku/Documents/Devapps/kansa
 6. フォルダ単位でPowerPoint出力
 
 ## APIヘッダ
-POST/DELETE時は以下ヘッダ必須:
-- `x-user-key`
-- `x-user-name`
+APIは `Authorization: Bearer <Cognito ID Token>` を必須とします。
 
 ## 注意
-この方式は`localStorage`値を書き換え可能なため、厳密な本人性保証はできません。監査要件が厳しい場合はCognito等の認証導入を推奨します。
+ルームパスワードはクライアント保持のため、漏えい時は同一ルームへのアクセスが可能です。定期変更とアクセス制限（WAF/IP制限）を併用してください。

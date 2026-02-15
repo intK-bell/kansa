@@ -18,8 +18,6 @@ const s3 = new S3Client({});
 const TABLE_NAME = process.env.TABLE_NAME;
 const PHOTO_BUCKET = process.env.PHOTO_BUCKET;
 const EXPORT_BUCKET = process.env.EXPORT_BUCKET;
-const DEFAULT_ROOM_NAME = 'ちょこ';
-const DEFAULT_ROOM_PASSWORD = '1234';
 
 const json = (statusCode, body) => ({
   statusCode,
@@ -43,6 +41,13 @@ function auditLog(entry) {
 }
 
 function getUser(event) {
+  const claims = event?.requestContext?.authorizer?.jwt?.claims || null;
+  if (claims && claims.sub) {
+    const userName =
+      claims['cognito:username'] || claims.name || claims.email || claims.preferred_username || 'unknown';
+    return { userKey: claims.sub, userName };
+  }
+
   const headers = event.headers || {};
   const userKey = headers['x-user-key'] || headers['X-User-Key'];
   const rawUserName = headers['x-user-name'] || headers['X-User-Name'] || 'unknown';
@@ -68,8 +73,7 @@ function decodeText(value) {
 }
 
 function isRoomMatch(itemRoomName, requestedRoomName) {
-  if (itemRoomName) return itemRoomName === requestedRoomName;
-  return requestedRoomName === DEFAULT_ROOM_NAME;
+  return Boolean(itemRoomName) && itemRoomName === requestedRoomName;
 }
 
 function getRoomRequest(event, method) {
@@ -92,10 +96,6 @@ function getRoomRequest(event, method) {
 async function resolveRoom(roomName, roomPassword) {
   if (!roomName || !roomPassword) {
     throw new Error('MISSING_ROOM');
-  }
-
-  if (roomName === DEFAULT_ROOM_NAME && roomPassword === DEFAULT_ROOM_PASSWORD) {
-    return { roomName, roomId: 'default-room' };
   }
 
   const res = await ddb.send(
@@ -758,19 +758,8 @@ exports.handler = async (event) => {
     const path = event.requestContext.http.path;
     const isRoomCreate = method === 'POST' && path === '/rooms/create';
     const isRoomEnter = method === 'POST' && path === '/rooms/enter';
-    const isExportCall = method === 'POST' && /^\/folders\/[^/]+\/export$/.test(path);
-    let user;
     let room = null;
-
-    if (method !== 'GET' && !isExportCall && !isRoomEnter) {
-      user = getUser(event);
-    } else {
-      const headers = event.headers || {};
-      user = {
-        userKey: headers['x-user-key'] || headers['X-User-Key'] || 'guest',
-        userName: decodeText(headers['x-user-name'] || headers['X-User-Name'] || 'guest'),
-      };
-    }
+    const user = getUser(event);
 
     const p = event.pathParameters || {};
     const body = event.body ? JSON.parse(event.body) : {};
@@ -832,7 +821,7 @@ exports.handler = async (event) => {
     return json(404, { message: 'not found' });
   } catch (error) {
     if (error.message === 'MISSING_USER_KEY') {
-      return json(401, { message: 'x-user-key header is required' });
+      return json(401, { message: 'unauthorized' });
     }
     if (error.message === 'MISSING_ROOM') {
       return json(401, { message: 'roomName and roomPassword are required' });

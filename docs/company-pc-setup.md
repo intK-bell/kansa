@@ -34,7 +34,11 @@ sam deploy --profile company
 ```
 
 - `samconfig.toml` の設定でデプロイされます。
-- 完了後、CloudFormation Outputs の `ApiUrl` と `PhotoBucketName` を控えてください。
+- 完了後、CloudFormation Outputs の以下を控えてください。
+  - `ApiUrl`
+  - `PhotoBucketName`
+  - `CognitoHostedUiDomain`
+  - `CognitoUserPoolClientId`
 
 ## 5. Frontend設定（会社環境）
 
@@ -44,6 +48,10 @@ sam deploy --profile company
 window.KANSA_CONFIG = {
   apiBase: 'https://<会社のAPI-ID>.execute-api.ap-northeast-1.amazonaws.com',
   photoBucket: '<会社のPhotoBucketName>',
+  cognitoRegion: 'ap-northeast-1',
+  cognitoDomain: '<CognitoHostedUiDomainのprefix部分>',
+  cognitoClientId: '<CognitoUserPoolClientId>',
+  cognitoRedirectUri: 'https://<公開URL>',
 };
 ```
 

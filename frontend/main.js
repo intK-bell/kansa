@@ -3,10 +3,28 @@ const API_BASE =
   window.localStorage.getItem('kansa_api_base') || APP_CONFIG.apiBase || 'http://127.0.0.1:3000';
 const PHOTO_BUCKET =
   window.localStorage.getItem('kansa_photo_bucket') || APP_CONFIG.photoBucket || '';
+function normalizeCognitoDomain(raw) {
+  const value = String(raw || '').trim();
+  if (!value) return '';
+  const withoutProto = value.replace(/^https?:\/\//i, '');
+  const host = withoutProto.split('/')[0];
+  return host.replace(/\.auth\..*$/, '');
+}
+
+const COGNITO_REGION =
+  window.localStorage.getItem('kansa_cognito_region') || APP_CONFIG.cognitoRegion || '';
+const COGNITO_DOMAIN = normalizeCognitoDomain(
+  window.localStorage.getItem('kansa_cognito_domain') || APP_CONFIG.cognitoDomain || ''
+);
+const COGNITO_CLIENT_ID =
+  window.localStorage.getItem('kansa_cognito_client_id') || APP_CONFIG.cognitoClientId || '';
+const COGNITO_REDIRECT_URI =
+  window.localStorage.getItem('kansa_cognito_redirect_uri') || APP_CONFIG.cognitoRedirectUri || window.location.origin;
 
 const state = {
   userKey: null,
   userName: null,
+  idToken: null,
   roomName: null,
   roomPassword: null,
   folders: [],
@@ -69,11 +87,115 @@ function markAsRead(photoId, latestIncomingAt) {
   }
 }
 
-function generateUserKey() {
-  if (window.crypto && typeof window.crypto.randomUUID === 'function') {
-    return window.crypto.randomUUID();
+function hasCognitoConfig() {
+  return Boolean(COGNITO_REGION && COGNITO_DOMAIN && COGNITO_CLIENT_ID && COGNITO_REDIRECT_URI);
+}
+
+function parseJwt(token) {
+  if (!token) return null;
+  try {
+    const payload = token.split('.')[1];
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const json = atob(normalized);
+    return JSON.parse(json);
+  } catch (_) {
+    return null;
   }
-  return `user_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
+function clearAuth() {
+  localStorage.removeItem('kansa_id_token');
+  localStorage.removeItem('kansa_oauth_state');
+  localStorage.removeItem('kansa_oauth_code_verifier');
+  state.idToken = null;
+  state.userKey = null;
+  state.userName = null;
+}
+
+function randomString(length = 64) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+  const bytes = new Uint8Array(length);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => chars[b % chars.length]).join('');
+}
+
+async function sha256(text) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(text);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return new Uint8Array(hash);
+}
+
+function base64UrlEncode(bytes) {
+  let binary = '';
+  bytes.forEach((b) => {
+    binary += String.fromCharCode(b);
+  });
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function startLogin() {
+  if (!hasCognitoConfig()) {
+    throw new Error('Cognito設定が不足しています。config.jsを確認してください。');
+  }
+  const stateVal = randomString(32);
+  const verifier = randomString(64);
+  const challenge = base64UrlEncode(await sha256(verifier));
+  localStorage.setItem('kansa_oauth_state', stateVal);
+  localStorage.setItem('kansa_oauth_code_verifier', verifier);
+  const authUrl = new URL(`https://${COGNITO_DOMAIN}.auth.${COGNITO_REGION}.amazoncognito.com/oauth2/authorize`);
+  authUrl.searchParams.set('response_type', 'code');
+  authUrl.searchParams.set('client_id', COGNITO_CLIENT_ID);
+  authUrl.searchParams.set('redirect_uri', COGNITO_REDIRECT_URI);
+  authUrl.searchParams.set('scope', 'openid email profile');
+  authUrl.searchParams.set('state', stateVal);
+  authUrl.searchParams.set('code_challenge_method', 'S256');
+  authUrl.searchParams.set('code_challenge', challenge);
+  window.location.href = authUrl.toString();
+}
+
+async function completeLoginFromCallback() {
+  const url = new URL(window.location.href);
+  const code = url.searchParams.get('code');
+  const returnedState = url.searchParams.get('state');
+  if (!code) return false;
+
+  const expectedState = localStorage.getItem('kansa_oauth_state');
+  const verifier = localStorage.getItem('kansa_oauth_code_verifier');
+  if (!expectedState || !verifier || returnedState !== expectedState) {
+    throw new Error('Cognitoログイン検証に失敗しました。');
+  }
+
+  const body = new URLSearchParams();
+  body.set('grant_type', 'authorization_code');
+  body.set('client_id', COGNITO_CLIENT_ID);
+  body.set('redirect_uri', COGNITO_REDIRECT_URI);
+  body.set('code', code);
+  body.set('code_verifier', verifier);
+
+  const tokenRes = await fetch(
+    `https://${COGNITO_DOMAIN}.auth.${COGNITO_REGION}.amazoncognito.com/oauth2/token`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: body.toString(),
+    }
+  );
+  if (!tokenRes.ok) {
+    const text = await tokenRes.text();
+    throw new Error(`Cognitoトークン取得失敗: ${text || tokenRes.status}`);
+  }
+  const tokenJson = await tokenRes.json();
+  if (!tokenJson.id_token) {
+    throw new Error('Cognitoトークンが取得できませんでした。');
+  }
+  localStorage.setItem('kansa_id_token', tokenJson.id_token);
+  localStorage.removeItem('kansa_oauth_state');
+  localStorage.removeItem('kansa_oauth_code_verifier');
+  url.searchParams.delete('code');
+  url.searchParams.delete('state');
+  window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+  return true;
 }
 
 const els = {
@@ -81,8 +203,8 @@ const els = {
   roomSetup: document.querySelector('#room-setup'),
   app: document.querySelector('#app'),
   globalMenuWrap: document.querySelector('#global-menu-wrap'),
-  nicknameInput: document.querySelector('#nickname-input'),
-  saveUserBtn: document.querySelector('#save-user-btn'),
+  loginBtn: document.querySelector('#login-btn'),
+  logoutBtn: document.querySelector('#logout-btn'),
   createRoomName: document.querySelector('#create-room-name'),
   createRoomPassword: document.querySelector('#create-room-password'),
   createRoomPasswordConfirm: document.querySelector('#create-room-password-confirm'),
@@ -123,6 +245,9 @@ function setMenuActionVisibility(showActions) {
   }
   if (els.leaveRoomBtn) {
     els.leaveRoomBtn.classList.toggle('hidden', !showActions);
+  }
+  if (els.logoutBtn) {
+    els.logoutBtn.classList.toggle('hidden', !showActions);
   }
 }
 
@@ -197,16 +322,26 @@ function preserveCurrentView(photoId) {
   state.restoreScrollY = window.scrollY;
 }
 
-function initUser() {
+async function initUser() {
   initTheme();
   setMenuActionVisibility(false);
-  const userKey = localStorage.getItem('kansa_user_key');
-  const userName = localStorage.getItem('kansa_user_name');
+  if (!hasCognitoConfig()) {
+    if (els.userSetup) els.userSetup.classList.remove('hidden');
+    showError('Cognito設定が不足しています。config.jsにdomain/clientId/regionを設定してください。');
+    return;
+  }
+  await completeLoginFromCallback();
+  const idToken = localStorage.getItem('kansa_id_token');
   const roomName = localStorage.getItem('kansa_room_name');
   const roomPassword = localStorage.getItem('kansa_room_password');
-  if (userKey && userName) {
-    state.userKey = userKey;
-    state.userName = userName;
+  const claims = parseJwt(idToken);
+  const now = Math.floor(Date.now() / 1000);
+
+  if (idToken && claims && claims.sub && (!claims.exp || claims.exp > now)) {
+    state.idToken = idToken;
+    state.userKey = claims.sub;
+    state.userName =
+      claims['cognito:username'] || claims.name || claims.email || claims.preferred_username || 'unknown';
     if (roomName && roomPassword) {
       state.roomName = roomName;
       state.roomPassword = roomPassword;
@@ -216,7 +351,8 @@ function initUser() {
     }
     return;
   }
-  els.userSetup.classList.remove('hidden');
+  clearAuth();
+  if (els.userSetup) els.userSetup.classList.remove('hidden');
 }
 
 function showRoomSetup() {
@@ -242,13 +378,15 @@ function showApp() {
 
 function headers(method = 'GET') {
   const upper = String(method || 'GET').toUpperCase();
+  const authHeader = state.idToken ? { Authorization: `Bearer ${state.idToken}` } : {};
   if (upper === 'GET') {
-    return {};
+    return authHeader;
   }
   const safeUserName = encodeURIComponent(state.userName || 'unknown');
   const safeRoomName = encodeURIComponent(state.roomName || '');
   const safeRoomPassword = encodeURIComponent(state.roomPassword || '');
   return {
+    ...authHeader,
     'content-type': 'application/json',
     'x-user-key': state.userKey,
     'x-user-name': safeUserName,
@@ -283,6 +421,12 @@ async function api(path, options = {}) {
 
   if (!res.ok) {
     const text = await res.text();
+    if (res.status === 401) {
+      clearAuth();
+      if (els.app) els.app.classList.add('hidden');
+      if (els.roomSetup) els.roomSetup.classList.add('hidden');
+      if (els.userSetup) els.userSetup.classList.remove('hidden');
+    }
     throw new Error(`APIエラー(${res.status}): ${text || 'unknown error'}`);
   }
 
@@ -641,30 +785,47 @@ async function renderPhotos() {
   }
 }
 
-els.saveUserBtn.onclick = () => {
-  clearError();
-  const name = els.nicknameInput.value.trim();
-  if (!name) return;
+if (els.loginBtn) {
+  els.loginBtn.onclick = safeAction(async () => {
+    await startLogin();
+  }, 'ログイン');
+}
 
-  const userKey = generateUserKey();
-  localStorage.setItem('kansa_user_key', userKey);
-  localStorage.setItem('kansa_user_name', name);
-  state.userKey = userKey;
-  state.userName = name;
-  showRoomSetup();
-};
+if (els.resetUserBtn) {
+  els.resetUserBtn.onclick = () => {
+    showToast('ユーザー名変更はCognito側で管理してください。');
+    closeMenu();
+  };
+}
 
-els.resetUserBtn.onclick = () => {
-  const nextName = window.prompt('新しいユーザー名', state.userName || '');
-  if (nextName === null) return;
-  const trimmed = nextName.trim();
-  if (!trimmed) return;
-  state.userName = trimmed;
-  localStorage.setItem('kansa_user_name', trimmed);
-  if (els.currentName) els.currentName.textContent = trimmed;
-  showToast('ユーザー名を変更しました。');
-  closeMenu();
-};
+if (els.logoutBtn) {
+  els.logoutBtn.onclick = () => {
+    localStorage.removeItem('kansa_room_name');
+    localStorage.removeItem('kansa_room_password');
+    state.roomName = null;
+    state.roomPassword = null;
+    state.selectedFolder = null;
+    state.folders = [];
+    state.photos = [];
+    state.openAccordions.clear();
+    state.restoreScrollY = null;
+    clearAuth();
+    closeMenu();
+    if (els.folderDetail) els.folderDetail.classList.add('hidden');
+
+    if (hasCognitoConfig()) {
+      const logoutUrl = new URL(`https://${COGNITO_DOMAIN}.auth.${COGNITO_REGION}.amazoncognito.com/logout`);
+      logoutUrl.searchParams.set('client_id', COGNITO_CLIENT_ID);
+      logoutUrl.searchParams.set('logout_uri', COGNITO_REDIRECT_URI);
+      window.location.href = logoutUrl.toString();
+      return;
+    }
+
+    if (els.userSetup) els.userSetup.classList.remove('hidden');
+    if (els.roomSetup) els.roomSetup.classList.add('hidden');
+    if (els.app) els.app.classList.add('hidden');
+  };
+}
 
 if (els.leaveRoomBtn) {
   els.leaveRoomBtn.onclick = () => {
@@ -815,4 +976,7 @@ if (els.folderSelect) {
   });
 }
 
-initUser();
+initUser().catch((error) => {
+  console.error(error);
+  showError(`初期化失敗: ${asMessage(error)}`);
+});
