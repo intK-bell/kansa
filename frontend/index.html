@@ -50,20 +50,22 @@
 
       <section id="room-setup" class="card hidden">
         <h2>お部屋</h2>
-        <p class="muted">新規作成または入室を選んでください。</p>
+        <p class="muted">管理者はお部屋を作成、メンバーは招待URLから参加します。</p>
         <div class="room-grid">
           <div class="room-card">
             <h3>新規作成</h3>
             <input id="create-room-name" placeholder="お部屋名" />
-            <input id="create-room-password" placeholder="パスワード" type="password" />
-            <input id="create-room-password-confirm" placeholder="パスワード（確認）" type="password" />
             <button id="create-room-btn">お部屋を作る</button>
           </div>
+        </div>
+        <div class="room-grid" style="margin-top:14px;">
           <div class="room-card">
-            <h3>入室</h3>
-            <input id="enter-room-name" placeholder="お部屋名" />
-            <input id="enter-room-password" placeholder="パスワード" type="password" />
-            <button id="enter-room-btn">お部屋へ入る</button>
+            <h3>招待されたお部屋</h3>
+            <div class="row" style="margin-bottom:8px;">
+              <button id="refresh-my-rooms-btn" type="button">一覧更新</button>
+            </div>
+            <div id="my-rooms-list" class="muted">読み込み中...</div>
+            <p class="muted" style="margin-top:10px;">※ 退出すると「アクティブなお部屋」が解除されます（所属は残ります）。</p>
           </div>
         </div>
       </section>
@@ -83,20 +85,36 @@
 
         <section id="team-admin" class="card hidden">
           <h2>チーム管理（管理者）</h2>
+          <h3 style="margin-top:8px;">メンバー</h3>
+          <div class="row" style="margin-top:10px;">
+            <button id="create-invite-btn" type="button">招待URLを発行（7日）</button>
+            <button id="revoke-invite-btn" type="button" class="danger hidden">招待URLを失効</button>
+            <input id="invite-url" placeholder="招待URL" readonly style="flex:1; min-width:180px;" />
+          </div>
+          <div id="member-list" style="margin-top:10px;"></div>
+
+          <h3 style="margin-top:16px;">フォルダ</h3>
+          <div id="folder-admin-list" style="margin-top:10px;"></div>
+
+          <h3 style="margin-top:16px;">容量</h3>
           <p id="billing-status" class="muted"></p>
           <div class="row">
             <button id="purchase-1gbm" type="button">+1GB・月 (¥1,000)</button>
             <button id="purchase-10gbm" type="button">+10GB・月 (¥8,000)</button>
             <button id="purchase-50gbm" type="button">+50GB・月 (¥35,000)</button>
           </div>
+
+          <h3 style="margin-top:16px;">お部屋</h3>
           <div class="row" style="margin-top:10px;">
             <button id="delete-team-btn" type="button" class="danger">お部屋を削除（全データ）</button>
           </div>
-          <h3 style="margin-top:14px;">メンバー</h3>
-          <div id="member-list"></div>
           <p class="muted" style="margin-top:10px;">
-            ※ 使用量は、アップロード画像に加え、サムネイル等の自動生成データも含みます。
+            ※ 削除は、アップロード画像に加え、サムネイル等の自動生成データも含みます。
           </p>
+
+          <div class="row" style="margin-top:10px;">
+            <button id="team-admin-back-btn" type="button">戻る</button>
+          </div>
         </section>
 
         <section class="card">
@@ -135,6 +153,6 @@
 
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
     <script src="./config.js?v=20260215-2"></script>
-    <script src="./main.js?v=20260215-12" type="module"></script>
+    <script src="./main.js?v=20260216-7" type="module"></script>
   </body>
 </html>

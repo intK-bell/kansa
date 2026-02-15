@@ -26,12 +26,12 @@ const state = {
   userName: null,
   idToken: null,
   roomName: null,
-  roomPassword: null,
   teamRole: null,
   isAdmin: false,
   uploadBlocked: false,
   billing: null,
   ownerUserKey: null,
+  lastInviteToken: null,
   folderPasswordById: {},
   folders: [],
   folderUnreadMap: {},
@@ -127,9 +127,31 @@ function clearAuth() {
   localStorage.removeItem('kansa_id_token');
   localStorage.removeItem('kansa_oauth_state');
   localStorage.removeItem('kansa_oauth_code_verifier');
+  localStorage.removeItem('kansa_room_name');
   state.idToken = null;
   state.userKey = null;
   state.userName = null;
+}
+
+function resetRoomContext() {
+  localStorage.removeItem('kansa_room_name');
+  state.roomName = null;
+  state.teamRole = null;
+  state.isAdmin = false;
+  state.uploadBlocked = false;
+  state.billing = null;
+  state.ownerUserKey = null;
+  state.lastInviteToken = null;
+  state.folderPasswordById = {};
+  state.folders = [];
+  state.folderUnreadMap = {};
+  state.selectedFolder = null;
+  state.photos = [];
+  state.openAccordions.clear();
+  state.restoreScrollY = null;
+  if (els.folderDetail) els.folderDetail.classList.add('hidden');
+  renderBillingBar();
+  setAdminUiVisibility();
 }
 
 function supportsPkce() {
@@ -274,12 +296,9 @@ const els = {
   signupBtn: document.querySelector('#signup-btn'),
   logoutBtn: document.querySelector('#logout-btn'),
   createRoomName: document.querySelector('#create-room-name'),
-  createRoomPassword: document.querySelector('#create-room-password'),
-  createRoomPasswordConfirm: document.querySelector('#create-room-password-confirm'),
   createRoomBtn: document.querySelector('#create-room-btn'),
-  enterRoomName: document.querySelector('#enter-room-name'),
-  enterRoomPassword: document.querySelector('#enter-room-password'),
-  enterRoomBtn: document.querySelector('#enter-room-btn'),
+  refreshMyRoomsBtn: document.querySelector('#refresh-my-rooms-btn'),
+  myRoomsList: document.querySelector('#my-rooms-list'),
   leaveRoomBtn: document.querySelector('#leave-room-btn'),
   menuBtn: document.querySelector('#menu-btn'),
   menuPanel: document.querySelector('#menu-panel'),
@@ -288,13 +307,20 @@ const els = {
   resetUserBtn: document.querySelector('#reset-user-btn'),
   teamAdminBtn: document.querySelector('#team-admin-btn'),
   teamAdminCard: document.querySelector('#team-admin'),
+  teamAdminBackBtn: document.querySelector('#team-admin-back-btn'),
   billingBar: document.querySelector('#billing-bar'),
   billingStatus: document.querySelector('#billing-status'),
   purchase1Btn: document.querySelector('#purchase-1gbm'),
   purchase10Btn: document.querySelector('#purchase-10gbm'),
   purchase50Btn: document.querySelector('#purchase-50gbm'),
   deleteTeamBtn: document.querySelector('#delete-team-btn'),
+  createInviteBtn: document.querySelector('#create-invite-btn'),
+  revokeInviteBtn: document.querySelector('#revoke-invite-btn'),
+  inviteUrl: document.querySelector('#invite-url'),
   memberList: document.querySelector('#member-list'),
+  folderAdminList: document.querySelector('#folder-admin-list'),
+  folderCreateCard: document.querySelector('#folder-create-card'),
+  folderListCard: document.querySelector('#folder-list-card'),
   folderDeleteBtn: document.querySelector('#delete-folder-btn'),
   currentName: document.querySelector('#current-name'),
   currentRoom: document.querySelector('#current-room'),
@@ -319,6 +345,13 @@ function closeMenu() {
   if (els.menuPanel) {
     els.menuPanel.classList.add('hidden');
   }
+}
+
+function setTeamAdminMode(isOpen) {
+  // While team admin is open, hide main folder workflow to reduce clutter.
+  if (els.folderCreateCard) els.folderCreateCard.classList.toggle('hidden', isOpen);
+  if (els.folderListCard) els.folderListCard.classList.toggle('hidden', isOpen);
+  if (els.folderDetail) els.folderDetail.classList.toggle('hidden', isOpen ? true : !state.selectedFolder);
 }
 
 function setMenuActionVisibility(showActions) {
@@ -370,7 +403,6 @@ function renderBillingBar() {
   const parts = [];
   parts.push(`使用量: ${usage} / 無料: ${free}（残り ${freeRemain}）`);
   parts.push(`追加残り: ${gbm} GB・月 相当`);
-  parts.push(`推定: ${days} 日`);
   if (state.ownerUserKey && state.userKey) {
     parts.push(state.ownerUserKey === state.userKey ? '作成者' : '参加者');
   }
@@ -506,10 +538,17 @@ async function initUser() {
     showError('Cognito設定が不足しています。config.jsにdomain/clientId/regionを設定してください。');
     return;
   }
+
+  // Preserve invite token across Cognito redirects (redirect_uri cannot keep arbitrary query params).
+  const currentUrl = new URL(window.location.href);
+  const inviteFromUrl = currentUrl.searchParams.get('invite');
+  if (inviteFromUrl) {
+    localStorage.setItem('kansa_pending_invite', inviteFromUrl);
+  }
+
   await completeLoginFromCallback();
   const idToken = localStorage.getItem('kansa_id_token');
-  const roomName = localStorage.getItem('kansa_room_name');
-  const roomPassword = localStorage.getItem('kansa_room_password');
+  const inviteToken = inviteFromUrl || localStorage.getItem('kansa_pending_invite');
   const claims = parseJwt(idToken);
   const now = Math.floor(Date.now() / 1000);
 
@@ -519,11 +558,34 @@ async function initUser() {
     state.userName =
       claims['cognito:username'] || claims.name || claims.email || claims.preferred_username || 'unknown';
     await ensureDisplayName();
-    if (roomName && roomPassword) {
-      state.roomName = roomName;
-      state.roomPassword = roomPassword;
+    if (inviteToken) {
+      try {
+        const res = await api('/invites/accept', { method: 'POST', body: JSON.stringify({ token: inviteToken }) });
+        state.roomName = res.roomName || null;
+        localStorage.removeItem('kansa_pending_invite');
+        const url = new URL(window.location.href);
+        url.searchParams.delete('invite');
+        window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+        showApp();
+        showToast('お部屋に参加しました。');
+        return;
+      } catch (error) {
+        showError(`招待URLの処理に失敗しました: ${asMessage(error)}`);
+        // The token may be expired/invalid; avoid retry loops.
+        localStorage.removeItem('kansa_pending_invite');
+        // Fall through to normal room discovery/setup.
+      }
+    }
+    // Resolve room solely from membership; don't trust local cache across users.
+    try {
+      const data = await api('/team/me', { method: 'GET' });
+      if (!data || data.hasRoom === false || !data.roomName) {
+        showRoomSetup();
+        return;
+      }
+      state.roomName = data.roomName || null;
       showApp();
-    } else {
+    } catch (_) {
       showRoomSetup();
     }
     return;
@@ -539,12 +601,46 @@ function showRoomSetup() {
   if (state.userKey) {
     if (els.globalMenuWrap) els.globalMenuWrap.classList.remove('hidden');
     if (els.logoutBtn) els.logoutBtn.classList.remove('hidden');
+    loadMyRooms().catch(() => {});
   } else {
     if (els.globalMenuWrap) els.globalMenuWrap.classList.add('hidden');
     if (els.logoutBtn) els.logoutBtn.classList.add('hidden');
   }
   setMenuActionVisibility(false);
   closeMenu();
+}
+
+function renderMyRooms(items, activeRoomId) {
+  if (!els.myRoomsList) return;
+  const rooms = (items || []).filter((r) => r && r.roomId && r.roomName && r.status !== 'left');
+  if (!rooms.length) {
+    els.myRoomsList.textContent = '招待されたお部屋がなかです';
+    return;
+  }
+  els.myRoomsList.innerHTML = '';
+  rooms.forEach((r) => {
+    const row = el('div', { class: 'row', style: 'gap:8px; justify-content:space-between; align-items:center;' });
+    const suffix = r.roomId === activeRoomId ? '（参加中）' : r.status === 'inactive' ? '（退出中）' : '';
+    const label = el('div', {}, `${r.roomName}${suffix}`);
+    const btn = el('button', { type: 'button' }, r.roomId === activeRoomId ? '入室中' : 'この部屋へ');
+    btn.disabled = r.roomId === activeRoomId;
+    btn.onclick = safeAction(async () => {
+      const res = await api('/rooms/switch', { method: 'POST', body: JSON.stringify({ roomId: r.roomId }) });
+      state.roomName = res.roomName || r.roomName;
+      showApp();
+    }, 'お部屋切替');
+    row.appendChild(label);
+    row.appendChild(btn);
+    els.myRoomsList.appendChild(row);
+  });
+}
+
+async function loadMyRooms() {
+  if (!state.idToken) return;
+  if (!els.myRoomsList) return;
+  els.myRoomsList.textContent = '読み込み中...';
+  const res = await api('/rooms/mine', { method: 'GET' });
+  renderMyRooms(res.items || [], res.activeRoomId || null);
 }
 
 function showApp() {
@@ -566,15 +662,8 @@ function showApp() {
 function headers(method = 'GET') {
   const upper = String(method || 'GET').toUpperCase();
   const authHeader = state.idToken ? { Authorization: `Bearer ${state.idToken}` } : {};
-  const safeRoomName = encodeURIComponent(state.roomName || '');
-  const safeRoomPassword = encodeURIComponent(state.roomPassword || '');
-  const roomHeaders =
-    state.roomName && state.roomPassword
-      ? {
-          'x-room-name': safeRoomName,
-          'x-room-password': safeRoomPassword,
-        }
-      : {};
+  // Room headers are deprecated. Room is inferred from membership (/team/me, invite accept).
+  const roomHeaders = {};
   if (upper === 'GET') return { ...authHeader, ...roomHeaders };
   const safeUserName = encodeURIComponent(state.userName || 'unknown');
   return {
@@ -616,6 +705,10 @@ async function api(path, options = {}) {
       if (els.roomSetup) els.roomSetup.classList.add('hidden');
       if (els.userSetup) els.userSetup.classList.remove('hidden');
     }
+    if (res.status === 403 && text.includes('"no active room"')) {
+      resetRoomContext();
+      showRoomSetup();
+    }
     throw new Error(`APIエラー(${res.status}): ${text || 'unknown error'}`);
   }
 
@@ -647,34 +740,56 @@ async function loadAdminPanel() {
   if (!state.isAdmin) return;
   if (!els.teamAdminCard || els.teamAdminCard.classList.contains('hidden')) return;
 
+  // Members
   try {
     const members = await api('/team/members', { method: 'GET' });
     const items = members.items || [];
     if (els.memberList) {
       els.memberList.innerHTML = '';
       if (!items.length) {
-        els.memberList.appendChild(el('div', { class: 'muted' }, 'メンバーがなかです'));
+        els.memberList.appendChild(el('div', { class: 'muted' }, 'メンバーがおらんばい'));
       } else {
         items.forEach((m) => {
           const row = el('div', { class: 'member-row' });
-          const left = el('div', {}, `${m.userKey} / ${m.role} / ${m.status}`);
+          const name = m.displayName || m.userKey;
+          const left = el(
+            'div',
+            {},
+            `${name} / ${m.role} / ${m.status}${m.folderScope ? ` / 閲覧:${m.folderScope}` : ''}`
+          );
           row.appendChild(left);
 
           const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
-          const toggleBtn = el(
-            'button',
-            { type: 'button', class: m.status === 'disabled' ? '' : 'danger' },
-            m.status === 'disabled' ? '有効化' : '無効化'
-          );
-          toggleBtn.onclick = safeAction(async () => {
-            const nextStatus = m.status === 'disabled' ? 'active' : 'disabled';
+          const scopeSelect = el('select', { style: 'min-width:120px;' });
+          scopeSelect.appendChild(el('option', { value: 'own' }, '自分のフォルダのみ'));
+          scopeSelect.appendChild(el('option', { value: 'all' }, '全フォルダ表示'));
+          scopeSelect.value = m.role === 'admin' ? 'all' : m.folderScope || 'own';
+          scopeSelect.disabled = m.role === 'admin' || m.userKey === state.ownerUserKey;
+          scopeSelect.onchange = safeAction(async () => {
+            const next = scopeSelect.value;
             await api(`/team/members/${encodeURIComponent(m.userKey)}`, {
               method: 'PUT',
-              body: JSON.stringify({ status: nextStatus }),
+              body: JSON.stringify({ folderScope: next }),
             });
             await loadAdminPanel();
-          }, 'メンバー更新');
-          actions.appendChild(toggleBtn);
+          }, '権限更新');
+          actions.appendChild(scopeSelect);
+
+          // Remove member (kick) with confirm.
+          if (m.role !== 'admin' && m.userKey !== state.ownerUserKey && m.status !== 'left') {
+            const removeBtn = el('button', { type: 'button', class: 'danger' }, '削除');
+            removeBtn.onclick = safeAction(async () => {
+              const ok = window.confirm(`メンバー「${name}」をお部屋から削除してよかですか？（本人は入れんごとなります）`);
+              if (!ok) return;
+              await api(`/team/members/${encodeURIComponent(m.userKey)}`, {
+                method: 'PUT',
+                body: JSON.stringify({ status: 'left' }),
+              });
+              showToast('メンバーを削除しました。');
+              await loadAdminPanel();
+            }, 'メンバー削除');
+            actions.appendChild(removeBtn);
+          }
           row.appendChild(actions);
           els.memberList.appendChild(row);
         });
@@ -687,6 +802,41 @@ async function loadAdminPanel() {
     }
   }
 
+  // Folder admin list
+  try {
+    const data = await api('/folders', { method: 'GET' });
+    const folders = data.items || [];
+    if (els.folderAdminList) {
+      els.folderAdminList.innerHTML = '';
+      if (!folders.length) {
+        els.folderAdminList.appendChild(el('div', { class: 'muted' }, 'フォルダがなかです'));
+      } else {
+        folders.forEach((f) => {
+          const row = el('div', { class: 'member-row' });
+          const left = el('div', {}, `${f.folderCode || ''} ${f.title || f.folderId}（作成:${f.createdByName || f.createdBy}）`);
+          row.appendChild(left);
+          const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
+          const delBtn = el('button', { type: 'button', class: 'danger' }, '削除');
+          delBtn.onclick = safeAction(async () => {
+            const ok = window.confirm(`フォルダ「${f.title || f.folderId}」を削除してよかですか？（写真とコメントも消えます）`);
+            if (!ok) return;
+            await api(`/folders/${f.folderId}`, { method: 'DELETE' });
+            await loadFolders();
+            await loadAdminPanel();
+          }, 'フォルダ削除');
+          actions.appendChild(delBtn);
+          row.appendChild(actions);
+          els.folderAdminList.appendChild(row);
+        });
+      }
+    }
+  } catch (error) {
+    if (els.folderAdminList) {
+      els.folderAdminList.innerHTML = '';
+      els.folderAdminList.appendChild(el('div', { class: 'muted' }, `フォルダ取得失敗: ${asMessage(error)}`));
+    }
+  }
+
   if (els.billingStatus && state.billing) {
     const b = state.billing;
     const freeRemainBytes = Math.max(0, Number(b.freeBytes || 0) - Number(b.usageBytes || 0));
@@ -694,8 +844,52 @@ async function loadAdminPanel() {
       b.freeBytes
     )}（残り ${formatBytes(freeRemainBytes)}） / 追加残り ${Number(
       b.gbMonthEquivalent || 0
-    ).toFixed(2)} GB・月 相当 / 推定 ${b.estimatedDaysLeft === null ? '-' : Math.max(0, b.estimatedDaysLeft).toFixed(1)} 日`;
+    ).toFixed(2)} GB・月 相当`;
   }
+}
+
+async function setInviteUrlText(url) {
+  if (els.inviteUrl) els.inviteUrl.value = url || '';
+  if (!url) return;
+  try {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      await navigator.clipboard.writeText(url);
+      showToast('招待URLをコピーしました。');
+      return;
+    }
+  } catch (_) {
+    // Ignore and fall back.
+  }
+  window.prompt('招待URL（コピーしてください）', url);
+}
+
+if (els.createInviteBtn) {
+  els.createInviteBtn.onclick = safeAction(async () => {
+    const res = await api('/invites/create', { method: 'POST', body: JSON.stringify({}) });
+    const token = res.token;
+    if (!token) throw new Error('招待トークンが取得できませんでした。');
+    state.lastInviteToken = token;
+    if (els.revokeInviteBtn) els.revokeInviteBtn.classList.remove('hidden');
+    const base = window.location.origin + window.location.pathname;
+    const url = `${base}?invite=${encodeURIComponent(token)}`;
+    await setInviteUrlText(url);
+  }, '招待URL発行');
+}
+
+if (els.revokeInviteBtn) {
+  els.revokeInviteBtn.onclick = safeAction(async () => {
+    if (!state.lastInviteToken) {
+      showError('失効する招待URLがなかです（先に発行してください）');
+      return;
+    }
+    const ok = window.confirm('この招待URLを失効してよかですか？');
+    if (!ok) return;
+    await api('/invites/revoke', { method: 'POST', body: JSON.stringify({ token: state.lastInviteToken }) });
+    state.lastInviteToken = null;
+    if (els.inviteUrl) els.inviteUrl.value = '';
+    els.revokeInviteBtn.classList.add('hidden');
+    showToast('招待URLを失効しました。');
+  }, '招待URL失効');
 }
 
 async function loadFolders() {
@@ -720,9 +914,9 @@ async function computeFolderUnread(folderId) {
   const photosData = await api(`/folders/${folderId}/photos`, { method: 'GET' });
   const photos = photosData.items || [];
   for (const photo of photos) {
-    const commentsData = await api(`/photos/${photo.photoId}/comments`, { method: 'GET' });
-    const comments = commentsData.items || [];
-    const latestIncoming = getLatestIncomingCommentAt(comments);
+    const latestAt = photo.latestCommentAt || '';
+    const latestBy = photo.latestCommentBy || '';
+    const latestIncoming = latestAt && latestBy && latestBy !== state.userKey ? latestAt : '';
     if (isUnread(photo.photoId, latestIncoming)) return true;
   }
   return false;
@@ -1002,76 +1196,84 @@ async function renderPhotos() {
     }
     card.appendChild(photoEditWrap);
 
-    const comments = await loadComments(photo.photoId);
-    const latestIncomingCommentAt = getLatestIncomingCommentAt(comments);
+    const latestAt = photo.latestCommentAt || '';
+    const latestBy = photo.latestCommentBy || '';
+    let latestIncomingCommentAt = latestAt && latestBy && latestBy !== state.userKey ? latestAt : '';
     const unread = isUnread(photo.photoId, latestIncomingCommentAt);
 
     const accordion = el('details', { class: 'comments-accordion' });
     const summary = el('summary', { class: 'comments-summary' });
     summary.appendChild(el('span', { class: 'accordion-marker', 'aria-hidden': 'true' }, '▶'));
-    summary.appendChild(el('span', {}, `コメント (${comments.length})`));
+    const commentLabel = el('span', {}, 'コメント');
+    summary.appendChild(commentLabel);
     if (unread) summary.appendChild(el('span', { class: 'unread-badge' }, '未読'));
     accordion.appendChild(summary);
 
     const commentWrap = el('div', { class: 'comments' });
-    comments.forEach((comment) => {
-      const stamp = comment.updatedAt ? '修正' : '投稿';
-      const stampAt = comment.updatedAt || comment.createdAt;
+    commentWrap.appendChild(el('div', { class: 'muted' }, '開いたら読み込みます'));
+    let commentsLoaded = false;
 
-      const row = el('div', { class: 'comment' });
-      const meta = el('div', { class: 'comment-meta' });
-      meta.appendChild(
-        el('span', { class: 'comment-meta-text' }, `${stamp} ${formatDateTime(stampAt)} ${comment.createdByName}`)
-      );
-      row.appendChild(meta);
-      row.appendChild(el('div', { class: 'comment-text' }, comment.text));
+    const renderLoadedComments = (comments) => {
+      commentWrap.innerHTML = '';
+      comments.forEach((comment) => {
+        const stamp = comment.updatedAt ? '修正' : '投稿';
+        const stampAt = comment.updatedAt || comment.createdAt;
 
-      if (canDelete(comment)) {
-        const actions = el('div', { class: 'comment-actions' });
-        const editBtn = el('button', { class: 'icon-btn', type: 'button', title: 'コメント修正' }, '✎');
-        const deleteBtn = el('button', { class: 'icon-btn danger', type: 'button', title: 'コメント削除' }, '🗑');
+        const row = el('div', { class: 'comment' });
+        const meta = el('div', { class: 'comment-meta' });
+        meta.appendChild(
+          el('span', { class: 'comment-meta-text' }, `${stamp} ${formatDateTime(stampAt)} ${comment.createdByName}`)
+        );
+        row.appendChild(meta);
+        row.appendChild(el('div', { class: 'comment-text' }, comment.text));
 
-        editBtn.onclick = async () => {
-          if (row.querySelector('.js-comment-editor')) return;
-          const editor = el('div', { class: 'inline-edit js-comment-editor' });
-          const ta = el('textarea', { class: 'js-edit-text', rows: '3', style: 'flex:1' });
-          ta.value = comment.text || '';
-          const saveBtn = el('button', { class: 'js-save-edit', type: 'button' }, '保存');
-          const cancelBtn = el('button', { class: 'js-cancel-edit danger', type: 'button' }, '取消');
-          editor.appendChild(ta);
-          editor.appendChild(saveBtn);
-          editor.appendChild(cancelBtn);
-          row.appendChild(editor);
+        if (canDelete(comment)) {
+          const actions = el('div', { class: 'comment-actions' });
+          const editBtn = el('button', { class: 'icon-btn', type: 'button', title: 'コメント修正' }, '✎');
+          const deleteBtn = el('button', { class: 'icon-btn danger', type: 'button', title: 'コメント削除' }, '🗑');
 
-          saveBtn.onclick = async () => {
-            const nextText = ta.value.trim();
-            if (!nextText) return;
-            preserveCurrentView(photo.photoId);
-            await api(`/photos/${photo.photoId}/comments/${comment.commentId}`, {
-              method: 'PUT',
-              body: JSON.stringify({ text: nextText }),
-            });
+          editBtn.onclick = async () => {
+            if (row.querySelector('.js-comment-editor')) return;
+            const editor = el('div', { class: 'inline-edit js-comment-editor' });
+            const ta = el('textarea', { class: 'js-edit-text', rows: '3', style: 'flex:1' });
+            ta.value = comment.text || '';
+            const saveBtn = el('button', { class: 'js-save-edit', type: 'button' }, '保存');
+            const cancelBtn = el('button', { class: 'js-cancel-edit danger', type: 'button' }, '取消');
+            editor.appendChild(ta);
+            editor.appendChild(saveBtn);
+            editor.appendChild(cancelBtn);
+            row.appendChild(editor);
+
+            saveBtn.onclick = async () => {
+              const nextText = ta.value.trim();
+              if (!nextText) return;
+              preserveCurrentView(photo.photoId);
+              await api(`/photos/${photo.photoId}/comments/${comment.commentId}`, {
+                method: 'PUT',
+                body: JSON.stringify({ text: nextText }),
+              });
+              await loadPhotos();
+            };
+
+            cancelBtn.onclick = () => {
+              editor.remove();
+            };
+          };
+
+          deleteBtn.onclick = async () => {
+            if (!window.confirm('このコメントを削除してよかですか？')) return;
+            await api(`/photos/${photo.photoId}/comments/${comment.commentId}`, { method: 'DELETE' });
             await loadPhotos();
           };
 
-          cancelBtn.onclick = () => {
-            editor.remove();
-          };
-        };
+          actions.appendChild(editBtn);
+          actions.appendChild(deleteBtn);
+          row.appendChild(actions);
+        }
 
-        deleteBtn.onclick = async () => {
-          if (!window.confirm('このコメントを削除してよかですか？')) return;
-          await api(`/photos/${photo.photoId}/comments/${comment.commentId}`, { method: 'DELETE' });
-          await loadPhotos();
-        };
-
-        actions.appendChild(editBtn);
-        actions.appendChild(deleteBtn);
-        row.appendChild(actions);
-      }
-
-      commentWrap.appendChild(row);
-    });
+        commentWrap.appendChild(row);
+      });
+    };
     accordion.appendChild(commentWrap);
 
     const addRow = el('div', { class: 'row', style: 'margin-top:8px;' });
@@ -1092,6 +1294,15 @@ async function renderPhotos() {
     accordion.addEventListener('toggle', async () => {
       if (accordion.open) {
         state.openAccordions.add(photo.photoId);
+        if (!commentsLoaded) {
+          commentWrap.innerHTML = '';
+          commentWrap.appendChild(el('div', { class: 'muted' }, '読み込み中...'));
+          const comments = await loadComments(photo.photoId);
+          commentsLoaded = true;
+          commentLabel.textContent = `コメント (${comments.length})`;
+          latestIncomingCommentAt = getLatestIncomingCommentAt(comments);
+          renderLoadedComments(comments);
+        }
         markAsRead(photo.photoId, latestIncomingCommentAt);
         const badge = summary.querySelector('.unread-badge');
         if (badge) badge.remove();
@@ -1201,18 +1412,9 @@ if (els.resetUserBtn) {
 
 if (els.logoutBtn) {
   els.logoutBtn.onclick = () => {
-    localStorage.removeItem('kansa_room_name');
-    localStorage.removeItem('kansa_room_password');
-    state.roomName = null;
-    state.roomPassword = null;
-    state.selectedFolder = null;
-    state.folders = [];
-    state.photos = [];
-    state.openAccordions.clear();
-    state.restoreScrollY = null;
+    resetRoomContext();
     clearAuth();
     closeMenu();
-    if (els.folderDetail) els.folderDetail.classList.add('hidden');
 
     if (hasCognitoConfig()) {
       const logoutUrl = new URL(`https://${COGNITO_DOMAIN}.auth.${COGNITO_REGION}.amazoncognito.com/logout`);
@@ -1230,55 +1432,48 @@ if (els.logoutBtn) {
 
 if (els.leaveRoomBtn) {
   els.leaveRoomBtn.onclick = safeAction(async () => {
-    // Best-effort: mark membership as left so the user can create a new room.
+    try {
+      const me = await api('/team/me', { method: 'GET' });
+      if (me && me.isAdmin) {
+        window.alert('管理者は退出できません。チーム管理から「お部屋を削除（全データ）」を実行してください。');
+        closeMenu();
+        return;
+      }
+    } catch (_) {
+      // If /team/me fails, keep old behavior.
+    }
+    // "退出" means: clear active room selection, but keep membership.
     try {
       await api('/team/leave', { method: 'POST' });
     } catch (_) {
       // Ignore; local "leave" still proceeds.
     }
-    localStorage.removeItem('kansa_room_name');
-    localStorage.removeItem('kansa_room_password');
-    state.roomName = null;
-    state.roomPassword = null;
-    state.teamRole = null;
-    state.isAdmin = false;
-    state.uploadBlocked = false;
-    state.billing = null;
-    state.selectedFolder = null;
-    state.folders = [];
-    state.photos = [];
-    state.openAccordions.clear();
-    state.restoreScrollY = null;
-    els.folderDetail.classList.add('hidden');
-    renderBillingBar();
-    setAdminUiVisibility();
+    resetRoomContext();
+    closeMenu();
     showRoomSetup();
   }, '退出');
+}
+
+if (els.refreshMyRoomsBtn) {
+  els.refreshMyRoomsBtn.onclick = safeAction(async () => {
+    await loadMyRooms();
+  }, '一覧更新');
 }
 
 els.createRoomBtn.onclick = async () => {
   clearError();
   const roomName = (els.createRoomName.value || '').trim();
-  const roomPassword = (els.createRoomPassword.value || '').trim();
-  const roomPasswordConfirm = (els.createRoomPasswordConfirm.value || '').trim();
-  if (!roomName || !roomPassword || !roomPasswordConfirm) {
-    showError('お部屋名とパスワードを入力してください。');
-    return;
-  }
-  if (roomPassword !== roomPasswordConfirm) {
-    showError('パスワードと確認用パスワードが一致しません。');
+  if (!roomName) {
+    showError('お部屋名を入力してください。');
     return;
   }
   try {
     await api('/rooms/create', {
       method: 'POST',
-      body: JSON.stringify({ roomName, roomPassword }),
+      body: JSON.stringify({ roomName }),
     });
     window.alert(`お部屋：${roomName} が作成されました。`);
     state.roomName = roomName;
-    state.roomPassword = roomPassword;
-    localStorage.setItem('kansa_room_name', roomName);
-    localStorage.setItem('kansa_room_password', roomPassword);
     showApp();
   } catch (error) {
     const message = asMessage(error);
@@ -1291,35 +1486,6 @@ els.createRoomBtn.onclick = async () => {
     } else {
       showError(`お部屋作成失敗: ${message}`);
     }
-  }
-};
-
-els.enterRoomBtn.onclick = async () => {
-  clearError();
-  const roomName = (els.enterRoomName.value || '').trim();
-  const roomPassword = (els.enterRoomPassword.value || '').trim();
-  if (!roomName || !roomPassword) {
-    showError('お部屋名とパスワードを入力してください。');
-    return;
-  }
-  try {
-    await api('/rooms/enter', {
-      method: 'POST',
-      body: JSON.stringify({ roomName, roomPassword }),
-    });
-    window.alert(`お部屋：${roomName} に入室しました。`);
-    state.roomName = roomName;
-    state.roomPassword = roomPassword;
-    localStorage.setItem('kansa_room_name', roomName);
-    localStorage.setItem('kansa_room_password', roomPassword);
-    showApp();
-  } catch (error) {
-    const message = asMessage(error);
-    if (message.includes('already in another room')) {
-      window.alert('他のお部屋に所属中のため入室できません。いったん退出してから入室してください。');
-      return;
-    }
-    window.alert('お部屋名またはパスワードが違います。');
   }
 };
 
@@ -1364,8 +1530,16 @@ if (els.teamAdminBtn && els.teamAdminCard) {
   els.teamAdminBtn.onclick = safeAction(async () => {
     els.teamAdminCard.classList.toggle('hidden');
     closeMenu();
+    setTeamAdminMode(!els.teamAdminCard.classList.contains('hidden'));
     await loadAdminPanel();
   }, 'チーム管理');
+}
+
+if (els.teamAdminBackBtn && els.teamAdminCard) {
+  els.teamAdminBackBtn.onclick = () => {
+    els.teamAdminCard.classList.add('hidden');
+    setTeamAdminMode(false);
+  };
 }
 
 async function purchaseSku(sku) {
@@ -1393,24 +1567,7 @@ if (els.deleteTeamBtn) {
     if (!ok2) return;
     await api('/team/delete', { method: 'POST' });
     window.alert('お部屋を削除しました。');
-
-    localStorage.removeItem('kansa_room_name');
-    localStorage.removeItem('kansa_room_password');
-    state.roomName = null;
-    state.roomPassword = null;
-    state.teamRole = null;
-    state.isAdmin = false;
-    state.uploadBlocked = false;
-    state.billing = null;
-    state.ownerUserKey = null;
-    state.selectedFolder = null;
-    state.folders = [];
-    state.photos = [];
-    state.openAccordions.clear();
-    state.restoreScrollY = null;
-    if (els.folderDetail) els.folderDetail.classList.add('hidden');
-    renderBillingBar();
-    setAdminUiVisibility();
+    resetRoomContext();
     showRoomSetup();
   }, 'お部屋削除');
 }

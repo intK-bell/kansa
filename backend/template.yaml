@@ -179,8 +179,6 @@ Resources:
           - content-type
           - x-user-key
           - x-user-name
-          - x-room-name
-          - x-room-password
           - x-folder-password
         AllowMethods:
           - GET
@@ -269,11 +267,17 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /rooms/create
             Method: POST
-        EnterRoom:
+        ListMyRooms:
           Type: HttpApi
           Properties:
             ApiId: !Ref HttpApi
-            Path: /rooms/enter
+            Path: /rooms/mine
+            Method: GET
+        SwitchRoom:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /rooms/switch
             Method: POST
         GetMe:
           Type: HttpApi
@@ -407,6 +411,24 @@ Resources:
           Properties:
             ApiId: !Ref HttpApi
             Path: /team/delete
+            Method: POST
+        InviteCreate:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /invites/create
+            Method: POST
+        InviteRevoke:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /invites/revoke
+            Method: POST
+        InviteAccept:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /invites/accept
             Method: POST
 
   BackfillCodesFunction:

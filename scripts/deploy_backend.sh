@@ -4,6 +4,11 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
 
+# Work around broken permissions in the user's global npm cache.
+# SAM's NodejsNpmBuilder invokes npm and honors npm_config_cache.
+export npm_config_cache="$ROOT_DIR/.npm-cache"
+mkdir -p "$npm_config_cache"
+
 cd "$BACKEND_DIR"
 
 npm --prefix src install

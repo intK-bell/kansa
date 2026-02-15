@@ -54,6 +54,19 @@ const json = (statusCode, body) => ({
 
 const badRequest = (message) => json(400, { message });
 
+function base64UrlFromBuffer(buf) {
+  return Buffer.from(buf)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function makeInviteToken() {
+  // 24 chars-ish, URL-safe, high entropy.
+  return `inv_${base64UrlFromBuffer(randomBytes(18))}`;
+}
+
 function hashRoomPassword(password) {
   const iterations = 120000;
   const salt = randomBytes(16);
@@ -194,22 +207,114 @@ function isRoomMatch(itemRoomName, requestedRoomName) {
   return Boolean(itemRoomName) && itemRoomName === requestedRoomName;
 }
 
-function getRoomRequest(event, method) {
-  const upper = String(method || 'GET').toUpperCase();
-  const headers = event.headers || {};
-  const fromHeaders = {
-    roomName: decodeText(headers['x-room-name'] || headers['X-Room-Name'] || ''),
-    roomPassword: decodeText(headers['x-room-password'] || headers['X-Room-Password'] || ''),
-  };
-  if (fromHeaders.roomName && fromHeaders.roomPassword) return fromHeaders;
-  if (upper === 'GET') {
-    const q = event.queryStringParameters || {};
-    return {
-      roomName: decodeText(q.roomName || ''),
-      roomPassword: decodeText(q.roomPassword || ''),
-    };
+async function resolveActiveRoomForUser(userKey) {
+  // Determine the user's current active room from the USER#... reverse index.
+  const res = await ddb.send(
+    new QueryCommand({
+      TableName: TABLE_NAME,
+      KeyConditionExpression: 'PK = :pk and begins_with(SK, :sk)',
+      ExpressionAttributeValues: {
+        ':pk': `USER#${userKey}`,
+        ':sk': 'ROOMMEMBER#',
+      },
+      // Use a strongly consistent read so switching rooms is immediately reflected.
+      ConsistentRead: true,
+      ScanIndexForward: true,
+      Limit: 25,
+    })
+  );
+  const items = res.Items || [];
+  const active = items.find((m) => {
+    const selection = String(m.status || 'inactive').toLowerCase();
+    if (selection !== 'active') return false;
+    const memberStatus = String(m.memberStatus || 'active').toLowerCase();
+    return memberStatus !== 'disabled' && memberStatus !== 'left';
+  });
+  if (!active?.roomId || !active?.roomName) return null;
+
+  // Verify the room exists and createdBy is consistent.
+  const roomRes = await ddb.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: 'ORG#DEFAULT', SK: `ROOM#${active.roomName}` },
+    })
+  );
+  const roomItem = roomRes.Item;
+  if (!roomItem || roomItem.roomId !== active.roomId) return null;
+  return { roomId: roomItem.roomId, roomName: roomItem.roomName, createdBy: roomItem.createdBy || null };
+}
+
+async function listUserRoomMemberships(userKey) {
+  const res = await ddb.send(
+    new QueryCommand({
+      TableName: TABLE_NAME,
+      KeyConditionExpression: 'PK = :pk and begins_with(SK, :sk)',
+      ExpressionAttributeValues: {
+        ':pk': `USER#${userKey}`,
+        ':sk': 'ROOMMEMBER#',
+      },
+      ConsistentRead: true,
+      ScanIndexForward: true,
+      Limit: 100,
+    })
+  );
+  return res.Items || [];
+}
+
+async function setActiveRoomForUser(userKey, nextRoomId) {
+  const memberships = await listUserRoomMemberships(userKey);
+  const nowIso = new Date().toISOString();
+
+  const nextId = String(nextRoomId || '').trim();
+  if (!nextId) throw new Error('ROOM_NOT_MEMBER');
+
+  const target = memberships.find((m) => String(m.roomId || '') === nextId);
+  if (!target) throw new Error('ROOM_NOT_MEMBER');
+  const targetMemberStatus = String(target.memberStatus || 'active').toLowerCase();
+  if (targetMemberStatus === 'left') throw new Error('ROOM_MEMBERSHIP_LEFT');
+  if (targetMemberStatus === 'disabled') throw new Error('ROOM_MEMBERSHIP_DISABLED');
+
+  // Always set the target first, then inactivate others. This avoids rare edge cases where
+  // the user can temporarily end up with no active room.
+  await ddb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: userRoomMemberKey(userKey, target.roomId),
+      UpdateExpression: 'SET #status = :s, updatedAt = :u',
+      ExpressionAttributeNames: { '#status': 'status' },
+      ExpressionAttributeValues: { ':s': 'active', ':u': nowIso },
+      ConditionExpression: 'attribute_exists(PK) and attribute_exists(SK)',
+    })
+  );
+
+  // Keep exactly one "active" room; others become "inactive" (unless already left/disabled).
+  for (const m of memberships) {
+    if (!m?.roomId) continue;
+    const memberStatus = String(m.memberStatus || 'active').toLowerCase();
+    if (memberStatus === 'left' || memberStatus === 'disabled') continue;
+    const current = String(m.status || 'inactive').toLowerCase();
+    const rid = String(m.roomId || '');
+    if (rid === nextId) continue;
+    if (current === 'inactive') continue;
+    await ddb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: userRoomMemberKey(userKey, rid),
+        UpdateExpression: 'SET #status = :s, updatedAt = :u',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':s': 'inactive', ':u': nowIso },
+        ConditionExpression: 'attribute_exists(PK) and attribute_exists(SK)',
+      })
+    );
   }
-  return fromHeaders;
+  return { roomId: target.roomId, roomName: target.roomName, role: target.role || 'member' };
+}
+
+async function resolveRoomForRequest(event, user) {
+  // Room headers are deprecated. Infer solely from membership.
+  const active = await resolveActiveRoomForUser(user.userKey);
+  if (!active) throw new Error('MISSING_ROOM');
+  return active;
 }
 
 function getFolderPassword(event) {
@@ -229,47 +334,6 @@ function folderHasPassword(folder) {
   return Boolean(folder?.folderPasswordHash);
 }
 
-async function resolveRoom(roomName, roomPassword) {
-  if (!roomName || !roomPassword) {
-    throw new Error('MISSING_ROOM');
-  }
-
-  const res = await ddb.send(
-    new GetCommand({
-      TableName: TABLE_NAME,
-      Key: { PK: 'ORG#DEFAULT', SK: `ROOM#${roomName}` },
-    })
-  );
-  const room = res.Item;
-  if (!room) throw new Error('INVALID_ROOM');
-
-  if (room.passwordHash) {
-    if (!verifyRoomPassword(roomPassword, room.passwordHash)) {
-      throw new Error('INVALID_ROOM');
-    }
-    return { roomName: room.roomName, roomId: room.roomId, createdBy: room.createdBy || null };
-  }
-
-  // Legacy: plain password. Accept it once, then migrate to hash.
-  if (room.password !== roomPassword) {
-    throw new Error('INVALID_ROOM');
-  }
-  const migratedHash = hashRoomPassword(roomPassword);
-  try {
-    await ddb.send(
-      new UpdateCommand({
-        TableName: TABLE_NAME,
-        Key: { PK: 'ORG#DEFAULT', SK: `ROOM#${roomName}` },
-        UpdateExpression: 'SET passwordHash = :h REMOVE password',
-        ExpressionAttributeValues: { ':h': migratedHash },
-      })
-    );
-  } catch (_) {
-    // Best-effort migration; auth still succeeds.
-  }
-  return { roomName: room.roomName, roomId: room.roomId, createdBy: room.createdBy || null };
-}
-
 function roomMemberKey(roomId, userKey) {
   return { PK: `ROOM#${roomId}`, SK: `MEMBER#${userKey}` };
 }
@@ -278,19 +342,44 @@ function userRoomMemberKey(userKey, roomId) {
   return { PK: `USER#${userKey}`, SK: `ROOMMEMBER#${roomId}` };
 }
 
+function userRoomConstraintKey(userKey) {
+  return { PK: `USER#${userKey}`, SK: 'CONSTRAINT#ROOM' };
+}
+
 function isAdminRole(role) {
   return String(role || '').toLowerCase() === 'admin';
+}
+
+function normalizeFolderScope(value) {
+  const v = String(value || '').trim().toLowerCase();
+  if (v === 'all') return 'all';
+  return 'own';
+}
+
+function normalizeMemberStatus(value) {
+  const v = String(value || '').trim().toLowerCase();
+  if (v === 'disabled') return 'disabled';
+  if (v === 'left') return 'left';
+  // Inactive is a room selection status (USER#...), not a membership status (ROOM#...).
+  // Treat it as active for backward-compat data cleanup.
+  return 'active';
 }
 
 async function upsertUserRoomMemberIndex(room, member, nowIso) {
   if (!room?.roomId || !member?.userKey) return;
   const key = userRoomMemberKey(member.userKey, room.roomId);
+  const memberStatus = normalizeMemberStatus(member.status);
+  const folderScope =
+    isAdminRole(member.role) ? 'all' : normalizeFolderScope(member.folderScope || member.folder_scope || 'own');
   await ddb.send(
     new UpdateCommand({
       TableName: TABLE_NAME,
       Key: key,
       UpdateExpression:
-        'SET #type = if_not_exists(#type, :type), roomId = :roomId, roomName = :roomName, userKey = :userKey, #role = :role, #status = :status, joinedAt = if_not_exists(joinedAt, :joinedAt), updatedAt = :updatedAt',
+        // USER#... items store:
+        // - status: active selection (active|inactive)
+        // - memberStatus: membership status (active|disabled|left)
+        'SET #type = if_not_exists(#type, :type), roomId = :roomId, roomName = :roomName, userKey = :userKey, #role = :role, memberStatus = :memberStatus, folderScope = :folderScope, joinedAt = if_not_exists(joinedAt, :joinedAt), updatedAt = :updatedAt, #status = if_not_exists(#status, :defaultSelection)',
       ExpressionAttributeNames: {
         '#type': 'type',
         '#role': 'role',
@@ -302,19 +391,93 @@ async function upsertUserRoomMemberIndex(room, member, nowIso) {
         ':roomName': room.roomName,
         ':userKey': member.userKey,
         ':role': member.role || 'member',
-        ':status': member.status || 'active',
+        ':memberStatus': memberStatus,
+        ':folderScope': folderScope,
         ':joinedAt': member.joinedAt || nowIso,
         ':updatedAt': nowIso,
+        ':defaultSelection': 'inactive',
       },
     })
   );
+}
+
+async function maybeUpsertUserRoomMemberIndex(room, member, nowIso) {
+  if (!room?.roomId || !member?.userKey) return;
+  const key = userRoomMemberKey(member.userKey, room.roomId);
+  const desired = {
+    roomId: room.roomId,
+    roomName: room.roomName,
+    role: member.role || 'member',
+    memberStatus: normalizeMemberStatus(member.status),
+    folderScope:
+      isAdminRole(member.role) ? 'all' : normalizeFolderScope(member.folderScope || member.folder_scope || 'own'),
+  };
+
+  const existing = await ddb.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: key,
+      ConsistentRead: true,
+    })
+  );
+  const item = existing.Item || null;
+  if (!item) {
+    await upsertUserRoomMemberIndex(room, member, nowIso);
+    return;
+  }
+  const same =
+    String(item.roomId || '') === String(desired.roomId) &&
+    String(item.roomName || '') === String(desired.roomName) &&
+    String(item.role || '') === String(desired.role) &&
+    String(item.memberStatus || 'active').toLowerCase() === String(desired.memberStatus) &&
+    String(item.folderScope || item.folder_scope || '').toLowerCase() === String(desired.folderScope);
+  if (same) return;
+
+  await upsertUserRoomMemberIndex(room, member, nowIso);
 }
 
 async function ensureRoomMember(room, user, nowIso, ctx) {
   const key = roomMemberKey(room.roomId, user.userKey);
   const existing = await ddb.send(new GetCommand({ TableName: TABLE_NAME, Key: key }));
   if (existing.Item) {
-    await upsertUserRoomMemberIndex(room, existing.Item, nowIso);
+    // Backfill for old data: ROOM member status must never be "inactive".
+    if (String(existing.Item.status || 'active').toLowerCase() === 'inactive') {
+      try {
+        await ddb.send(
+          new UpdateCommand({
+            TableName: TABLE_NAME,
+            Key: key,
+            UpdateExpression: 'SET #status = :s, updatedAt = :u',
+            ExpressionAttributeNames: { '#status': 'status' },
+            ExpressionAttributeValues: { ':s': 'active', ':u': nowIso },
+          })
+        );
+        existing.Item.status = 'active';
+      } catch (_) {
+        // Ignore; best-effort backfill.
+      }
+    }
+    // Backfill defaults for older items.
+    const currentScope = existing.Item.folderScope || existing.Item.folder_scope;
+    const wantsScope = isAdminRole(existing.Item.role)
+      ? 'all'
+      : normalizeFolderScope(currentScope || 'own');
+    if (!currentScope || String(currentScope) !== String(wantsScope)) {
+      try {
+        await ddb.send(
+          new UpdateCommand({
+            TableName: TABLE_NAME,
+            Key: key,
+            UpdateExpression: 'SET folderScope = :s, updatedAt = :u',
+            ExpressionAttributeValues: { ':s': wantsScope, ':u': nowIso },
+          })
+        );
+        existing.Item.folderScope = wantsScope;
+      } catch (_) {
+        // Ignore; best-effort backfill.
+      }
+    }
+    await maybeUpsertUserRoomMemberIndex(room, existing.Item, nowIso);
     return existing.Item;
   }
 
@@ -327,6 +490,7 @@ async function ensureRoomMember(room, user, nowIso, ctx) {
     userKey: user.userKey,
     role,
     status: 'active',
+    folderScope: isAdminRole(role) ? 'all' : 'own',
     joinedAt: nowIso,
     updatedAt: nowIso,
   };
@@ -353,7 +517,7 @@ async function ensureRoomMember(room, user, nowIso, ctx) {
     return item;
   } catch (_) {
     const retry = await ddb.send(new GetCommand({ TableName: TABLE_NAME, Key: key }));
-    if (retry.Item) await upsertUserRoomMemberIndex(room, retry.Item, nowIso);
+    if (retry.Item) await maybeUpsertUserRoomMemberIndex(room, retry.Item, nowIso);
     return retry.Item || item;
   }
 }
@@ -398,6 +562,19 @@ async function requireActiveMember(room, user, ctx) {
   return { ok: true, member, isAdmin: isAdminRole(member.role), billing };
 }
 
+function folderScopeForMember(member, isAdmin) {
+  if (isAdmin) return 'all';
+  return normalizeFolderScope(member?.folderScope || member?.folder_scope || 'own');
+}
+
+function canAccessFolder(folder, user, authz) {
+  if (!folder || !user || !authz) return false;
+  if (authz.isAdmin) return true;
+  const scope = folderScopeForMember(authz.member, authz.isAdmin);
+  if (scope === 'all') return true;
+  return folder.createdBy && folder.createdBy === user.userKey;
+}
+
 function isUploadBlocked(billing) {
   const usageBytes = Number(billing?.usageBytes || 0);
   const freeBytes = Number(billing?.freeBytes || FREE_BYTES_DEFAULT);
@@ -440,26 +617,14 @@ async function nextPhotoCode(folderId, folderCode) {
 async function createRoom(event, user, ctx) {
   const body = JSON.parse(event.body || '{}');
   const roomName = (body.roomName || '').trim();
-  const roomPassword = (body.roomPassword || '').trim();
-  if (!roomName || !roomPassword) return badRequest('roomName and roomPassword are required');
+  if (!roomName) return badRequest('roomName is required');
 
   // メンバーとしてチームに所属中のユーザーは、脱退するまで新しい部屋を作れない。
-  // ここでは「1人1部屋」運用: active所属が1つでもあれば作成不可。
+  // ここでは「1人1部屋」運用: left以外の所属が1つでもあれば作成不可。
   try {
-    const membershipRes = await ddb.send(
-      new QueryCommand({
-        TableName: TABLE_NAME,
-        KeyConditionExpression: 'PK = :pk and begins_with(SK, :sk)',
-        ExpressionAttributeValues: {
-          ':pk': `USER#${user.userKey}`,
-          ':sk': 'ROOMMEMBER#',
-        },
-        ScanIndexForward: true,
-      })
-    );
-    const memberships = membershipRes.Items || [];
-    const hasActiveTeam = memberships.some((m) => String(m.status || 'active') === 'active');
-    if (hasActiveTeam) {
+    const memberships = await listUserRoomMemberships(user.userKey);
+    const hasAnyTeam = memberships.some((m) => String(m.memberStatus || 'active').toLowerCase() !== 'left');
+    if (hasAnyTeam) {
       return json(409, { message: 'already has a room' });
     }
   } catch (_) {
@@ -468,13 +633,36 @@ async function createRoom(event, user, ctx) {
 
   const roomId = randomUUID();
   const now = new Date().toISOString();
+
+  // Enforce "1 user = 1 room" for creators using a constraint lock item.
+  // This protects against missing/lagging reverse indexes and concurrent requests.
+  try {
+    await ddb.send(
+      new PutCommand({
+        TableName: TABLE_NAME,
+        Item: {
+          ...userRoomConstraintKey(user.userKey),
+          type: 'user_room_constraint',
+          userKey: user.userKey,
+          roomId,
+          roomName,
+          createdAt: now,
+          updatedAt: now,
+        },
+        ConditionExpression: 'attribute_not_exists(PK) and attribute_not_exists(SK)',
+      })
+    );
+  } catch (_) {
+    return json(409, { message: 'already has a room' });
+  }
+
   const item = {
     PK: 'ORG#DEFAULT',
     SK: `ROOM#${roomName}`,
     type: 'room',
     roomId,
     roomName,
-    passwordHash: hashRoomPassword(roomPassword),
+    // Room password is deprecated. Joining happens via invite URL.
     createdBy: user.userKey,
     createdByName: user.userName,
     createdAt: now,
@@ -489,6 +677,12 @@ async function createRoom(event, user, ctx) {
       })
     );
   } catch (_) {
+    // Roll back constraint lock so the user can retry with a different name.
+    try {
+      await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: userRoomConstraintKey(user.userKey) }));
+    } catch (_) {
+      // Ignore best-effort cleanup.
+    }
     return json(409, { message: 'room already exists' });
   }
 
@@ -511,6 +705,7 @@ async function createRoom(event, user, ctx) {
       userKey: user.userKey,
       role: 'admin',
       status: 'active',
+      folderScope: 'all',
       joinedAt: now,
       updatedAt: now,
     };
@@ -522,51 +717,27 @@ async function createRoom(event, user, ctx) {
       })
     );
     await upsertUserRoomMemberIndex({ roomId, roomName }, member, now);
+    await setActiveRoomForUser(user.userKey, roomId);
   } catch (_) {
-    // Ignore; membership will be ensured on first authenticated call.
+    // Roll back in case we created the room but couldn't create membership/index.
+    try {
+      await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: { PK: 'ORG#DEFAULT', SK: `ROOM#${roomName}` } }));
+    } catch (_) {
+      // Ignore.
+    }
+    try {
+      await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: userRoomConstraintKey(user.userKey) }));
+    } catch (_) {
+      // Ignore.
+    }
+    return json(500, { message: 'internal server error' });
   }
   return json(201, { roomName, roomId });
 }
 
 async function getActiveRoomIdForUser(userKey) {
-  if (!userKey) return null;
-  const res = await ddb.send(
-    new QueryCommand({
-      TableName: TABLE_NAME,
-      KeyConditionExpression: 'PK = :pk and begins_with(SK, :sk)',
-      ExpressionAttributeValues: {
-        ':pk': `USER#${userKey}`,
-        ':sk': 'ROOMMEMBER#',
-      },
-      ScanIndexForward: true,
-    })
-  );
-  const items = res.Items || [];
-  const active = items.find((m) => String(m.status || 'active') === 'active');
+  const active = await resolveActiveRoomForUser(userKey);
   return active?.roomId || null;
-}
-
-async function enterRoom(event, user, ctx) {
-  const body = JSON.parse(event.body || '{}');
-  const roomName = (body.roomName || '').trim();
-  const roomPassword = (body.roomPassword || '').trim();
-  const room = await resolveRoom(roomName, roomPassword);
-  const activeRoomId = await getActiveRoomIdForUser(user.userKey);
-  if (activeRoomId && activeRoomId !== room.roomId) {
-    auditLog({
-      requestId: ctx.requestId,
-      action: 'room.enter',
-      actor: user.userKey,
-      actorName: user.userName,
-      roomName,
-      result: 'denied',
-      reason: 'already_in_another_room',
-      activeRoomId,
-      requestedRoomId: room.roomId,
-    });
-    return json(403, { message: 'already in another room' });
-  }
-  return json(200, room);
 }
 
 async function getMe(user) {
@@ -624,6 +795,253 @@ async function teamMe(room, authz) {
     isAdmin: Boolean(authz.isAdmin),
     uploadBlocked: isUploadBlocked(authz.billing),
     billing,
+  });
+}
+
+async function teamMeAuto(event, user, ctx) {
+  // /team/me is used as "my room" discovery after login. It must not require room headers.
+  const active = await resolveActiveRoomForUser(user.userKey);
+  if (!active) {
+    return json(200, { hasRoom: false });
+  }
+  const authzRes = await requireActiveMember(active, user, ctx);
+  if (!authzRes.ok) return authzRes.response;
+  return await teamMe(active, authzRes);
+}
+
+async function listMyRooms(user) {
+  const items = await listUserRoomMemberships(user.userKey);
+  const mapped = (items || []).map((m) => ({
+    roomId: m.roomId || null,
+    roomName: m.roomName || null,
+    role: m.role || 'member',
+    status: String(m.status || 'inactive').toLowerCase(),
+    memberStatus: String(m.memberStatus || 'active').toLowerCase(),
+    folderScope: normalizeFolderScope(m.folderScope || m.folder_scope || (isAdminRole(m.role) ? 'all' : 'own')),
+    updatedAt: m.updatedAt || null,
+  }));
+  const active = mapped.find((m) => m.status === 'active') || null;
+  return json(200, { items: mapped, activeRoomId: active?.roomId || null });
+}
+
+async function switchActiveRoom(event, user, ctx) {
+  const body = event.body ? JSON.parse(event.body) : {};
+  const roomId = String(body.roomId || '').trim();
+  if (!roomId) return badRequest('roomId is required');
+  try {
+    const next = await setActiveRoomForUser(user.userKey, roomId);
+    // Read back with a strongly consistent read to avoid "no active room" right after switching.
+    const active = await resolveActiveRoomForUser(user.userKey);
+    if (!active || active.roomId !== roomId) {
+      return json(409, { message: 'room switch not applied yet; retry' });
+    }
+    auditLog({
+      requestId: ctx.requestId,
+      action: 'room.switch',
+      actor: user.userKey,
+      actorName: user.userName,
+      roomId: next.roomId,
+      roomName: next.roomName,
+      result: 'success',
+    });
+    return json(200, { ok: true, roomId: next.roomId, roomName: next.roomName });
+  } catch (error) {
+    if (error.message === 'ROOM_NOT_MEMBER') return json(404, { message: 'room not found' });
+    if (error.message === 'ROOM_MEMBERSHIP_LEFT') return json(403, { message: 'forbidden' });
+    if (error.message === 'ROOM_MEMBERSHIP_DISABLED') return json(403, { message: 'forbidden' });
+    throw error;
+  }
+}
+
+async function createInvite(event, user, room, authz, ctx) {
+  if (!authz.isAdmin) return json(403, { message: 'forbidden' });
+  if (!room.createdBy || room.createdBy !== user.userKey) return json(403, { message: 'forbidden' });
+
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const ttlSeconds = Math.floor(now / 1000) + 7 * 24 * 60 * 60;
+  const expiresAtIso = new Date(ttlSeconds * 1000).toISOString();
+  const token = makeInviteToken();
+
+  const item = {
+    PK: 'ORG#DEFAULT',
+    SK: `INVITE#${token}`,
+    type: 'invite',
+    token,
+    roomId: room.roomId,
+    roomName: room.roomName,
+    createdBy: room.createdBy || null,
+    createdAt: nowIso,
+    expiresAt: expiresAtIso,
+    expiresAtEpoch: ttlSeconds,
+    usedCount: 0,
+    ttl: ttlSeconds,
+  };
+
+  await ddb.send(
+    new PutCommand({
+      TableName: TABLE_NAME,
+      Item: item,
+      ConditionExpression: 'attribute_not_exists(PK) and attribute_not_exists(SK)',
+    })
+  );
+
+  auditLog({
+    requestId: ctx.requestId,
+    action: 'invite.create',
+    actor: user.userKey,
+    actorName: user.userName,
+    roomId: room.roomId,
+    roomName: room.roomName,
+    token,
+    expiresAt: expiresAtIso,
+    result: 'success',
+  });
+
+  return json(201, { token, expiresAt: expiresAtIso, days: 7 });
+}
+
+async function revokeInvite(event, user, room, authz, ctx) {
+  if (!authz.isAdmin) return json(403, { message: 'forbidden' });
+  if (!room.createdBy || room.createdBy !== user.userKey) return json(403, { message: 'forbidden' });
+
+  const body = event.body ? JSON.parse(event.body) : {};
+  const token = String(body.token || '').trim();
+  if (!token || !token.startsWith('inv_')) return badRequest('token is required');
+
+  const nowEpoch = Math.floor(Date.now() / 1000);
+  const nowIso = new Date().toISOString();
+
+  try {
+    await ddb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: 'ORG#DEFAULT', SK: `INVITE#${token}` },
+        UpdateExpression:
+          'SET expiresAtEpoch = :e, expiresAt = :expiresAt, revokedAt = :revokedAt, revokedBy = :revokedBy, ttl = :ttl, updatedAt = :u',
+        ExpressionAttributeValues: {
+          ':e': 0,
+          ':expiresAt': nowIso,
+          ':revokedAt': nowIso,
+          ':revokedBy': user.userKey,
+          ':ttl': nowEpoch,
+          ':u': nowIso,
+          ':roomId': room.roomId,
+        },
+        ConditionExpression: 'attribute_exists(PK) and attribute_exists(SK) and roomId = :roomId',
+      })
+    );
+  } catch (_) {
+    return json(404, { message: 'invite not found' });
+  }
+
+  auditLog({
+    requestId: ctx.requestId,
+    action: 'invite.revoke',
+    actor: user.userKey,
+    actorName: user.userName,
+    roomId: room.roomId,
+    roomName: room.roomName,
+    token,
+    result: 'success',
+  });
+
+  return json(200, { ok: true });
+}
+
+async function acceptInvite(event, user, ctx) {
+  const body = event.body ? JSON.parse(event.body) : {};
+  const token = String(body.token || '').trim();
+  if (!token || !token.startsWith('inv_')) return badRequest('token is required');
+
+  const nowEpoch = Math.floor(Date.now() / 1000);
+  const nowIso = new Date().toISOString();
+
+  let inviteItem = null;
+  try {
+    const updateRes = await ddb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: 'ORG#DEFAULT', SK: `INVITE#${token}` },
+        UpdateExpression: 'ADD usedCount :inc SET lastUsedAt = :u',
+        ExpressionAttributeValues: { ':inc': 1, ':u': nowIso, ':now': nowEpoch },
+        ConditionExpression: 'attribute_exists(PK) and attribute_exists(SK) and expiresAtEpoch > :now',
+        ReturnValues: 'ALL_NEW',
+      })
+    );
+    inviteItem = updateRes.Attributes || null;
+  } catch (error) {
+    const name = error?.name || '';
+    if (name === 'ConditionalCheckFailedException') {
+      return json(410, { message: 'invite expired or invalid' });
+    }
+    throw error;
+  }
+
+  if (!inviteItem?.roomId || !inviteItem?.roomName) return json(410, { message: 'invite expired or invalid' });
+
+  // Verify the room still exists and is consistent.
+  const roomRes = await ddb.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: 'ORG#DEFAULT', SK: `ROOM#${inviteItem.roomName}` },
+    })
+  );
+  const roomItem = roomRes.Item;
+  if (!roomItem || roomItem.roomId !== inviteItem.roomId) {
+    return json(410, { message: 'invite expired or invalid' });
+  }
+  const room = { roomId: roomItem.roomId, roomName: roomItem.roomName, createdBy: roomItem.createdBy || null };
+
+  const member = await ensureRoomMember(room, user, nowIso, ctx);
+  if (member.status === 'disabled') return json(403, { message: 'forbidden' });
+  if (member.status === 'left') {
+    // Allow re-joining after being removed/left: reactivate membership on invite acceptance.
+    try {
+      await ddb.send(
+        new UpdateCommand({
+          TableName: TABLE_NAME,
+          Key: roomMemberKey(room.roomId, user.userKey),
+          UpdateExpression: 'SET #status = :s, updatedAt = :u',
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: { ':s': 'active', ':u': nowIso },
+          ConditionExpression: 'attribute_exists(PK) and attribute_exists(SK)',
+        })
+      );
+      member.status = 'active';
+      member.updatedAt = nowIso;
+    } catch (_) {
+      return json(403, { message: 'forbidden' });
+    }
+  }
+  await maybeUpsertUserRoomMemberIndex(room, member, nowIso);
+  const billing = await ensureBillingMeta(ddb, {
+    tableName: TABLE_NAME,
+    roomId: room.roomId,
+    roomName: room.roomName,
+    nowIso,
+  });
+
+  // Make this room active (and others inactive) so the user lands in the invited room.
+  await setActiveRoomForUser(user.userKey, room.roomId);
+
+  auditLog({
+    requestId: ctx.requestId,
+    action: 'invite.accept',
+    actor: user.userKey,
+    actorName: user.userName,
+    token,
+    roomId: room.roomId,
+    roomName: room.roomName,
+    result: 'success',
+  });
+
+  return json(200, {
+    ok: true,
+    roomId: room.roomId,
+    roomName: room.roomName,
+    role: member.role || 'member',
+    billing: summarizeBilling(billing),
   });
 }
 
@@ -813,10 +1231,14 @@ async function listTeamMembers(room, authz) {
       ScanIndexForward: true,
     })
   );
-  const items = (res.Items || []).map((m) => ({
+  const raw = res.Items || [];
+  const nameMap = await loadDisplayNameMap(raw.map((m) => m.userKey));
+  const items = raw.map((m) => ({
     userKey: m.userKey,
+    displayName: nameMap[m.userKey] || '',
     role: m.role || 'member',
-    status: m.status || 'active',
+    status: normalizeMemberStatus(m.status),
+    folderScope: normalizeFolderScope(m.folderScope || m.folder_scope || (isAdminRole(m.role) ? 'all' : 'own')),
     joinedAt: m.joinedAt || null,
     updatedAt: m.updatedAt || null,
   }));
@@ -827,8 +1249,14 @@ async function updateTeamMember(targetUserKey, event, user, room, authz, ctx) {
   if (!authz.isAdmin) return json(403, { message: 'forbidden' });
   const body = JSON.parse(event.body || '{}');
   const nextStatus = body.status ? String(body.status).toLowerCase() : null;
-  if (nextStatus && nextStatus !== 'active' && nextStatus !== 'disabled') return badRequest('status must be active|disabled');
+  const nextFolderScopeRaw = body.folderScope || body.folder_scope || null;
+  const nextFolderScope = nextFolderScopeRaw ? normalizeFolderScope(nextFolderScopeRaw) : null;
+  if (nextStatus && nextStatus !== 'active' && nextStatus !== 'disabled' && nextStatus !== 'left') {
+    return badRequest('status must be active|disabled|left');
+  }
+  if (nextFolderScope && nextFolderScope !== 'own' && nextFolderScope !== 'all') return badRequest('folderScope must be own|all');
   if (targetUserKey === room.createdBy) return badRequest('cannot change owner status');
+  if (targetUserKey === user.userKey) return badRequest('cannot change self status');
 
   const key = roomMemberKey(room.roomId, targetUserKey);
   const nowIso = new Date().toISOString();
@@ -839,10 +1267,15 @@ async function updateTeamMember(targetUserKey, event, user, room, authz, ctx) {
     updates.push('status = :s');
     values[':s'] = nextStatus;
   }
-  if (!updates.length) return badRequest('status is required');
+  if (nextFolderScope) {
+    updates.push('folderScope = :fs');
+    values[':fs'] = nextFolderScope;
+  }
+  if (!updates.length) return badRequest('status or folderScope is required');
 
+  let after = null;
   try {
-    await ddb.send(
+    const res = await ddb.send(
       new UpdateCommand({
         TableName: TABLE_NAME,
         Key: key,
@@ -852,13 +1285,33 @@ async function updateTeamMember(targetUserKey, event, user, room, authz, ctx) {
         ReturnValues: 'ALL_NEW',
       })
     );
+    after = res.Attributes || null;
   } catch (_) {
     return json(404, { message: 'member not found' });
   }
 
-  const afterRes = await ddb.send(new GetCommand({ TableName: TABLE_NAME, Key: key }));
-  if (afterRes.Item) {
-    await upsertUserRoomMemberIndex(room, afterRes.Item, nowIso);
+  if (!after) {
+    const afterRes = await ddb.send(new GetCommand({ TableName: TABLE_NAME, Key: key }));
+    after = afterRes.Item || null;
+  }
+  if (after) await upsertUserRoomMemberIndex(room, after, nowIso);
+  if (nextStatus === 'left') {
+    // If the user was currently selecting this room, force-clear it.
+    // Keep membership record (status=left) so we can audit and allow re-invite later.
+    try {
+      await ddb.send(
+        new UpdateCommand({
+          TableName: TABLE_NAME,
+          Key: userRoomMemberKey(targetUserKey, room.roomId),
+          UpdateExpression: 'SET #status = :sel, memberStatus = :ms, updatedAt = :u',
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: { ':sel': 'inactive', ':ms': 'left', ':u': nowIso },
+          ConditionExpression: 'attribute_exists(PK) and attribute_exists(SK)',
+        })
+      );
+    } catch (_) {
+      // If the reverse index doesn't exist yet, ignore.
+    }
   }
 
   auditLog({
@@ -869,7 +1322,7 @@ async function updateTeamMember(targetUserKey, event, user, room, authz, ctx) {
     roomId: room.roomId,
     roomName: room.roomName,
     targetUserKey,
-    updates: { status: nextStatus || undefined },
+    updates: { status: nextStatus || undefined, folderScope: nextFolderScope || undefined },
     result: 'success',
   });
 
@@ -881,27 +1334,22 @@ async function teamLeave(user, room, authz, ctx) {
   if (authz.isAdmin) return badRequest('owner cannot leave team');
 
   const nowIso = new Date().toISOString();
-  const key = roomMemberKey(room.roomId, user.userKey);
+  const key = userRoomMemberKey(user.userKey, room.roomId);
   try {
     await ddb.send(
       new UpdateCommand({
         TableName: TABLE_NAME,
         Key: key,
+        // "Leave" means: clear active selection for this room, but keep membership itself.
         UpdateExpression: 'SET #status = :s, updatedAt = :u',
         ExpressionAttributeNames: { '#status': 'status' },
-        ExpressionAttributeValues: { ':s': 'left', ':u': nowIso },
+        ExpressionAttributeValues: { ':s': 'inactive', ':u': nowIso },
         ConditionExpression: 'attribute_exists(PK) and attribute_exists(SK)',
       })
     );
   } catch (_) {
-    // If it doesn't exist, treat as already left.
+    // If it doesn't exist, treat as already inactive.
   }
-
-  await upsertUserRoomMemberIndex(
-    room,
-    { userKey: user.userKey, role: authz.member.role || 'member', status: 'left', joinedAt: authz.member.joinedAt || nowIso },
-    nowIso
-  );
 
   auditLog({
     requestId: ctx.requestId,
@@ -924,7 +1372,7 @@ async function deleteAllByPk(tableName, pk) {
         TableName: tableName,
         KeyConditionExpression: 'PK = :pk',
         ExpressionAttributeValues: { ':pk': pk },
-        ExclusiveStartKey: lastKey,
+        ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
       })
     );
     const items = res.Items || [];
@@ -976,7 +1424,7 @@ async function teamDelete(event, user, room, authz, ctx) {
             ':pk': `FOLDER#${folderId}`,
             ':sk': 'PHOTO#',
           },
-          ExclusiveStartKey: lastKey,
+          ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
         })
       );
       const photos = (photosRes.Items || []).filter((p) => isRoomMatch(p.roomName, room.roomName));
@@ -1008,7 +1456,7 @@ async function teamDelete(event, user, room, authz, ctx) {
         TableName: TABLE_NAME,
         KeyConditionExpression: 'PK = :pk and begins_with(SK, :sk)',
         ExpressionAttributeValues: { ':pk': `ROOM#${room.roomId}`, ':sk': 'MEMBER#' },
-        ExclusiveStartKey: memberLastKey,
+        ...(memberLastKey ? { ExclusiveStartKey: memberLastKey } : {}),
       })
     );
     const members = res.Items || [];
@@ -1031,6 +1479,13 @@ async function teamDelete(event, user, room, authz, ctx) {
 
   // 4) Delete room meta itself.
   await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: { PK: 'ORG#DEFAULT', SK: `ROOM#${room.roomName}` } }));
+
+  // 5) Release creator constraint lock so the owner can create a new room later.
+  try {
+    await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: userRoomConstraintKey(user.userKey) }));
+  } catch (_) {
+    // Ignore best-effort cleanup.
+  }
 
   auditLog({
     requestId: ctx.requestId,
@@ -1093,7 +1548,7 @@ function applyResolvedDisplayName(item, nameMap) {
   return { ...item, createdByName: resolved };
 }
 
-async function listFolders(room) {
+async function listFolders(room, user, authz) {
   const res = await ddb.send(
     new QueryCommand({
       TableName: TABLE_NAME,
@@ -1106,8 +1561,9 @@ async function listFolders(room) {
     })
   );
   const items = (res.Items || []).filter((item) => isRoomMatch(item.roomName, room.roomName));
+  const visible = items.filter((folder) => canAccessFolder(folder, user, authz));
   const nameMap = await loadDisplayNameMap(items.map((item) => item.createdBy));
-  const hydrated = items.map((item) => {
+  const hydrated = visible.map((item) => {
     const base = applyResolvedDisplayName(item, nameMap);
     return { ...base, hasPassword: folderHasPassword(base) };
   });
@@ -1153,7 +1609,7 @@ async function createFolder(event, user, room, ctx) {
   return json(201, { ...item, hasPassword: folderHasPassword(item) });
 }
 
-async function listPhotos(event, folderId, room) {
+async function listPhotos(event, folderId, user, room, authz) {
   const folderRes = await ddb.send(
     new GetCommand({
       TableName: TABLE_NAME,
@@ -1164,7 +1620,10 @@ async function listPhotos(event, folderId, room) {
   if (!folder || !isRoomMatch(folder.roomName, room.roomName)) {
     return json(404, { message: 'folder not found' });
   }
-  const pw = verifyFolderPassword(folder, event);
+  if (!canAccessFolder(folder, user, authz)) {
+    return json(403, { message: 'forbidden' });
+  }
+  const pw = authz?.isAdmin ? { ok: true } : verifyFolderPassword(folder, event);
   if (!pw.ok) return json(403, { message: 'invalid folder password' });
 
   const res = await ddb.send(
@@ -1200,7 +1659,7 @@ async function listPhotos(event, folderId, room) {
   return json(200, { items: withUrls });
 }
 
-async function createUploadUrl(event, folderId, body, room, authz) {
+async function createUploadUrl(event, folderId, body, user, room, authz) {
   const folderRes = await ddb.send(
     new GetCommand({
       TableName: TABLE_NAME,
@@ -1211,7 +1670,10 @@ async function createUploadUrl(event, folderId, body, room, authz) {
   if (!folder || !isRoomMatch(folder.roomName, room.roomName)) {
     return json(404, { message: 'folder not found' });
   }
-  const pw = verifyFolderPassword(folder, event);
+  if (!canAccessFolder(folder, user, authz)) {
+    return json(403, { message: 'forbidden' });
+  }
+  const pw = authz?.isAdmin ? { ok: true } : verifyFolderPassword(folder, event);
   if (!pw.ok) return json(403, { message: 'invalid folder password' });
 
   if (isUploadBlocked(authz.billing)) {
@@ -1267,7 +1729,10 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
   const folder = folderRes.Item;
   if (!folder) return json(404, { message: 'folder not found' });
   if (!isRoomMatch(folder.roomName, room.roomName)) return json(404, { message: 'folder not found' });
-  const pw = verifyFolderPassword(folder, event);
+  if (!canAccessFolder(folder, user, authz)) {
+    return json(403, { message: 'forbidden' });
+  }
+  const pw = authz?.isAdmin ? { ok: true } : verifyFolderPassword(folder, event);
   if (!pw.ok) return json(403, { message: 'invalid folder password' });
 
   if (isUploadBlocked(authz.billing)) {
@@ -1519,6 +1984,25 @@ async function createComment(photoId, body, user, room, ctx) {
   };
 
   await ddb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
+  // Best-effort: maintain comment summary on the photo to avoid N+1 comment fetches in the frontend.
+  try {
+    await ddb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: `PHOTO#${photoId}`, SK: 'META' },
+        UpdateExpression: 'SET latestCommentAt = :t, latestCommentBy = :b, latestCommentByName = :bn, updatedAt = :u',
+        ExpressionAttributeValues: {
+          ':t': now,
+          ':b': user.userKey,
+          ':bn': user.userName,
+          ':u': now,
+        },
+        ConditionExpression: 'attribute_exists(PK) and attribute_exists(SK)',
+      })
+    );
+  } catch (_) {
+    // Ignore best-effort summary updates.
+  }
   auditLog({
     requestId: ctx.requestId,
     action: 'comment.create',
@@ -1641,7 +2125,7 @@ async function updateComment(photoId, commentId, body, user, room, authz, ctx) {
   return json(200, { ok: true });
 }
 
-async function exportFolder(event, folderId, user, room, ctx) {
+async function exportFolder(event, folderId, user, room, authz, ctx) {
   const folderRes = await ddb.send(
     new QueryCommand({
       TableName: TABLE_NAME,
@@ -1657,7 +2141,8 @@ async function exportFolder(event, folderId, user, room, ctx) {
   const folder = (folderRes.Items || [])[0];
   if (!folder) return json(404, { message: 'folder not found' });
   if (!isRoomMatch(folder.roomName, room.roomName)) return json(404, { message: 'folder not found' });
-  const pw = verifyFolderPassword(folder, event);
+  if (!canAccessFolder(folder, user, authz)) return json(403, { message: 'forbidden' });
+  const pw = authz?.isAdmin ? { ok: true } : verifyFolderPassword(folder, event);
   if (!pw.ok) return json(403, { message: 'invalid folder password' });
 
   const photosRes = await ddb.send(
@@ -1786,7 +2271,7 @@ async function deleteAllCommentsForPhoto(photoId) {
           ':pk': `PHOTO#${photoId}`,
           ':sk': 'COMMENT#',
         },
-        ExclusiveStartKey: lastKey,
+        ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
       })
     );
     const items = res.Items || [];
@@ -1872,7 +2357,7 @@ async function deleteFolder(event, folderId, user, room, authz, ctx) {
   if (!folder || !isRoomMatch(folder.roomName, room.roomName)) {
     return json(404, { message: 'folder not found' });
   }
-  const pw = verifyFolderPassword(folder, event);
+  const pw = authz?.isAdmin ? { ok: true } : verifyFolderPassword(folder, event);
   if (!pw.ok) return json(403, { message: 'invalid folder password' });
 
   let lastKey = null;
@@ -1887,7 +2372,7 @@ async function deleteFolder(event, folderId, user, room, authz, ctx) {
           ':pk': `FOLDER#${folderId}`,
           ':sk': 'PHOTO#',
         },
-        ExclusiveStartKey: lastKey,
+        ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
       })
     );
     const photos = (photosRes.Items || []).filter((p) => isRoomMatch(p.roomName, room.roomName));
@@ -1976,7 +2461,6 @@ exports.handler = async (event) => {
     const method = event.requestContext.http.method;
     const path = event.requestContext.http.path;
     const isRoomCreate = method === 'POST' && path === '/rooms/create';
-    const isRoomEnter = method === 'POST' && path === '/rooms/enter';
     let room = null;
     const user = await getUser(event);
 
@@ -1987,16 +2471,23 @@ exports.handler = async (event) => {
     if (method === 'GET' && path === '/me') return await getMe(user);
     if (method === 'PUT' && path === '/me/display-name') return await updateDisplayName(event, user, ctx);
 
-    if (isRoomCreate) return await createRoom(event, user, ctx);
-    if (isRoomEnter) return await enterRoom(event, user, ctx);
+    if (method === 'GET' && path === '/team/me') return await teamMeAuto(event, user, ctx);
 
-    const roomReq = getRoomRequest(event, method);
-    room = await resolveRoom(roomReq.roomName, roomReq.roomPassword);
+    if (method === 'GET' && path === '/rooms/mine') return await listMyRooms(user);
+    if (method === 'POST' && path === '/rooms/switch') return await switchActiveRoom(event, user, ctx);
+
+    if (method === 'POST' && path === '/invites/accept') return await acceptInvite(event, user, ctx);
+
+    if (isRoomCreate) return await createRoom(event, user, ctx);
+
+    room = await resolveRoomForRequest(event, user);
     const authzRes = await requireActiveMember(room, user, ctx);
     if (!authzRes.ok) return authzRes.response;
     const authz = authzRes;
 
-    if (method === 'GET' && path === '/team/me') return await teamMe(room, authz);
+    if (method === 'POST' && path === '/invites/create') return await createInvite(event, user, room, authz, ctx);
+    if (method === 'POST' && path === '/invites/revoke') return await revokeInvite(event, user, room, authz, ctx);
+
     if (method === 'GET' && path === '/team/billing') return await teamBilling(authz);
     if (method === 'POST' && path === '/team/purchase') return await teamPurchase(event, user, room, authz, ctx);
     if (method === 'POST' && path === '/team/purchase/checkout') {
@@ -2009,7 +2500,7 @@ exports.handler = async (event) => {
     if (method === 'POST' && path === '/team/leave') return await teamLeave(user, room, authz, ctx);
     if (method === 'POST' && path === '/team/delete') return await teamDelete(event, user, room, authz, ctx);
 
-    if (method === 'GET' && path === '/folders') return await listFolders(room);
+    if (method === 'GET' && path === '/folders') return await listFolders(room, user, authz);
     if (method === 'POST' && path === '/folders') return await createFolder(event, user, room, ctx);
     if (method === 'DELETE' && p.folderId && path.endsWith(`/folders/${p.folderId}`)) {
       return await deleteFolder(event, p.folderId, user, room, authz, ctx);
@@ -2019,10 +2510,10 @@ exports.handler = async (event) => {
     }
 
     if (method === 'GET' && p.folderId && path.endsWith(`/folders/${p.folderId}/photos`)) {
-      return await listPhotos(event, p.folderId, room);
+      return await listPhotos(event, p.folderId, user, room, authz);
     }
     if (method === 'POST' && p.folderId && path.endsWith(`/folders/${p.folderId}/photos/upload-url`)) {
-      return await createUploadUrl(event, p.folderId, body, room, authz);
+      return await createUploadUrl(event, p.folderId, body, user, room, authz);
     }
     if (method === 'POST' && p.folderId && path.endsWith(`/folders/${p.folderId}/photos`)) {
       return await finalizePhoto(event, p.folderId, body, user, room, authz, ctx);
@@ -2059,7 +2550,7 @@ exports.handler = async (event) => {
     }
 
     if (method === 'POST' && p.folderId && path.endsWith(`/folders/${p.folderId}/export`)) {
-      return await exportFolder(event, p.folderId, user, room, ctx);
+      return await exportFolder(event, p.folderId, user, room, authz, ctx);
     }
 
     return json(404, { message: 'not found' });
@@ -2068,7 +2559,8 @@ exports.handler = async (event) => {
       return json(401, { message: 'unauthorized' });
     }
     if (error.message === 'MISSING_ROOM') {
-      return json(401, { message: 'roomName and roomPassword are required' });
+      // Room selection is membership-based. Missing room means the user must create/join via invite URL.
+      return json(403, { message: 'no active room' });
     }
     if (error.message === 'INVALID_ROOM') {
       return json(403, { message: 'invalid room credentials' });
