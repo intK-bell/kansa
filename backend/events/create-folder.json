@@ -1,0 +1,8 @@
+{
+  "requestContext": { "http": { "method": "POST", "path": "/folders" } },
+  "headers": {
+    "x-user-key": "demo-user-key",
+    "x-user-name": "demo"
+  },
+  "body": "{\"title\":\"〇〇工場_20260214\"}"
+}

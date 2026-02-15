@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
+    <title>Kansa Photo Audit</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Zen+Old+Mincho:wght@500;700&display=swap"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <div class="page-header">
+        <h1>監査写真コメントアプリ</h1>
+        <div class="menu-wrap hidden" id="global-menu-wrap">
+          <button id="menu-btn" class="menu-btn" type="button" aria-label="menu">☰</button>
+          <div id="menu-panel" class="menu-panel hidden">
+            <label class="menu-label" for="season-select">季節テーマ</label>
+            <select id="season-select">
+              <option value="spring">春</option>
+              <option value="summer">夏</option>
+              <option value="autumn">秋</option>
+              <option value="winter">冬</option>
+            </select>
+            <button id="toggle-theme-btn" type="button">ダークモード切替</button>
+            <button id="reset-user-btn" type="button">ユーザー名変更</button>
+            <button id="leave-room-btn" type="button" class="danger">退室</button>
+          </div>
+        </div>
+      </div>
+
+      <section id="user-setup" class="card hidden">
+        <h2>利用者登録</h2>
+        <p>初回だけニックネームば入れてください。</p>
+        <input id="nickname-input" placeholder="ニックネーム" maxlength="30" />
+        <button id="save-user-btn">保存</button>
+      </section>
+
+      <section id="room-setup" class="card hidden">
+        <h2>お部屋</h2>
+        <p class="muted">新規作成または入室を選んでください。</p>
+        <div class="room-grid">
+          <div class="room-card">
+            <h3>新規作成</h3>
+            <input id="create-room-name" placeholder="お部屋名" />
+            <input id="create-room-password" placeholder="パスワード" type="password" />
+            <input id="create-room-password-confirm" placeholder="パスワード（確認）" type="password" />
+            <button id="create-room-btn">お部屋を作る</button>
+          </div>
+          <div class="room-card">
+            <h3>入室</h3>
+            <input id="enter-room-name" placeholder="お部屋名" />
+            <input id="enter-room-password" placeholder="パスワード" type="password" />
+            <button id="enter-room-btn">お部屋へ入る</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="app" class="hidden">
+        <div class="app-header">
+          <p>
+            利用者: <strong id="current-name"></strong>
+            / お部屋: <strong id="current-room"></strong>
+          </p>
+        </div>
+
+        <div class="toolbar">
+          <p id="error-box" class="muted hidden" style="color:#b91c1c;"></p>
+        </div>
+
+        <section class="card">
+          <h2>フォルダ作成</h2>
+          <input id="folder-title" placeholder="〇〇工場_yyyymmdd" />
+          <button id="create-folder-btn">作成</button>
+        </section>
+
+        <section class="card">
+          <h2>フォルダ一覧</h2>
+          <select id="folder-select">
+            <option value="">フォルダを選択してください</option>
+          </select>
+        </section>
+
+        <section id="folder-detail" class="card hidden">
+          <h2 id="folder-detail-title"></h2>
+          <div class="row">
+            <input id="photo-files" type="file" accept="image/*" multiple />
+            <button id="upload-btn">複数アップロード</button>
+            <button id="export-btn">PowerPoint出力</button>
+          </div>
+          <div id="photo-list" class="photo-grid"></div>
+        </section>
+      </section>
+    </main>
+
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+    <script src="./config.js?v=20260215-1"></script>
+    <script src="./main.js?v=20260215-2" type="module"></script>
+  </body>
+</html>

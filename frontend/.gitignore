@@ -1,0 +1,13 @@
+dist/
+node_modules/
+.DS_Store
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*

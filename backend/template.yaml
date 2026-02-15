@@ -1,0 +1,221 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Kansa photo audit app backend (localStorage user mode)
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Timeout: 30
+    MemorySize: 512
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref AuditTable
+        PHOTO_BUCKET: !Ref PhotoBucket
+        EXPORT_BUCKET: !Ref ExportBucket
+
+Parameters:
+  ApiThrottleRateLimit:
+    Type: Number
+    Default: 50
+    Description: API Gateway default route rate limit (requests/second)
+  ApiThrottleBurstLimit:
+    Type: Number
+    Default: 100
+    Description: API Gateway default route burst limit
+
+Resources:
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      DefaultRouteSettings:
+        ThrottlingRateLimit: !Ref ApiThrottleRateLimit
+        ThrottlingBurstLimit: !Ref ApiThrottleBurstLimit
+      CorsConfiguration:
+        AllowHeaders:
+          - "*"
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        AllowOrigins:
+          - "*"
+
+  AuditTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: GSI1PK
+          AttributeType: S
+        - AttributeName: GSI1SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: GSI1PK
+              KeyType: HASH
+            - AttributeName: GSI1SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  PhotoBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ["*"]
+            AllowedMethods: [GET, PUT, POST, DELETE]
+            AllowedOrigins: ["*"]
+
+  PhotoBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PhotoBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: PublicReadPhotos
+            Effect: Allow
+            Principal: "*"
+            Action:
+              - s3:GetObject
+            Resource: !Sub "${PhotoBucket.Arn}/*"
+
+  ExportBucket:
+    Type: AWS::S3::Bucket
+
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: api.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AuditTable
+        - S3CrudPolicy:
+            BucketName: !Ref PhotoBucket
+        - S3CrudPolicy:
+            BucketName: !Ref ExportBucket
+      Events:
+        ListFolders:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /folders
+            Method: GET
+        CreateFolder:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /folders
+            Method: POST
+        CreateRoom:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /rooms/create
+            Method: POST
+        EnterRoom:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /rooms/enter
+            Method: POST
+        ListPhotos:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /folders/{folderId}/photos
+            Method: GET
+        CreateUploadUrl:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /folders/{folderId}/photos/upload-url
+            Method: POST
+        FinalizePhoto:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /folders/{folderId}/photos
+            Method: POST
+        DeletePhoto:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /photos/{photoId}
+            Method: DELETE
+        UpdatePhoto:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /photos/{photoId}
+            Method: PUT
+        ListComments:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /photos/{photoId}/comments
+            Method: GET
+        CreateComment:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /photos/{photoId}/comments
+            Method: POST
+        DeleteComment:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /photos/{photoId}/comments/{commentId}
+            Method: DELETE
+        UpdateComment:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /photos/{photoId}/comments/{commentId}
+            Method: PUT
+        ExportPptx:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /folders/{folderId}/export
+            Method: POST
+
+  BackfillCodesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: backfill-codes.handler
+      Timeout: 180
+      MemorySize: 512
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AuditTable
+
+Outputs:
+  ApiUrl:
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+  PhotoBucketName:
+    Value: !Ref PhotoBucket
+  ExportBucketName:
+    Value: !Ref ExportBucket
+  BackfillCodesFunctionName:
+    Value: !Ref BackfillCodesFunction

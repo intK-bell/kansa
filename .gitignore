@@ -1,0 +1,41 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.p12
+**/*.crt
+
+# AWS / SAM build artifacts
+.aws-sam/
+backend/.aws-sam/
+**/.aws/
+
+# Node / package artifacts
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build outputs
+dist/
+**/dist/
+coverage/
+**/coverage/
+tmp/
+*.zip
+.backup/
+
+# If this directory is turned into a root git repo,
+# keep nested frontend repo internals out.
+frontend/.git/
