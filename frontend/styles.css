@@ -275,6 +275,54 @@ select {
   color: var(--muted);
 }
 
+.auth-legal-link {
+  display: inline-block;
+  margin-top: 4px;
+}
+
+.legal-page {
+  max-width: 1200px;
+}
+
+.legal-header {
+  align-items: flex-start;
+}
+
+.legal-back-link {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.legal-card {
+  margin-bottom: 14px;
+}
+
+.legal-card-body {
+  border-top: 1px solid var(--border);
+  margin-top: 10px;
+  padding-top: 10px;
+  max-height: 50vh;
+  overflow: auto;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.legal-card-body h3,
+.legal-card-body h4 {
+  margin: 0 0 6px;
+}
+
+.legal-card-body h4 {
+  margin-top: 10px;
+}
+
+.legal-card-body p {
+  margin: 0 0 7px;
+}
+
 button {
   border: 0;
   border-radius: 8px;
@@ -312,7 +360,7 @@ button:disabled {
 }
 
 .hidden {
-  display: none;
+  display: none !important;
 }
 
 .app-header {
@@ -656,6 +704,47 @@ body.dark .billing-bar {
   background: rgba(20, 20, 20, 0.55);
 }
 
+.storage-graph {
+  margin: 10px 0;
+}
+
+#billing-graph-top {
+  max-width: 100%;
+  margin-top: 8px;
+}
+
+.storage-graph-bar {
+  display: flex;
+  width: 100%;
+  height: 16px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.storage-graph-used {
+  background: linear-gradient(90deg, var(--danger-hover), var(--danger));
+}
+
+.storage-graph-remaining {
+  background: linear-gradient(90deg, var(--primary-hover), var(--primary));
+}
+
+.storage-graph-meta {
+  margin-top: 6px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+body.dark .storage-graph-bar {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(20, 20, 20, 0.65);
+}
+
 .member-row {
   display: flex;
   justify-content: space-between;
@@ -693,6 +782,14 @@ body.dark .room-row {
 
   .page-header {
     align-items: flex-start;
+  }
+
+  .legal-back-link {
+    white-space: normal;
+  }
+
+  .legal-card-body {
+    max-height: 45vh;
   }
 
   .card {

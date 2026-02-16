@@ -50,6 +50,8 @@
           新規登録前に、 Microsoft Authenticator / Google Authenticatorなどをインストールください。
           <br />
           <span id="help-user-link" class="help-link">使い方を見る</span>
+          <br />
+          <a class="help-link auth-legal-link" href="./legal.html">特定商取引法に基づく表記・利用規約・プライバシーポリシー</a>
         </p>
       </section>
 
@@ -77,7 +79,7 @@
 
       <section id="app" class="hidden">
         <div class="app-header">
-          <p>
+          <p id="app-header-summary">
             利用者: <strong id="current-name"></strong>
             / お部屋: <strong id="current-room"></strong>
           </p>
@@ -85,6 +87,16 @@
 
         <div class="toolbar">
           <p id="error-box" class="muted hidden" style="color:#b91c1c;"></p>
+          <div id="billing-graph-top" class="storage-graph hidden" aria-label="ストレージ使用量">
+            <div class="storage-graph-bar">
+              <div id="billing-graph-top-used" class="storage-graph-used" style="width:0%;"></div>
+              <div id="billing-graph-top-remaining" class="storage-graph-remaining" style="width:100%;"></div>
+            </div>
+            <div class="storage-graph-meta">
+              <span id="billing-graph-top-used-label">使用量 0MB</span>
+              <span id="billing-graph-top-remain-label">残り 0MB</span>
+            </div>
+          </div>
           <p id="billing-bar" class="billing-bar muted hidden"></p>
         </div>
 
@@ -103,6 +115,16 @@
 
           <h3 style="margin-top:16px;">容量</h3>
           <p id="billing-status" class="muted"></p>
+          <div id="billing-graph" class="storage-graph hidden" aria-label="ストレージ使用量">
+            <div class="storage-graph-bar">
+              <div id="billing-graph-used" class="storage-graph-used" style="width:0%;"></div>
+              <div id="billing-graph-remaining" class="storage-graph-remaining" style="width:100%;"></div>
+            </div>
+            <div class="storage-graph-meta">
+              <span id="billing-graph-used-label">使用量 0MB</span>
+              <span id="billing-graph-remain-label">残り 0MB</span>
+            </div>
+          </div>
           <div class="row">
             <button id="purchase-1gbm" type="button">+1GB・月 (¥1,000)</button>
             <button id="purchase-10gbm" type="button">+10GB・月 (¥8,000)</button>
@@ -198,12 +220,29 @@
           <p><strong>メンバーやめる</strong> を実行すると、その部屋には招待URLなしでは再参加できません。</p>
 
           <h4>料金</h4>
-          <p>無料枠を超えて利用を続ける場合は、管理者が追加容量を購入します。</p>
-          <p>追加容量チケット:</p>
+          <p>ご利用料金は、当サービスにお預けいただくデータ量に応じて異なります。</p>
+          <p>無料枠を超えて利用を続ける場合、管理者が毎月前払いで必要容量を購入します。</p>
+          <p>追加容量チケット（1か月分・前払い）:</p>
           <p>- +1GB・月: ¥1,000</p>
           <p>- +10GB・月: ¥8,000</p>
           <p>- +50GB・月: ¥35,000</p>
           <p class="muted">※ 料金操作は管理者メニュー（お部屋管理）から実行します。</p>
+          <p class="muted">※ 自動で勝手に課金されることはありません。</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="low-storage-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="容量不足のご案内">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 style="margin:0;">容量不足のご案内</h3>
+          <button id="low-storage-close-btn" type="button" class="danger">閉じる</button>
+        </div>
+        <p id="low-storage-message" class="muted" style="margin:8px 0 12px;">
+          容量を追加しますか？
+        </p>
+        <div class="row" style="justify-content:flex-end;">
+          <button id="low-storage-charge-btn" type="button">プリペイド容量をチャージ</button>
         </div>
       </div>
     </div>

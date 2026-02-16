@@ -25,6 +25,7 @@ const state = {
   userKey: null,
   userName: null,
   idToken: null,
+  roomId: null,
   roomName: null,
   teamRole: null,
   isAdmin: false,
@@ -135,6 +136,7 @@ function clearAuth() {
 
 function resetRoomContext() {
   localStorage.removeItem('kansa_room_name');
+  state.roomId = null;
   state.roomName = null;
   state.teamRole = null;
   state.isAdmin = false;
@@ -150,6 +152,7 @@ function resetRoomContext() {
   state.openAccordions.clear();
   state.restoreScrollY = null;
   if (els.folderDetail) els.folderDetail.classList.add('hidden');
+  closeLowStorageModal();
   renderBillingBar();
   setAdminUiVisibility();
 }
@@ -322,10 +325,24 @@ const els = {
   teamAdminCard: document.querySelector('#team-admin'),
   teamAdminBackBtn: document.querySelector('#team-admin-back-btn'),
   billingBar: document.querySelector('#billing-bar'),
+  billingGraphTop: document.querySelector('#billing-graph-top'),
+  billingGraphTopUsed: document.querySelector('#billing-graph-top-used'),
+  billingGraphTopRemaining: document.querySelector('#billing-graph-top-remaining'),
+  billingGraphTopUsedLabel: document.querySelector('#billing-graph-top-used-label'),
+  billingGraphTopRemainLabel: document.querySelector('#billing-graph-top-remain-label'),
   billingStatus: document.querySelector('#billing-status'),
+  billingGraph: document.querySelector('#billing-graph'),
+  billingGraphUsed: document.querySelector('#billing-graph-used'),
+  billingGraphRemaining: document.querySelector('#billing-graph-remaining'),
+  billingGraphUsedLabel: document.querySelector('#billing-graph-used-label'),
+  billingGraphRemainLabel: document.querySelector('#billing-graph-remain-label'),
   purchase1Btn: document.querySelector('#purchase-1gbm'),
   purchase10Btn: document.querySelector('#purchase-10gbm'),
   purchase50Btn: document.querySelector('#purchase-50gbm'),
+  lowStorageModal: document.querySelector('#low-storage-modal'),
+  lowStorageCloseBtn: document.querySelector('#low-storage-close-btn'),
+  lowStorageMessage: document.querySelector('#low-storage-message'),
+  lowStorageChargeBtn: document.querySelector('#low-storage-charge-btn'),
   deleteTeamBtn: document.querySelector('#delete-team-btn'),
   createInviteBtn: document.querySelector('#create-invite-btn'),
   revokeInviteBtn: document.querySelector('#revoke-invite-btn'),
@@ -335,6 +352,7 @@ const els = {
   folderCreateCard: document.querySelector('#folder-create-card'),
   folderListCard: document.querySelector('#folder-list-card'),
   folderDeleteBtn: document.querySelector('#delete-folder-btn'),
+  appHeaderSummary: document.querySelector('#app-header-summary'),
   currentName: document.querySelector('#current-name'),
   currentRoom: document.querySelector('#current-room'),
   folderTitle: document.querySelector('#folder-title'),
@@ -381,6 +399,22 @@ function closeHelpModal() {
   if (els.helpModal) {
     els.helpModal.classList.add('hidden');
   }
+}
+
+function closeLowStorageModal() {
+  if (els.lowStorageModal) {
+    els.lowStorageModal.classList.add('hidden');
+  }
+}
+
+function showAuthSetup() {
+  if (els.userSetup) els.userSetup.classList.remove('hidden');
+  if (els.roomSetup) els.roomSetup.classList.add('hidden');
+  if (els.app) els.app.classList.add('hidden');
+  if (els.globalMenuWrap) els.globalMenuWrap.classList.add('hidden');
+  if (els.logoutBtn) els.logoutBtn.classList.add('hidden');
+  setMenuActionVisibility(false);
+  closeMenu();
 }
 
 function openHelpModal() {
@@ -486,26 +520,64 @@ function formatBytes(bytes) {
   return `${Math.round(n / mib)}MB`;
 }
 
+function storagePromptKey() {
+  const rid = state.roomId || state.roomName || 'unknown';
+  return `kansa_low_storage_prompted_${rid}`;
+}
+
+function computeStorageStats(billing) {
+  const usageBytes = Math.max(0, Number(billing?.usageBytes || 0));
+  const freeBytes = Math.max(0, Number(billing?.freeBytes || 0));
+  const usedBytes = Math.min(usageBytes, freeBytes);
+  const freeRemainBytes = Math.max(0, freeBytes - usageBytes);
+  const usedRatio = freeBytes > 0 ? Math.min(100, (usedBytes / freeBytes) * 100) : 0;
+  const remainRatio = Math.max(0, 100 - usedRatio);
+  return { usageBytes, freeBytes, usedBytes, freeRemainBytes, usedRatio, remainRatio };
+}
+
+function syncTopStorageGraphWidth() {
+  if (!els.billingGraphTop || !els.appHeaderSummary) return;
+  const width = Math.round(els.appHeaderSummary.getBoundingClientRect().width || 0);
+  if (width > 0) {
+    els.billingGraphTop.style.width = `${width}px`;
+    return;
+  }
+  els.billingGraphTop.style.removeProperty('width');
+}
+
+function renderTopStorageGraph() {
+  if (!els.billingGraphTop || !els.billingGraphTopUsed || !els.billingGraphTopRemaining) return;
+  if (!state.roomName || !state.billing) {
+    els.billingGraphTop.classList.add('hidden');
+    return;
+  }
+  const stats = computeStorageStats(state.billing);
+  syncTopStorageGraphWidth();
+  els.billingGraphTopUsed.style.width = `${stats.usedRatio}%`;
+  els.billingGraphTopRemaining.style.width = `${stats.remainRatio}%`;
+  if (els.billingGraphTopUsedLabel) {
+    els.billingGraphTopUsedLabel.textContent = `使用量 ${formatBytes(stats.usageBytes)}`;
+  }
+  if (els.billingGraphTopRemainLabel) {
+    els.billingGraphTopRemainLabel.textContent = `残り ${formatBytes(stats.freeRemainBytes)}`;
+  }
+  els.billingGraphTop.classList.remove('hidden');
+}
+
 function renderBillingBar() {
   if (!els.billingBar) return;
   if (!state.roomName || !state.billing) {
+    renderTopStorageGraph();
     els.billingBar.classList.add('hidden');
     els.billingBar.textContent = '';
     return;
   }
 
   const b = state.billing;
-  const usage = formatBytes(b.usageBytes);
-  const free = formatBytes(b.freeBytes);
   const freeRemainBytes = Math.max(0, Number(b.freeBytes || 0) - Number(b.usageBytes || 0));
-  const freeRemain = formatBytes(freeRemainBytes);
-  const gbm = Number(b.gbMonthEquivalent || 0).toFixed(2);
-  const days = b.estimatedDaysLeft === null ? '-' : Math.max(0, b.estimatedDaysLeft).toFixed(1);
   const blocked = state.uploadBlocked;
 
   const parts = [];
-  parts.push(`使用量: ${usage} / 無料: ${free}（残り ${freeRemain}）`);
-  parts.push(`追加残り: ${gbm} GB・月 相当`);
   if (state.ownerUserKey && state.userKey) {
     parts.push(state.ownerUserKey === state.userKey ? '作成者' : '参加者');
   }
@@ -513,6 +585,7 @@ function renderBillingBar() {
   if (!blocked && Number(b.gbMonthEquivalent || 0) <= 0 && freeRemainBytes > 0) parts.push('無料枠で利用中');
   if (state.isAdmin) parts.push('管理者');
 
+  renderTopStorageGraph();
   els.billingBar.textContent = parts.join(' / ');
   els.billingBar.classList.remove('hidden');
 }
@@ -523,7 +596,48 @@ function setAdminUiVisibility() {
   if (els.setFolderPasswordBtn) els.setFolderPasswordBtn.classList.toggle('hidden', !state.isAdmin);
   if (!state.isAdmin) {
     if (els.teamAdminCard) els.teamAdminCard.classList.add('hidden');
+    closeLowStorageModal();
   }
+}
+
+function renderStorageGraph() {
+  if (!els.billingGraph || !els.billingGraphUsed || !els.billingGraphRemaining) return;
+  if (!state.billing) {
+    els.billingGraph.classList.add('hidden');
+    return;
+  }
+  const stats = computeStorageStats(state.billing);
+  els.billingGraphUsed.style.width = `${stats.usedRatio}%`;
+  els.billingGraphRemaining.style.width = `${stats.remainRatio}%`;
+  if (els.billingGraphUsedLabel) {
+    els.billingGraphUsedLabel.textContent = `使用量 ${formatBytes(stats.usageBytes)}`;
+  }
+  if (els.billingGraphRemainLabel) {
+    els.billingGraphRemainLabel.textContent = `残り ${formatBytes(stats.freeRemainBytes)}`;
+  }
+  els.billingGraph.classList.remove('hidden');
+}
+
+function maybePromptLowStorage() {
+  if (!state.isAdmin || !state.billing || !els.lowStorageModal) return;
+  const stats = computeStorageStats(state.billing);
+  const lowByBytes = stats.freeRemainBytes <= 100 * 1024 * 1024;
+  const lowByRatio = stats.freeBytes > 0 ? stats.freeRemainBytes / stats.freeBytes <= 0.15 : false;
+  const isLow = state.uploadBlocked || lowByBytes || lowByRatio;
+  const key = storagePromptKey();
+  if (!isLow) {
+    localStorage.removeItem(key);
+    return;
+  }
+  if (localStorage.getItem(key) === '1') return;
+  const extra = Number(state.billing.gbMonthEquivalent || 0).toFixed(2);
+  if (els.lowStorageMessage) {
+    els.lowStorageMessage.textContent = `容量を追加しますか？（現在の残り: ${formatBytes(
+      stats.freeRemainBytes
+    )} / 追加残り: ${extra} GB・月）`;
+  }
+  els.lowStorageModal.classList.remove('hidden');
+  localStorage.setItem(key, '1');
 }
 
 function applyTheme(theme) {
@@ -711,7 +825,7 @@ async function initUser() {
   if (els.logoutBtn) els.logoutBtn.classList.add('hidden');
   if (els.globalMenuWrap) els.globalMenuWrap.classList.add('hidden');
   if (!hasCognitoConfig()) {
-    if (els.userSetup) els.userSetup.classList.remove('hidden');
+    showAuthSetup();
     showError('Cognito設定が不足しています。config.jsにdomain/clientId/regionを設定してください。');
     return;
   }
@@ -768,7 +882,7 @@ async function initUser() {
     return;
   }
   clearAuth();
-  if (els.userSetup) els.userSetup.classList.remove('hidden');
+  showAuthSetup();
 }
 
 function showRoomSetup() {
@@ -887,9 +1001,7 @@ async function api(path, options = {}) {
     const text = await res.text();
     if (res.status === 401) {
       clearAuth();
-      if (els.app) els.app.classList.add('hidden');
-      if (els.roomSetup) els.roomSetup.classList.add('hidden');
-      if (els.userSetup) els.userSetup.classList.remove('hidden');
+      showAuthSetup();
     }
     if (res.status === 403 && text.includes('"no active room"')) {
       resetRoomContext();
@@ -904,6 +1016,7 @@ async function api(path, options = {}) {
 async function loadTeamMe() {
   try {
     const data = await api('/team/me', { method: 'GET' });
+    state.roomId = data.roomId || state.roomId;
     state.teamRole = data.role || 'member';
     state.isAdmin = Boolean(data.isAdmin);
     state.uploadBlocked = Boolean(data.uploadBlocked);
@@ -913,6 +1026,7 @@ async function loadTeamMe() {
     // Keep the UI usable, but don't hide the failure.
     showError(`チーム情報取得失敗: ${asMessage(error)}（バックエンド/フロントのデプロイ差分やキャッシュの可能性）`);
     state.teamRole = null;
+    state.roomId = null;
     state.isAdmin = false;
     state.uploadBlocked = false;
     state.billing = null;
@@ -1025,12 +1139,17 @@ async function loadAdminPanel() {
 
   if (els.billingStatus && state.billing) {
     const b = state.billing;
-    const freeRemainBytes = Math.max(0, Number(b.freeBytes || 0) - Number(b.usageBytes || 0));
+    const stats = computeStorageStats(b);
     els.billingStatus.textContent = `使用量 ${formatBytes(b.usageBytes)} / 無料 ${formatBytes(
       b.freeBytes
-    )}（残り ${formatBytes(freeRemainBytes)}） / 追加残り ${Number(
+    )}（残り ${formatBytes(stats.freeRemainBytes)}） / 追加残り ${Number(
       b.gbMonthEquivalent || 0
     ).toFixed(2)} GB・月 相当`;
+    renderStorageGraph();
+    maybePromptLowStorage();
+  } else {
+    if (els.billingStatus) els.billingStatus.textContent = '';
+    if (els.billingGraph) els.billingGraph.classList.add('hidden');
   }
 }
 
@@ -1592,6 +1711,7 @@ if (els.resetUserBtn) {
     if (els.currentName) {
       els.currentName.textContent = state.userName;
     }
+    renderTopStorageGraph();
     showToast('表示名を更新しました。');
     closeMenu();
   }, 'ユーザー名変更');
@@ -1614,9 +1734,7 @@ if (els.logoutBtn) {
       return;
     }
 
-    if (els.userSetup) els.userSetup.classList.remove('hidden');
-    if (els.roomSetup) els.roomSetup.classList.add('hidden');
-    if (els.app) els.app.classList.add('hidden');
+    showAuthSetup();
   };
 }
 
@@ -1659,6 +1777,20 @@ if (els.helpModal) {
   els.helpModal.onclick = (e) => {
     if (e && e.target === els.helpModal) {
       closeHelpModal();
+    }
+  };
+}
+
+if (els.lowStorageCloseBtn) {
+  els.lowStorageCloseBtn.onclick = () => {
+    closeLowStorageModal();
+  };
+}
+
+if (els.lowStorageModal) {
+  els.lowStorageModal.onclick = (e) => {
+    if (e && e.target === els.lowStorageModal) {
+      closeLowStorageModal();
     }
   };
 }
@@ -1862,6 +1994,17 @@ async function purchaseSku(sku) {
 if (els.purchase1Btn) els.purchase1Btn.onclick = safeAction(() => purchaseSku('1gbm'), '購入');
 if (els.purchase10Btn) els.purchase10Btn.onclick = safeAction(() => purchaseSku('10gbm'), '購入');
 if (els.purchase50Btn) els.purchase50Btn.onclick = safeAction(() => purchaseSku('50gbm'), '購入');
+if (els.lowStorageChargeBtn) {
+  els.lowStorageChargeBtn.onclick = safeAction(async () => {
+    closeLowStorageModal();
+    if (els.teamAdminCard && els.teamAdminCard.classList.contains('hidden')) {
+      els.teamAdminCard.classList.remove('hidden');
+      setTeamAdminMode(true);
+      await loadAdminPanel();
+    }
+    await purchaseSku('1gbm');
+  }, '容量チャージ');
+}
 
 if (els.deleteTeamBtn) {
   els.deleteTeamBtn.onclick = safeAction(async () => {
@@ -1915,6 +2058,10 @@ window.addEventListener('unhandledrejection', (event) => {
 
 window.addEventListener('error', (event) => {
   showError(`実行エラー: ${asMessage(event.error || event.message)}`);
+});
+
+window.addEventListener('resize', () => {
+  syncTopStorageGraphWidth();
 });
 
 if (els.toggleThemeBtn) {
