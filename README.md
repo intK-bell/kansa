@@ -76,6 +76,8 @@ cd /Users/aokikensaku/Documents/Devapps/kansa
 5. 自分が作成した写真/コメントのみ削除可
 6. フォルダ単位でPowerPoint出力
 
+利用者向けの詳細手順は `docs/user-guide.md` を参照してください。
+
 ## APIヘッダ
 APIは `Authorization: Bearer <Cognito ID Token>` を必須とします。
 

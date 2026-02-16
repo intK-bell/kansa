@@ -294,6 +294,7 @@ const els = {
   globalMenuWrap: document.querySelector('#global-menu-wrap'),
   loginBtn: document.querySelector('#login-btn'),
   signupBtn: document.querySelector('#signup-btn'),
+  helpUserLink: document.querySelector('#help-user-link'),
   logoutBtn: document.querySelector('#logout-btn'),
   createRoomName: document.querySelector('#create-room-name'),
   createRoomBtn: document.querySelector('#create-room-btn'),
@@ -309,9 +310,12 @@ const els = {
   roomCreateName: document.querySelector('#room-create-name'),
   roomCreateSubmitBtn: document.querySelector('#room-create-submit-btn'),
   roomCreateCloseBtn: document.querySelector('#room-create-close-btn'),
+  helpModal: document.querySelector('#help-modal'),
+  helpCloseBtn: document.querySelector('#help-close-btn'),
   menuBtn: document.querySelector('#menu-btn'),
   menuPanel: document.querySelector('#menu-panel'),
   toggleThemeBtn: document.querySelector('#toggle-theme-btn'),
+  helpMenuBtn: document.querySelector('#help-menu-btn'),
   seasonSelect: document.querySelector('#season-select'),
   resetUserBtn: document.querySelector('#reset-user-btn'),
   teamAdminBtn: document.querySelector('#team-admin-btn'),
@@ -371,6 +375,17 @@ function closeRoomCreateModal() {
   if (els.roomCreateModal) {
     els.roomCreateModal.classList.add('hidden');
   }
+}
+
+function closeHelpModal() {
+  if (els.helpModal) {
+    els.helpModal.classList.add('hidden');
+  }
+}
+
+function openHelpModal() {
+  if (!els.helpModal) return;
+  els.helpModal.classList.remove('hidden');
 }
 
 function openRoomCreateModal() {
@@ -1589,6 +1604,7 @@ if (els.logoutBtn) {
     closeMenu();
     closeRoomSwitchModal();
     closeRoomCreateModal();
+    closeHelpModal();
 
     if (hasCognitoConfig()) {
       const logoutUrl = new URL(`https://${COGNITO_DOMAIN}.auth.${COGNITO_REGION}.amazoncognito.com/logout`);
@@ -1629,6 +1645,20 @@ if (els.roomCreateModal) {
   els.roomCreateModal.onclick = (e) => {
     if (e && e.target === els.roomCreateModal) {
       closeRoomCreateModal();
+    }
+  };
+}
+
+if (els.helpCloseBtn) {
+  els.helpCloseBtn.onclick = () => {
+    closeHelpModal();
+  };
+}
+
+if (els.helpModal) {
+  els.helpModal.onclick = (e) => {
+    if (e && e.target === els.helpModal) {
+      closeHelpModal();
     }
   };
 }
@@ -1682,6 +1712,19 @@ if (els.createRoomMenuBtn) {
     closeMenu();
     openRoomCreateModal();
   }, 'お部屋作成');
+}
+
+if (els.helpMenuBtn) {
+  els.helpMenuBtn.onclick = safeAction(async () => {
+    closeMenu();
+    openHelpModal();
+  }, '使い方表示');
+}
+
+if (els.helpUserLink) {
+  els.helpUserLink.onclick = safeAction(async () => {
+    openHelpModal();
+  }, '使い方表示');
 }
 
 if (els.roomCreateSubmitBtn) {

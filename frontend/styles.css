@@ -617,6 +617,21 @@ button:disabled {
   gap: 10px;
 }
 
+.help-content h4 {
+  margin: 12px 0 6px;
+}
+
+.help-content p {
+  margin: 4px 0;
+}
+
+.help-link {
+  color: var(--primary);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 @keyframes modalIn {
   from {
     transform: translateY(6px);

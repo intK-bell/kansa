@@ -33,6 +33,7 @@
             <button id="team-admin-btn" type="button" class="hidden">お部屋管理</button>
             <button id="create-room-menu-btn" type="button">お部屋作成</button>
             <button id="switch-room-btn" type="button">お部屋切替</button>
+            <button id="help-menu-btn" type="button">使い方・料金</button>
             <button id="leave-room-btn" type="button" class="danger">メンバーやめる</button>
             <button id="logout-btn" type="button" class="danger">ログアウト</button>
           </div>
@@ -47,6 +48,8 @@
         <p class="auth-footnote">
           ※ 本アプリの多要素認証は汎用の認証アプリを使用します。<br />
           新規登録前に、 Microsoft Authenticator / Google Authenticatorなどをインストールください。
+          <br />
+          <span id="help-user-link" class="help-link">使い方を見る</span>
         </p>
       </section>
 
@@ -178,7 +181,33 @@
         </div>
       </div>
     </div>
+
+    <div id="help-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="使い方・料金">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 style="margin:0;">使い方・料金</h3>
+          <button id="help-close-btn" type="button" class="danger">閉じる</button>
+        </div>
+        <div class="help-content">
+          <p>1. 新規登録後、ログイン（初回は表示名を設定）</p>
+          <p>2. お部屋を作成するか、招待URLから参加</p>
+          <p>3. フォルダ作成 → 写真アップロード → コメント追加</p>
+
+          <h4>お部屋操作</h4>
+          <p>メニューの <strong>お部屋切替</strong> で、所属中のお部屋をいつでも切替できます。</p>
+          <p><strong>メンバーやめる</strong> を実行すると、その部屋には招待URLなしでは再参加できません。</p>
+
+          <h4>料金</h4>
+          <p>無料枠を超えて利用を続ける場合は、管理者が追加容量を購入します。</p>
+          <p>追加容量チケット:</p>
+          <p>- +1GB・月: ¥1,000</p>
+          <p>- +10GB・月: ¥8,000</p>
+          <p>- +50GB・月: ¥35,000</p>
+          <p class="muted">※ 料金操作は管理者メニュー（お部屋管理）から実行します。</p>
+        </div>
+      </div>
+    </div>
     <script src="./config.js?v=20260215-2"></script>
-    <script src="./main.js?v=20260216-14" type="module"></script>
+    <script src="./main.js?v=20260216-15" type="module"></script>
   </body>
 </html>
