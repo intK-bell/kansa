@@ -521,6 +521,80 @@ function safeAction(fn, label) {
   };
 }
 
+async function scrollToPhotoList() {
+  if (!els.photoList) return;
+  // Wait a frame so DOM updates from renderPhotos are reflected before scrolling.
+  await new Promise((r) => window.requestAnimationFrame(() => r()));
+  els.photoList.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function skuToProductLabel(sku) {
+  const v = String(sku || '').trim().toLowerCase();
+  if (v === '1gbm') return '1GB';
+  if (v === '10gbm') return '10GB';
+  if (v === '50gbm') return '50GB';
+  return null;
+}
+
+function clearPurchaseParamsFromUrl() {
+  const url = new URL(window.location.href);
+  ['purchase', 'sku', 'session_id', 'sessionId'].forEach((k) => url.searchParams.delete(k));
+  window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+}
+
+async function handleStripePurchaseReturn() {
+  // Stripe Checkout success redirect. We only show the toast once the webhook credit is confirmed.
+  const url = new URL(window.location.href);
+  const purchase = url.searchParams.get('purchase');
+  if (!purchase) return;
+
+  if (purchase !== 'success') {
+    clearPurchaseParamsFromUrl();
+    return;
+  }
+
+  const sku = url.searchParams.get('sku') || '';
+  const sessionId = url.searchParams.get('session_id') || url.searchParams.get('sessionId') || '';
+  const label = skuToProductLabel(sku);
+  if (!label || !sessionId) {
+    clearPurchaseParamsFromUrl();
+    return;
+  }
+  if (!state.isAdmin) {
+    clearPurchaseParamsFromUrl();
+    return;
+  }
+
+  // Navigate to the room admin screen (within the same page).
+  if (els.teamAdminCard) {
+    els.teamAdminCard.classList.remove('hidden');
+    setTeamAdminMode(true);
+  }
+  await loadAdminPanel();
+
+  // Poll until webhook credits are applied (session marker exists).
+  const maxAttempts = 45; // ~45s
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    try {
+      const res = await api(`/team/purchase/confirm?sessionId=${encodeURIComponent(sessionId)}`, { method: 'GET' });
+      if (res && res.processed) {
+        await loadTeamMe();
+        await loadAdminPanel();
+        showToast(`追加残りに購入した商品名（${label}）が追加されました。`);
+        clearPurchaseParamsFromUrl();
+        return;
+      }
+    } catch (_) {
+      // Ignore transient API errors while polling.
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+
+  // Timed out. Don't loop on refresh.
+  clearPurchaseParamsFromUrl();
+  showToast('決済反映に少し時間がかかっとるばい。しばらくして容量表示ば確認してね。');
+}
+
 function preserveCurrentView(photoId) {
   if (photoId) {
     state.openAccordions.add(photoId);
@@ -653,8 +727,9 @@ function showApp() {
   closeMenu();
   els.currentName.textContent = state.userName;
   if (els.currentRoom) els.currentRoom.textContent = state.roomName || '-';
-  loadTeamMe().then(() => {
+  loadTeamMe().then(async () => {
     if (els.uploadBtn) els.uploadBtn.disabled = Boolean(state.uploadBlocked);
+    await handleStripePurchaseReturn();
   });
   loadFolders();
 }
@@ -1130,6 +1205,7 @@ async function uploadFiles() {
 
     els.photoFiles.value = '';
     await loadPhotos();
+    await scrollToPhotoList();
   } catch (error) {
     const message = asMessage(error);
     if (message.includes('APIエラー(402)')) {
@@ -1543,10 +1619,12 @@ if (els.teamAdminBackBtn && els.teamAdminCard) {
 }
 
 async function purchaseSku(sku) {
-  const returnUrl = window.location.origin + window.location.pathname;
+  const base = window.location.origin + window.location.pathname;
+  const successUrl = `${base}?purchase=success&sku=${encodeURIComponent(sku)}&session_id={CHECKOUT_SESSION_ID}`;
+  const cancelUrl = base;
   const res = await api('/team/purchase/checkout', {
     method: 'POST',
-    body: JSON.stringify({ sku, successUrl: returnUrl, cancelUrl: returnUrl }),
+    body: JSON.stringify({ sku, successUrl, cancelUrl }),
   });
   if (res && res.url) {
     window.location.href = res.url;

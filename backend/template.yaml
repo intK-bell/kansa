@@ -388,6 +388,12 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /team/purchase/checkout
             Method: POST
+        TeamPurchaseConfirm:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /team/purchase/confirm
+            Method: GET
         TeamMembers:
           Type: HttpApi
           Properties:

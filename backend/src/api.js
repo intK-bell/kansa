@@ -1160,6 +1160,23 @@ async function teamPurchaseCheckout(event, user, room, authz, ctx) {
   return json(200, { url: session.url, sessionId: session.id });
 }
 
+async function teamPurchaseConfirm(event, room, authz) {
+  // Frontend polls this endpoint after returning from Stripe Checkout.
+  // We confirm the webhook has already credited the room by checking the session marker.
+  if (!authz.isAdmin) return json(403, { message: 'forbidden' });
+  const qs = event.queryStringParameters || {};
+  const sessionId = String(qs.sessionId || qs.session_id || '').trim();
+  if (!sessionId) return badRequest('sessionId is required');
+
+  const res = await ddb.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `ROOM#${room.roomId}`, SK: `STRIPE_SESSION#${sessionId}` },
+    })
+  );
+  return json(200, { ok: true, processed: Boolean(res.Item) });
+}
+
 async function teamPurchase(event, user, room, authz, ctx) {
   // Deprecated manual credit endpoint. Keep it for emergency/dev only.
   // Use Stripe Checkout (/team/purchase/checkout) + webhook crediting in normal operation.
@@ -2492,6 +2509,9 @@ exports.handler = async (event) => {
     if (method === 'POST' && path === '/team/purchase') return await teamPurchase(event, user, room, authz, ctx);
     if (method === 'POST' && path === '/team/purchase/checkout') {
       return await teamPurchaseCheckout(event, user, room, authz, ctx);
+    }
+    if (method === 'GET' && path === '/team/purchase/confirm') {
+      return await teamPurchaseConfirm(event, room, authz);
     }
     if (method === 'GET' && path === '/team/members') return await listTeamMembers(room, authz);
     if (method === 'PUT' && p.userKey && path.endsWith(`/team/members/${p.userKey}`)) {
