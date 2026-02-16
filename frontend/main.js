@@ -330,6 +330,8 @@ const els = {
   billingGraphTopRemaining: document.querySelector('#billing-graph-top-remaining'),
   billingGraphTopUsedLabel: document.querySelector('#billing-graph-top-used-label'),
   billingGraphTopRemainLabel: document.querySelector('#billing-graph-top-remain-label'),
+  billingGraphTopSubmeta: document.querySelector('#billing-graph-top-submeta'),
+  billingGraphTopExtraLabel: document.querySelector('#billing-graph-top-extra-label'),
   billingStatus: document.querySelector('#billing-status'),
   billingGraph: document.querySelector('#billing-graph'),
   billingGraphUsed: document.querySelector('#billing-graph-used'),
@@ -560,6 +562,14 @@ function renderTopStorageGraph() {
   }
   if (els.billingGraphTopRemainLabel) {
     els.billingGraphTopRemainLabel.textContent = `残り ${formatBytes(stats.freeRemainBytes)}`;
+  }
+  const extraGbm = Number(state.billing?.gbMonthEquivalent || 0);
+  const shouldShowExtra = stats.freeBytes > 0 && stats.freeRemainBytes <= 0;
+  if (els.billingGraphTopSubmeta) {
+    els.billingGraphTopSubmeta.classList.toggle('hidden', !shouldShowExtra);
+  }
+  if (els.billingGraphTopExtraLabel) {
+    els.billingGraphTopExtraLabel.textContent = `追加残り ${extraGbm.toFixed(2)} GB・月 相当`;
   }
   els.billingGraphTop.classList.remove('hidden');
 }

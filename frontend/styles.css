@@ -740,6 +740,15 @@ body.dark .billing-bar {
   color: var(--muted);
 }
 
+.storage-graph-submeta {
+  margin-top: 3px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
 body.dark .storage-graph-bar {
   border-color: rgba(255, 255, 255, 0.2);
   background: rgba(20, 20, 20, 0.65);
