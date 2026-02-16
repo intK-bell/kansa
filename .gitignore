@@ -2,8 +2,6 @@
 .DS_Store
 .backup/
 artifacts.zip
-dist/
-dist.zip
 
 # SAM / Node build artifacts
 backend/.aws-sam/

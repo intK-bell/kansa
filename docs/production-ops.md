@@ -35,7 +35,7 @@ fields @timestamp, action, actorName, actor, photoId, commentId, result, reason
 3. Build settings はリポジトリの `amplify.yml` を利用
 4. Deploy
 
-`amplify.yml` は `frontend/` を `dist/` にコピーして配信します。
+`amplify.yml` は `frontend/` をそのまま配信します。
 
 ### 2-2. フロント設定（本番）
 `frontend/config.js` に本番値を設定してコミット:

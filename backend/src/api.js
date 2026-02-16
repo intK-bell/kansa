@@ -619,22 +619,10 @@ async function createRoom(event, user, ctx) {
   const roomName = (body.roomName || '').trim();
   if (!roomName) return badRequest('roomName is required');
 
-  // メンバーとしてチームに所属中のユーザーは、脱退するまで新しい部屋を作れない。
-  // ここでは「1人1部屋」運用: left以外の所属が1つでもあれば作成不可。
-  try {
-    const memberships = await listUserRoomMemberships(user.userKey);
-    const hasAnyTeam = memberships.some((m) => String(m.memberStatus || 'active').toLowerCase() !== 'left');
-    if (hasAnyTeam) {
-      return json(409, { message: 'already has a room' });
-    }
-  } catch (_) {
-    // If the index isn't populated yet, don't block room creation.
-  }
-
   const roomId = randomUUID();
   const now = new Date().toISOString();
 
-  // Enforce "1 user = 1 room" for creators using a constraint lock item.
+  // Enforce "1 user = 1 owned room" for creators using a constraint lock item.
   // This protects against missing/lagging reverse indexes and concurrent requests.
   try {
     await ddb.send(
@@ -1351,21 +1339,38 @@ async function teamLeave(user, room, authz, ctx) {
   if (authz.isAdmin) return badRequest('owner cannot leave team');
 
   const nowIso = new Date().toISOString();
-  const key = userRoomMemberKey(user.userKey, room.roomId);
+
+  // Mark membership as "left" but keep the record for audit and allow re-invite later.
+  // This matches the UI label "メンバーやめる".
   try {
     await ddb.send(
       new UpdateCommand({
         TableName: TABLE_NAME,
-        Key: key,
-        // "Leave" means: clear active selection for this room, but keep membership itself.
+        Key: roomMemberKey(room.roomId, user.userKey),
         UpdateExpression: 'SET #status = :s, updatedAt = :u',
         ExpressionAttributeNames: { '#status': 'status' },
-        ExpressionAttributeValues: { ':s': 'inactive', ':u': nowIso },
+        ExpressionAttributeValues: { ':s': 'left', ':u': nowIso },
         ConditionExpression: 'attribute_exists(PK) and attribute_exists(SK)',
       })
     );
   } catch (_) {
-    // If it doesn't exist, treat as already inactive.
+    // If it doesn't exist, treat as already left.
+  }
+
+  try {
+    await ddb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: userRoomMemberKey(user.userKey, room.roomId),
+        // Clear room selection and reflect membership as left in the reverse index.
+        UpdateExpression: 'SET #status = :sel, memberStatus = :ms, updatedAt = :u',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':sel': 'inactive', ':ms': 'left', ':u': nowIso },
+        ConditionExpression: 'attribute_exists(PK) and attribute_exists(SK)',
+      })
+    );
+  } catch (_) {
+    // If it doesn't exist yet, ignore.
   }
 
   auditLog({

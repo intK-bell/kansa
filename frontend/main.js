@@ -297,9 +297,18 @@ const els = {
   logoutBtn: document.querySelector('#logout-btn'),
   createRoomName: document.querySelector('#create-room-name'),
   createRoomBtn: document.querySelector('#create-room-btn'),
+  createRoomMenuBtn: document.querySelector('#create-room-menu-btn'),
   refreshMyRoomsBtn: document.querySelector('#refresh-my-rooms-btn'),
   myRoomsList: document.querySelector('#my-rooms-list'),
   leaveRoomBtn: document.querySelector('#leave-room-btn'),
+  switchRoomBtn: document.querySelector('#switch-room-btn'),
+  roomSwitchModal: document.querySelector('#room-switch-modal'),
+  roomSwitchList: document.querySelector('#room-switch-list'),
+  roomSwitchCloseBtn: document.querySelector('#room-switch-close-btn'),
+  roomCreateModal: document.querySelector('#room-create-modal'),
+  roomCreateName: document.querySelector('#room-create-name'),
+  roomCreateSubmitBtn: document.querySelector('#room-create-submit-btn'),
+  roomCreateCloseBtn: document.querySelector('#room-create-close-btn'),
   menuBtn: document.querySelector('#menu-btn'),
   menuPanel: document.querySelector('#menu-panel'),
   toggleThemeBtn: document.querySelector('#toggle-theme-btn'),
@@ -347,6 +356,79 @@ function closeMenu() {
   }
 }
 
+function closeTeamAdminPanel() {
+  if (els.teamAdminCard) els.teamAdminCard.classList.add('hidden');
+  setTeamAdminMode(false);
+}
+
+function closeRoomSwitchModal() {
+  if (els.roomSwitchModal) {
+    els.roomSwitchModal.classList.add('hidden');
+  }
+}
+
+function closeRoomCreateModal() {
+  if (els.roomCreateModal) {
+    els.roomCreateModal.classList.add('hidden');
+  }
+}
+
+function openRoomCreateModal() {
+  if (!els.roomCreateModal) return;
+  els.roomCreateModal.classList.remove('hidden');
+  if (els.roomCreateName) {
+    els.roomCreateName.value = '';
+    els.roomCreateName.focus();
+  }
+}
+
+async function openRoomSwitchModal() {
+  if (!state.idToken) return;
+  if (!els.roomSwitchModal || !els.roomSwitchList) return;
+
+  els.roomSwitchList.textContent = '読み込み中...';
+  els.roomSwitchModal.classList.remove('hidden');
+
+  try {
+    const res = await api('/rooms/mine', { method: 'GET' });
+    const items = res?.items || [];
+    const activeRoomId = res?.activeRoomId || null;
+
+    const rooms = (items || []).filter((r) => r && r.roomId && r.roomName && r.memberStatus !== 'left');
+    if (!rooms.length) {
+      els.roomSwitchList.textContent = '入室可能なお部屋がありません';
+      return;
+    }
+
+    els.roomSwitchList.innerHTML = '';
+    rooms.forEach((r) => {
+      const row = el('div', { class: 'room-row' });
+      const ms = String(r.memberStatus || 'active').toLowerCase();
+      const suffix = r.roomId === activeRoomId ? '（参加中）' : ms === 'disabled' ? '（停止中）' : '';
+      const ownerLabel = String(r.role || 'member').toLowerCase() === 'admin' ? '作成者: 自分' : '作成者: 別ユーザ';
+      const label = el('div', { style: 'flex:1;' }, `${r.roomName}${suffix} / ${ownerLabel}`);
+      const btnLabel = r.roomId === activeRoomId ? '入室中' : ms === 'disabled' ? '停止中' : 'この部屋へ';
+      const btn = el('button', { type: 'button' }, btnLabel);
+      btn.disabled = r.roomId === activeRoomId || ms === 'disabled';
+      btn.onclick = safeAction(async () => {
+        const sw = await api('/rooms/switch', { method: 'POST', body: JSON.stringify({ roomId: r.roomId }) });
+        // Switching rooms should reset any room-specific UI state (selected folder, admin panel, etc).
+        const nextRoomName = sw.roomName || r.roomName;
+        closeTeamAdminPanel();
+        resetRoomContext();
+        state.roomName = nextRoomName;
+        closeRoomSwitchModal();
+        showApp();
+      }, 'お部屋切替');
+      row.appendChild(label);
+      row.appendChild(btn);
+      els.roomSwitchList.appendChild(row);
+    });
+  } catch (error) {
+    els.roomSwitchList.textContent = `読み込みに失敗しました: ${asMessage(error)}`;
+  }
+}
+
 function setTeamAdminMode(isOpen) {
   // While team admin is open, hide main folder workflow to reduce clutter.
   if (els.folderCreateCard) els.folderCreateCard.classList.toggle('hidden', isOpen);
@@ -357,6 +439,12 @@ function setTeamAdminMode(isOpen) {
 function setMenuActionVisibility(showActions) {
   if (els.resetUserBtn) {
     els.resetUserBtn.classList.toggle('hidden', !showActions);
+  }
+  if (els.createRoomMenuBtn) {
+    els.createRoomMenuBtn.classList.toggle('hidden', !showActions);
+  }
+  if (els.switchRoomBtn) {
+    els.switchRoomBtn.classList.toggle('hidden', !showActions);
   }
   if (els.leaveRoomBtn) {
     els.leaveRoomBtn.classList.toggle('hidden', !showActions);
@@ -686,21 +774,29 @@ function showRoomSetup() {
 
 function renderMyRooms(items, activeRoomId) {
   if (!els.myRoomsList) return;
-  const rooms = (items || []).filter((r) => r && r.roomId && r.roomName && r.status !== 'left');
+  // /rooms/mine returns USER#... selection (status=active|inactive) plus membership (memberStatus=active|left|disabled).
+  // Hide "left" rooms; they require a new invite to re-join anyway.
+  const rooms = (items || []).filter((r) => r && r.roomId && r.roomName && r.memberStatus !== 'left');
   if (!rooms.length) {
-    els.myRoomsList.textContent = '招待されたお部屋がなかです';
+    els.myRoomsList.textContent = '入室可能なお部屋がありません';
     return;
   }
   els.myRoomsList.innerHTML = '';
   rooms.forEach((r) => {
-    const row = el('div', { class: 'row', style: 'gap:8px; justify-content:space-between; align-items:center;' });
-    const suffix = r.roomId === activeRoomId ? '（参加中）' : r.status === 'inactive' ? '（退出中）' : '';
-    const label = el('div', {}, `${r.roomName}${suffix}`);
-    const btn = el('button', { type: 'button' }, r.roomId === activeRoomId ? '入室中' : 'この部屋へ');
-    btn.disabled = r.roomId === activeRoomId;
+    const row = el('div', { class: 'room-row' });
+    const ms = String(r.memberStatus || 'active').toLowerCase();
+    const suffix = r.roomId === activeRoomId ? '（参加中）' : ms === 'disabled' ? '（停止中）' : '';
+    const ownerLabel = String(r.role || 'member').toLowerCase() === 'admin' ? '作成者: 自分' : '作成者: 別ユーザ';
+    const label = el('div', { style: 'flex:1;' }, `${r.roomName}${suffix} / ${ownerLabel}`);
+    const btnLabel = r.roomId === activeRoomId ? '入室中' : ms === 'disabled' ? '停止中' : 'この部屋へ';
+    const btn = el('button', { type: 'button' }, btnLabel);
+    btn.disabled = r.roomId === activeRoomId || ms === 'disabled';
     btn.onclick = safeAction(async () => {
       const res = await api('/rooms/switch', { method: 'POST', body: JSON.stringify({ roomId: r.roomId }) });
-      state.roomName = res.roomName || r.roomName;
+      const nextRoomName = res.roomName || r.roomName;
+      closeTeamAdminPanel();
+      resetRoomContext();
+      state.roomName = nextRoomName;
       showApp();
     }, 'お部屋切替');
     row.appendChild(label);
@@ -1491,6 +1587,8 @@ if (els.logoutBtn) {
     resetRoomContext();
     clearAuth();
     closeMenu();
+    closeRoomSwitchModal();
+    closeRoomCreateModal();
 
     if (hasCognitoConfig()) {
       const logoutUrl = new URL(`https://${COGNITO_DOMAIN}.auth.${COGNITO_REGION}.amazoncognito.com/logout`);
@@ -1506,19 +1604,54 @@ if (els.logoutBtn) {
   };
 }
 
+if (els.roomSwitchCloseBtn) {
+  els.roomSwitchCloseBtn.onclick = () => {
+    closeRoomSwitchModal();
+  };
+}
+
+if (els.roomSwitchModal) {
+  els.roomSwitchModal.onclick = (e) => {
+    // Click on backdrop closes; clicks inside modal-card don't.
+    if (e && e.target === els.roomSwitchModal) {
+      closeRoomSwitchModal();
+    }
+  };
+}
+
+if (els.roomCreateCloseBtn) {
+  els.roomCreateCloseBtn.onclick = () => {
+    closeRoomCreateModal();
+  };
+}
+
+if (els.roomCreateModal) {
+  els.roomCreateModal.onclick = (e) => {
+    if (e && e.target === els.roomCreateModal) {
+      closeRoomCreateModal();
+    }
+  };
+}
+
 if (els.leaveRoomBtn) {
   els.leaveRoomBtn.onclick = safeAction(async () => {
     try {
       const me = await api('/team/me', { method: 'GET' });
       if (me && me.isAdmin) {
-        window.alert('管理者は退出できません。お部屋管理から「お部屋を削除（全データ）」を実行してください。');
+        window.alert('管理者はメンバーやめることはできません。お部屋管理から「お部屋を削除（全データ）」を実行してください。');
         closeMenu();
         return;
       }
     } catch (_) {
       // If /team/me fails, keep old behavior.
     }
-    // "退出" means: clear active room selection, but keep membership.
+    window.alert('メンバーをやめると、このお部屋には招待URLなしでは再参加できません。');
+    const ok = window.confirm('本当にメンバーをやめますか？');
+    if (!ok) {
+      closeMenu();
+      return;
+    }
+    // "メンバーやめる" means: mark membership as left, and clear active room selection.
     try {
       await api('/team/leave', { method: 'POST' });
     } catch (_) {
@@ -1527,13 +1660,68 @@ if (els.leaveRoomBtn) {
     resetRoomContext();
     closeMenu();
     showRoomSetup();
-  }, '退出');
+    await loadMyRooms();
+  }, 'メンバーやめる');
 }
 
 if (els.refreshMyRoomsBtn) {
   els.refreshMyRoomsBtn.onclick = safeAction(async () => {
     await loadMyRooms();
   }, '一覧更新');
+}
+
+if (els.switchRoomBtn) {
+  els.switchRoomBtn.onclick = safeAction(async () => {
+    closeMenu();
+    await openRoomSwitchModal();
+  }, 'お部屋切替');
+}
+
+if (els.createRoomMenuBtn) {
+  els.createRoomMenuBtn.onclick = safeAction(async () => {
+    closeMenu();
+    openRoomCreateModal();
+  }, 'お部屋作成');
+}
+
+if (els.roomCreateSubmitBtn) {
+  els.roomCreateSubmitBtn.onclick = safeAction(async () => {
+    const roomName = String(els.roomCreateName?.value || '').trim();
+    if (!roomName) {
+      window.alert('お部屋名を入力してください。');
+      return;
+    }
+    try {
+      await createRoomAndEnter(roomName);
+      closeRoomCreateModal();
+      window.alert(`お部屋：${roomName} が作成されました。`);
+    } catch (error) {
+      const message = asMessage(error);
+      if (message.includes('409')) {
+        if (message.includes('already has a room')) {
+          window.alert('すでに自分のお部屋を作成済みです（自分の部屋は1人1部屋）。');
+        } else {
+          window.alert('同じ部屋名は作成できません。別の部屋名にしてください。');
+        }
+        return;
+      }
+      window.alert(`お部屋作成失敗: ${message}`);
+    }
+  }, 'お部屋作成');
+}
+
+async function createRoomAndEnter(roomName) {
+  const value = String(roomName || '').trim();
+  if (!value) throw new Error('お部屋名を入力してください。');
+  await api('/rooms/create', {
+    method: 'POST',
+    body: JSON.stringify({ roomName: value }),
+  });
+  // Creating a room implicitly changes the active room; clear room-scoped UI state.
+  closeTeamAdminPanel();
+  resetRoomContext();
+  state.roomName = value;
+  showApp();
 }
 
 els.createRoomBtn.onclick = async () => {
@@ -1544,18 +1732,13 @@ els.createRoomBtn.onclick = async () => {
     return;
   }
   try {
-    await api('/rooms/create', {
-      method: 'POST',
-      body: JSON.stringify({ roomName }),
-    });
+    await createRoomAndEnter(roomName);
     window.alert(`お部屋：${roomName} が作成されました。`);
-    state.roomName = roomName;
-    showApp();
   } catch (error) {
     const message = asMessage(error);
     if (message.includes('409')) {
       if (message.includes('already has a room')) {
-        window.alert('すでにお部屋を作成済みです（1人1部屋）。別のお部屋は作れません。');
+        window.alert('すでに自分のお部屋を作成済みです（自分の部屋は1人1部屋）。');
       } else {
         window.alert('同じ部屋名は作成できません。別の部屋名にしてください。');
       }

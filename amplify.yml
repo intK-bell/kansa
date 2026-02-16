@@ -2,11 +2,9 @@ version: 1
 frontend:
   phases:
     build:
-      commands:
-        - mkdir -p dist
-        - cp -R frontend/* dist/
+      commands: []
   artifacts:
-    baseDirectory: dist
+    baseDirectory: frontend
     files:
       - '**/*'
   cache:

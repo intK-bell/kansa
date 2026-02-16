@@ -582,6 +582,52 @@ button:disabled {
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
 }
 
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 20, 20, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 10000;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-card {
+  width: min(920px, 100%);
+  margin: 0;
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.28);
+  animation: modalIn 0.14s ease-out;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+@keyframes modalIn {
+  from {
+    transform: translateY(6px);
+    opacity: 0.85;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 .billing-bar {
   margin: 6px 0 0;
   padding: 8px 10px;
@@ -606,6 +652,23 @@ body.dark .billing-bar {
 
 body.dark .member-row {
   border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.room-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+body.dark .room-row {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.room-row button {
+  min-width: 110px;
 }
 
 @media (max-width: 640px) {

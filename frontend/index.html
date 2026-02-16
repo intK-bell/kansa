@@ -31,7 +31,9 @@
             <button id="toggle-theme-btn" type="button">ダークモード切替</button>
             <button id="reset-user-btn" type="button">ユーザー名変更</button>
             <button id="team-admin-btn" type="button" class="hidden">お部屋管理</button>
-            <button id="leave-room-btn" type="button" class="danger">退出</button>
+            <button id="create-room-menu-btn" type="button">お部屋作成</button>
+            <button id="switch-room-btn" type="button">お部屋切替</button>
+            <button id="leave-room-btn" type="button" class="danger">メンバーやめる</button>
             <button id="logout-btn" type="button" class="danger">ログアウト</button>
           </div>
         </div>
@@ -60,12 +62,12 @@
         </div>
         <div class="room-grid" style="margin-top:14px;">
           <div class="room-card">
-            <h3>招待されたお部屋</h3>
+            <h3>入室可能なお部屋</h3>
             <div class="row" style="margin-bottom:8px;">
               <button id="refresh-my-rooms-btn" type="button">一覧更新</button>
             </div>
             <div id="my-rooms-list" class="muted">読み込み中...</div>
-            <p class="muted" style="margin-top:10px;">※ 退出すると「アクティブなお部屋」が解除されます（所属は残ります）。</p>
+            <p class="muted" style="margin-top:10px;">※ 「この部屋へ」で入室中のお部屋を切り替えられます。</p>
           </div>
         </div>
       </section>
@@ -151,7 +153,32 @@
     </main>
 
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+    <div id="room-switch-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="お部屋切替">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 style="margin:0;">お部屋切替</h3>
+          <button id="room-switch-close-btn" type="button" class="danger">閉じる</button>
+        </div>
+        <p class="muted" style="margin:8px 0 10px;">入室可能なお部屋から切り替えられます。</p>
+        <div id="room-switch-list" class="muted">読み込み中...</div>
+      </div>
+    </div>
+
+    <div id="room-create-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="お部屋作成">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 style="margin:0;">お部屋作成</h3>
+          <button id="room-create-close-btn" type="button" class="danger">閉じる</button>
+        </div>
+        <p class="muted" style="margin:8px 0 10px;">※ 1人1部屋です。作成済みの場合は作成できません。</p>
+        <div class="row" style="align-items:stretch;">
+          <input id="room-create-name" placeholder="お部屋名" />
+          <button id="room-create-submit-btn" type="button">作成して入室</button>
+        </div>
+      </div>
+    </div>
     <script src="./config.js?v=20260215-2"></script>
-    <script src="./main.js?v=20260216-7" type="module"></script>
+    <script src="./main.js?v=20260216-14" type="module"></script>
   </body>
 </html>
