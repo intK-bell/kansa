@@ -12,6 +12,7 @@ Globals:
         TABLE_NAME: !Ref AuditTable
         PHOTO_BUCKET: !Ref PhotoBucket
         EXPORT_BUCKET: !Ref ExportBucket
+        COGNITO_USER_POOL_ID: !Ref UserPool
         STRIPE_SECRET_KEY: !Ref StripeSecretKey
         STRIPE_CHECKOUT_SUCCESS_URL: !Ref StripeCheckoutSuccessUrl
         STRIPE_CHECKOUT_CANCEL_URL: !Ref StripeCheckoutCancelUrl
@@ -248,6 +249,11 @@ Resources:
             BucketName: !Ref PhotoBucket
         - S3CrudPolicy:
             BucketName: !Ref ExportBucket
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminDeleteUser
+              Resource: !GetAtt UserPool.Arn
       Events:
         ListFolders:
           Type: HttpApi
@@ -370,6 +376,12 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /team/me
             Method: GET
+        AccountDelete:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /account/delete
+            Method: POST
         TeamBilling:
           Type: HttpApi
           Properties:

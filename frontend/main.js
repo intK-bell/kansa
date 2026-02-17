@@ -299,6 +299,7 @@ const els = {
   signupBtn: document.querySelector('#signup-btn'),
   helpUserLink: document.querySelector('#help-user-link'),
   logoutBtn: document.querySelector('#logout-btn'),
+  accountDeleteBtn: document.querySelector('#account-delete-btn'),
   createRoomName: document.querySelector('#create-room-name'),
   createRoomBtn: document.querySelector('#create-room-btn'),
   createRoomMenuBtn: document.querySelector('#create-room-menu-btn'),
@@ -338,6 +339,7 @@ const els = {
   billingGraphRemaining: document.querySelector('#billing-graph-remaining'),
   billingGraphUsedLabel: document.querySelector('#billing-graph-used-label'),
   billingGraphRemainLabel: document.querySelector('#billing-graph-remain-label'),
+  subscribeFreeBtn: document.querySelector('#subscribe-free'),
   subscribeBasicBtn: document.querySelector('#subscribe-basic'),
   subscribePlusBtn: document.querySelector('#subscribe-plus'),
   subscribeProBtn: document.querySelector('#subscribe-pro'),
@@ -500,6 +502,9 @@ function setMenuActionVisibility(showActions) {
   if (els.leaveRoomBtn) {
     els.leaveRoomBtn.classList.toggle('hidden', !showActions);
   }
+  if (els.accountDeleteBtn) {
+    els.accountDeleteBtn.classList.toggle('hidden', !showActions);
+  }
 }
 
 function showError(message) {
@@ -629,6 +634,12 @@ function renderStorageGraph() {
 function syncSubscriptionPlanButtons() {
   const mode = String(state.billing?.billingMode || 'prepaid').toLowerCase();
   const currentPlan = String(state.billing?.subscription?.currentPlan || 'FREE').toUpperCase();
+  const isFreeCurrent = mode !== 'subscription' || currentPlan === 'FREE';
+  if (els.subscribeFreeBtn) {
+    els.subscribeFreeBtn.textContent = isFreeCurrent ? 'フリープランに戻る（現在のプラン）' : 'フリープランに戻る';
+    els.subscribeFreeBtn.disabled = isFreeCurrent;
+    els.subscribeFreeBtn.setAttribute('aria-pressed', isFreeCurrent ? 'true' : 'false');
+  }
   const planButtons = [
     { plan: 'BASIC', button: els.subscribeBasicBtn, label: '1GBプラン (¥980/月)' },
     { plan: 'PLUS', button: els.subscribePlusBtn, label: '5GBプラン (¥1,980/月)' },
@@ -972,6 +983,41 @@ async function loadMyRooms() {
   els.myRoomsList.textContent = '読み込み中...';
   const res = await api('/rooms/mine', { method: 'GET' });
   renderMyRooms(res.items || [], res.activeRoomId || null);
+}
+
+async function getOwnedRoomForGuard() {
+  if (!state.idToken) return false;
+  const res = await api('/rooms/mine', { method: 'GET' });
+  const items = Array.isArray(res?.items) ? res.items : [];
+  const owned = items.find((r) => {
+    const role = String(r?.role || '').toLowerCase();
+    const memberStatus = String(r?.memberStatus || 'active').toLowerCase();
+    return role === 'admin' && memberStatus !== 'left' && memberStatus !== 'disabled';
+  });
+  return owned || null;
+}
+
+async function showOwnerDeleteGuard(ownedRoom) {
+  const isCurrentOwnedRoom =
+    (state.roomId && String(state.roomId) === String(ownedRoom?.roomId || '')) ||
+    (state.roomName && String(state.roomName) === String(ownedRoom?.roomName || ''));
+
+  if (isCurrentOwnedRoom) {
+    window.alert('作成者は先に「このお部屋を削除（全データ）」を実行してください。');
+    return;
+  }
+
+  const ok = window.confirm(
+    `作成者は先に「お部屋を削除（全データ）」を実行してください。\n「${ownedRoom?.roomName || '自分の部屋'}」へ移動しますか？`
+  );
+  if (!ok) return;
+
+  await api('/rooms/switch', { method: 'POST', body: JSON.stringify({ roomId: ownedRoom.roomId }) });
+  closeTeamAdminPanel();
+  resetRoomContext();
+  state.roomName = ownedRoom.roomName;
+  showApp();
+  showToast(`「${ownedRoom.roomName}」へ移動しました。`);
 }
 
 function showApp() {
@@ -2037,6 +2083,22 @@ async function startSubscriptionCheckout(plan) {
 if (els.subscribeBasicBtn) els.subscribeBasicBtn.onclick = safeAction(() => startSubscriptionCheckout('BASIC'), '購入');
 if (els.subscribePlusBtn) els.subscribePlusBtn.onclick = safeAction(() => startSubscriptionCheckout('PLUS'), '購入');
 if (els.subscribeProBtn) els.subscribeProBtn.onclick = safeAction(() => startSubscriptionCheckout('PRO'), '購入');
+if (els.subscribeFreeBtn) {
+  els.subscribeFreeBtn.onclick = safeAction(async () => {
+    const usage = Number(state.billing?.usageBytes || 0);
+    const free = Number(state.billing?.freeBytes || 0);
+    const overFree = usage > free;
+    const warn = overFree
+      ? 'フリープランへ戻すと、無料枠(512MB)を超えた分はアップロード停止になります。戻してよかですか？'
+      : 'フリープランへ戻してよかですか？';
+    const ok = window.confirm(warn);
+    if (!ok) return;
+    await api('/team/subscription/change', { method: 'POST', body: JSON.stringify({ action: 'free' }) });
+    await loadTeamMe();
+    await loadAdminPanel();
+    showToast('フリープランへ戻しました。');
+  }, 'フリープラン変更');
+}
 if (els.lowStorageChargeBtn) {
   els.lowStorageChargeBtn.onclick = safeAction(async () => {
     closeLowStorageModal();
@@ -2063,6 +2125,38 @@ if (els.deleteTeamBtn) {
     resetRoomContext();
     showRoomSetup();
   }, 'お部屋削除');
+}
+
+if (els.accountDeleteBtn) {
+  els.accountDeleteBtn.onclick = safeAction(async () => {
+    // Guard by all memberships: if user owns any room, account deletion must be blocked.
+    const ownedRoom = await getOwnedRoomForGuard();
+    if (ownedRoom) {
+      await showOwnerDeleteGuard(ownedRoom);
+      closeMenu();
+      return;
+    }
+    const ok = window.confirm('アカウントを削除すると、このユーザーでは今後ログインできません。よかですか？');
+    if (!ok) return;
+    const ok2 = window.confirm('本当によかですか？（アカウント削除後は取り消せません）');
+    if (!ok2) return;
+    try {
+      await api('/account/delete', { method: 'POST', body: JSON.stringify({}) });
+    } catch (error) {
+      const msg = asMessage(error);
+      if (msg.includes('room owner must delete team first')) {
+        window.alert('作成者は先に「お部屋を削除（全データ）」を実行してください。');
+        closeMenu();
+        return;
+      }
+      throw error;
+    }
+    window.alert('アカウントを削除しました。');
+    closeMenu();
+    resetRoomContext();
+    clearAuth();
+    showAuthSetup();
+  }, 'アカウント削除');
 }
 
 if (els.folderDeleteBtn) {

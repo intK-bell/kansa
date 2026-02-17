@@ -10,6 +10,7 @@
 | GET | `/me` | `getMe` | ログインユーザー情報 |
 | PUT | `/me/display-name` | `updateDisplayName` | 表示名更新 |
 | GET | `/team/me` | `teamMeAuto` | active room 自動解決 |
+| POST | `/account/delete` | `accountDelete` | アカウント削除（作成者は先に部屋削除必須） |
 | GET | `/rooms/mine` | `listMyRooms` | 所属ルーム一覧 |
 | POST | `/rooms/switch` | `switchActiveRoom` | active room 切替 |
 | POST | `/invites/accept` | `acceptInvite` | 招待受諾 |
@@ -77,7 +78,14 @@
 | `INVALID_DISPLAY_NAME_LENGTH` | `400 bad request` |
 | その他未処理例外 | `500 internal server error` |
 
-## 4. 参照ドキュメント
+## 4. 仕様メモ（2026-02-18時点）
+- `POST /team/subscription/change` の `action`:
+  - `upgrade`, `downgrade`, `cancel`, `resume`, `free`
+- `POST /account/delete`:
+  - 作成者で部屋が残っている場合: `400 {"message":"room owner must delete team first"}`
+  - メンバーの場合: USER配下データ削除 + Cognitoユーザー削除
+
+## 5. 参照ドキュメント
 - 関数構造: `docs/backend-api-function-map.md`
 - フロント関数構造: `docs/frontend-mainjs-function-map.md`
 - 料金方針（サブスク）: `docs/billing-subscription-spec.md`

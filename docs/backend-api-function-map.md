@@ -1,6 +1,7 @@
 # backend/src/api.js 関数マップ
 
 対象: `backend/src/api.js`  
+更新日: 2026-02-18  
 目的: 長い `api.js` の「全体構造」「入口」「主要依存」を短時間で把握できるようにする。
 
 ## 1. エントリーポイント
@@ -18,6 +19,7 @@
 ### 認証・ユーザー
 - `getUserIdentity`, `ensureUserProfile`, `getUser`
 - `getMe`, `updateDisplayName`
+- `accountDelete`（Cognitoユーザー削除 + データ整理）
 
 ### ルーム解決・メンバーシップ
 - `resolveActiveRoomForUser`, `listUserRoomMemberships`, `setActiveRoomForUser`
@@ -33,7 +35,8 @@
 ### チーム/課金
 - `teamMe`, `teamMeAuto`, `teamBilling`
 - サブスク: `teamSubscription`, `teamSubscriptionCheckout`, `changeTeamSubscription`, `applyPendingSubscriptionIfDue`
-- Stripe連携: `stripeGetSubscription`, `stripeUpdateSubscriptionPlan`, `stripeSetCancelAtPeriodEnd`
+  - `changeTeamSubscription` は `upgrade|downgrade|cancel|resume|free`
+- Stripe連携: `stripeGetSubscription`, `stripeUpdateSubscriptionPlan`, `stripeSetCancelAtPeriodEnd`, `stripeCancelSubscriptionNow`
 - メンバー管理: `listTeamMembers`, `updateTeamMember`, `teamLeave`, `teamDelete`
 - 補助: `isUploadBlocked`
 
@@ -62,6 +65,7 @@
   - `/me`
   - `/me/display-name`
   - `/team/me`
+  - `/account/delete`
   - `/rooms/mine`
   - `/rooms/switch`
   - `/invites/accept`
@@ -72,3 +76,4 @@
 - `teamDelete` と `deleteFolder` はデータ削除影響が広いので、関連S3削除・課金メタ削除・監査ログまでセットで確認する。
 - `uploadBlocked` の条件は `isUploadBlocked` を唯一の判断源に寄せる（フロント側で独自判定を増やさない）。
 - 課金挙動を変えるときは `teamSubscriptionCheckout` / `changeTeamSubscription` / webhook 側実装（`backend/src/stripe-webhook.js`）を同時に確認する。
+- アカウント削除は「作成者は先に部屋削除」が前提。`accountDelete` の `room owner must delete team first` ガードを変える時は、フロント文言と同時更新する。

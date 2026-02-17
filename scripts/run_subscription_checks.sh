@@ -136,6 +136,16 @@ if [[ "$RUN_CHANGE" == "1" ]]; then
   else
     fail "POST /team/subscription/change resume status=$status body=$(cat "$tmp_body")"
   fi
+
+  status="$(api_call POST /team/subscription/change '{"action":"free"}')"
+  if [[ "$status" == "200" ]]; then
+    plan="$(body_field '.billing.subscription.currentPlan')"
+    pass "POST /team/subscription/change free (current=${plan:-unknown})"
+  elif [[ "$status" == "400" && "${mode:-}" != "subscription" ]]; then
+    pass "POST /team/subscription/change free skipped (mode=${mode:-unknown})"
+  else
+    fail "POST /team/subscription/change free status=$status body=$(cat "$tmp_body")"
+  fi
 else
   echo "[INFO] RUN_CHANGE=0: change API checks are skipped."
 fi

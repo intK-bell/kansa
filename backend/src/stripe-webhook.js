@@ -214,6 +214,7 @@ async function syncSubscriptionByEventObject(obj, mode) {
     const updated = await updateBillingMeta(
       roomId,
       {
+        billingMode: 'prepaid',
         stripeSubscriptionStatus: 'canceled',
         cancelAtPeriodEnd: false,
         pendingPlan: null,

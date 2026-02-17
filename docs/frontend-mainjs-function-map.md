@@ -1,101 +1,88 @@
 # frontend/main.js 関数マップ
 
 対象: `frontend/main.js`  
-目的: 長い1ファイルでも「どこから読めばいいか」「どの関数がどれを呼ぶか」を素早く把握する。
+更新日: 2026-02-18  
+目的: 長い単一ファイルの読み順と、主要機能ごとの関数関係を素早く把握する。
 
-## 1. 初期化の入口
+## 1. 入口と全体像
 - エントリーポイント: `initUser()`
-- 呼び出し位置: ファイル末尾 `initUser().catch(...)`
-
-初期化の大枠:
+- 主な遷移:
 1. `initTheme()`
-2. 認証情報確認 (`hasCognitoConfig`, `completeLoginFromCallback`, `parseJwt`)
+2. 認証復元 (`completeLoginFromCallback`, `parseJwt`)
 3. ユーザー準備 (`ensureDisplayName`)
 4. ルーム解決 (`/invites/accept` または `/team/me`)
-5. 画面遷移 (`showRoomSetup` or `showApp`)
+5. `showRoomSetup()` か `showApp()`
 
-## 2. 主要フロー（呼び出し関係）
+## 2. 主要フロー
 
-### 認証・入室
+### 認証/起動
 - `initUser`
-  - `completeLoginFromCallback`
-  - `ensureDisplayName`
-  - `api('/invites/accept')`
-  - `api('/team/me')`
-  - `showRoomSetup` / `showApp`
-
-### アプリ表示
+- `showAuthSetup`
+- `showRoomSetup`
 - `showApp`
-  - `loadTeamMe`
-    - `setAdminUiVisibility`
-    - `renderBillingBar`
-      - `renderTopStorageGraph`
-      - `computeStorageStats`
-  - `handleStripePurchaseReturn`
-  - `loadFolders`
 
-### 管理画面（お部屋管理）
-- `loadAdminPanel`
-  - `api('/team/members')`
-  - `api('/folders')`
-  - `renderStorageGraph`
-    - `computeStorageStats`
-  - `maybePromptLowStorage`
-    - `storagePromptKey`
+### ルーム切替/入室
+- `openRoomSwitchModal`
+- `renderMyRooms`
+- `loadMyRooms`
+- `createRoomAndEnter`
 
-### 課金（Stripe）
+### 課金/容量表示
+- `computeStorageStats`
+- `renderTopStorageGraph`
+- `renderBillingBar`
+- `renderStorageGraph`
+- `syncSubscriptionPlanButtons`
+- `maybePromptLowStorage`
 - `startSubscriptionCheckout`
-  - `api('/team/subscription/checkout')`
-  - 取得URLへ遷移
 - `handleStripePurchaseReturn`
-  - `api('/team/subscription')`
-  - `loadTeamMe`
-  - `loadAdminPanel`
 
-### フォルダ・写真
+### 管理画面
+- `loadAdminPanel`
+  - `/team/members`, `/folders` 読み込み
+  - フォルダ容量表示 (`usageBytes`)
+  - 容量グラフ/ステータス更新
+
+### アカウント削除ガード（最新）
+- `getOwnedRoomForGuard`
+  - `/rooms/mine` から「作成者として所有する部屋」を判定
+- `showOwnerDeleteGuard`
+  - 作成部屋にいる場合: 「このお部屋を削除（全データ）」案内
+  - 別部屋にいる場合: confirmで作成部屋へ移動提案
+- `accountDeleteBtn` ハンドラ
+  - 所有部屋チェック -> ブロック
+  - 問題なければ二重確認 -> `/account/delete`
+
+### 投稿/写真
 - `loadFolders` -> `renderFolders`
-- `selectFolder` -> `loadPhotos` -> `renderPhotos`
+- `selectFolder` / `selectFolderById`
+- `loadPhotos` -> `renderPhotos`
 - `uploadFiles`
-  - `api('/folders/:id/photos/upload-url')`
-  - S3 `PUT`
-  - `api('/folders/:id/photos')`
+- `loadComments`
 
-## 3. 関数グループ別の責務
+## 3. APIラッパ
+- `headers(method)`
+- `folderPasswordHeader(folderId)`
+- `api(path, options)`
 
-### ユーティリティ
-- `el`, `formatBytes`, `asMessage`, `safeAction`
-- 認証補助: `parseJwt`, `sha256`, `base64UrlEncode`
-- 既読管理: `readStateKey`, `getReadState`, `setReadState`, `markAsRead`
+## 4. 状態更新の起点
+- `loadTeamMe()` が `state.billing`, `state.isAdmin`, `state.uploadBlocked`, `state.ownerUserKey` を更新
+- 表示系は基本 `loadTeamMe` の結果を元に再描画
+- ルーム切替直後は `resetRoomContext()` -> `showApp()` で再同期
 
-### UI制御
-- モーダル閉じる系: `closeRoomSwitchModal`, `closeRoomCreateModal`, `closeHelpModal`, `closeLowStorageModal`
-- 画面切替: `showAuthSetup`, `showRoomSetup`, `showApp`
-- 管理画面表示: `setTeamAdminMode`, `setAdminUiVisibility`
-- 容量表示: `renderTopStorageGraph`, `renderBillingBar`, `renderStorageGraph`
+## 5. イベント定義の場所
+- ファイル後半の `if (els.xxx) { ... }` にボタン処理を集約
+- 重要ハンドラ:
+  - `deleteTeamBtn`: `/team/delete`
+  - `accountDeleteBtn`: `/account/delete`（二重確認あり）
+  - `subscribe*Btn`: `/team/subscription/checkout`
+  - `subscribeFreeBtn`: `/team/subscription/change` (`action: free`)
 
-### APIラッパー
-- `headers`, `folderPasswordHeader`, `api`
-
-### データロード
-- `loadTeamMe`, `loadAdminPanel`, `loadMyRooms`, `loadFolders`, `loadPhotos`, `loadComments`
-
-## 4. イベントハンドラ配置の見方
-- ファイル後半（`if (els.xxx)` が連続する区間）に UI イベント登録を集約。
-- 主要ボタン（例）:
-  - `teamAdminBtn` -> `loadAdminPanel`
-  - `purchase-xxx` -> `purchaseSku`
-  - `uploadBtn` -> `uploadFiles`
-  - `createFolderBtn` -> フォルダ作成API
-
-## 5. 変更時の読む順番（推奨）
+## 6. 変更時の読む順（推奨）
 1. `initUser`
 2. `showApp`
-3. 変更対象に応じて以下を読む
-   - 課金UI: `renderBillingBar`, `renderStorageGraph`, `maybePromptLowStorage`, `purchaseSku`, `handleStripePurchaseReturn`
+3. `loadTeamMe`
+4. 変更対象ごとの入口
+   - 課金: `renderBillingBar` / `computeStorageStats` / `syncSubscriptionPlanButtons`
    - 管理画面: `loadAdminPanel`
-   - 投稿系: `uploadFiles`, `loadPhotos`, `renderPhotos`
-
-## 6. 注意点
-- `main.js` は1ファイル集約のため、副作用点（`state` 更新）を先に追うと理解が速い。
-- 課金反映は `handleStripePurchaseReturn` と `loadTeamMe` の両方を確認する。
-- UI表示だけ変える場合でも、`state.uploadBlocked` と `state.billing` の更新元は必ず確認する。
+   - アカウント削除: `getOwnedRoomForGuard` / `showOwnerDeleteGuard` / `accountDeleteBtn` ハンドラ

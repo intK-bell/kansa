@@ -1,6 +1,7 @@
 const { randomUUID } = require('node:crypto');
 const { pbkdf2Sync, randomBytes, timingSafeEqual } = require('node:crypto');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { CognitoIdentityProviderClient, AdminDeleteUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
 const {
   DynamoDBDocumentClient,
   QueryCommand,
@@ -39,10 +40,12 @@ const {
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
+const cognito = new CognitoIdentityProviderClient({});
 
 const TABLE_NAME = process.env.TABLE_NAME;
 const PHOTO_BUCKET = process.env.PHOTO_BUCKET;
 const EXPORT_BUCKET = process.env.EXPORT_BUCKET;
+const COGNITO_USER_POOL_ID = process.env.COGNITO_USER_POOL_ID || '';
 
 const json = (statusCode, body) => ({
   statusCode,
@@ -140,7 +143,12 @@ function getUserIdentity(event) {
   if (claims && claims.sub) {
     const fallbackName =
       claims['cognito:username'] || claims.name || claims.email || claims.preferred_username || 'unknown';
-    return { userKey: claims.sub, fallbackName, fromCognito: true };
+    return {
+      userKey: claims.sub,
+      fallbackName,
+      fromCognito: true,
+      cognitoUsername: String(claims['cognito:username'] || '').trim() || null,
+    };
   }
 
   const headers = event.headers || {};
@@ -214,6 +222,8 @@ async function getUser(event) {
       userName: identity.fallbackName || 'unknown',
       displayName: identity.fallbackName || '',
       fallbackName: identity.fallbackName || 'unknown',
+      fromCognito: false,
+      cognitoUsername: null,
     };
   }
 
@@ -225,6 +235,8 @@ async function getUser(event) {
     userName: displayName || fallbackName,
     displayName,
     fallbackName,
+    fromCognito: true,
+    cognitoUsername: identity.cognitoUsername || null,
   };
 }
 
@@ -1197,6 +1209,14 @@ async function stripeSetCancelAtPeriodEnd(secretKey, subscriptionId, flag) {
   });
 }
 
+async function stripeCancelSubscriptionNow(secretKey, subscriptionId) {
+  return await stripeRequest({
+    secretKey,
+    method: 'DELETE',
+    path: `/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,
+  });
+}
+
 async function teamSubscription(room, authz) {
   if (!authz.isAdmin) return json(403, { message: 'forbidden' });
   const billing = summarizeBilling(authz.billing);
@@ -1262,7 +1282,7 @@ async function changeTeamSubscription(event, user, room, authz, ctx) {
   if (!authz.isAdmin) return json(403, { message: 'forbidden' });
   const body = JSON.parse(event.body || '{}');
   const action = String(body.action || '').trim().toLowerCase();
-  if (!action) return badRequest('action is required (upgrade|downgrade|cancel|resume)');
+  if (!action) return badRequest('action is required (upgrade|downgrade|cancel|resume|free)');
 
   const currentMode = String(authz.billing?.billingMode || BILLING_MODE_PREPAID).toLowerCase();
   if (currentMode !== BILLING_MODE_SUBSCRIPTION) {
@@ -1273,20 +1293,19 @@ async function changeTeamSubscription(event, user, room, authz, ctx) {
   const usageBytes = Number(authz.billing?.usageBytes || 0);
   const nowIso = new Date().toISOString();
   const nextBillingAt = nextBillingBoundaryIsoJst();
-  const updates = ['billingMode = :m', 'updatedAt = :u', 'nextBillingAt = :nb'];
+  const updates = ['updatedAt = :u'];
   const values = {
-    ':m': BILLING_MODE_SUBSCRIPTION,
     ':u': nowIso,
-    ':nb': nextBillingAt,
     ':null': null,
     ':f': false,
-    ':t': true,
   };
 
   if (action === 'upgrade') {
     if (!targetPlan) return badRequest('targetPlan is required for upgrade');
     if (planRank(targetPlan) <= planRank(currentPlan)) return badRequest('targetPlan must be higher than currentPlan');
-    updates.push('currentPlan = :cp', 'pendingPlan = :null', 'cancelAtPeriodEnd = :f');
+    updates.push('billingMode = :ms', 'nextBillingAt = :nb', 'currentPlan = :cp', 'pendingPlan = :null', 'cancelAtPeriodEnd = :f');
+    values[':ms'] = BILLING_MODE_SUBSCRIPTION;
+    values[':nb'] = nextBillingAt;
     values[':cp'] = targetPlan;
   } else if (action === 'downgrade') {
     if (!targetPlan) return badRequest('targetPlan is required for downgrade');
@@ -1297,16 +1316,34 @@ async function changeTeamSubscription(event, user, room, authz, ctx) {
         `current usage (${usageBytes} bytes) exceeds target plan limit (${targetLimit} bytes); cannot schedule downgrade`
       );
     }
-    updates.push('pendingPlan = :pp', 'cancelAtPeriodEnd = :f');
+    updates.push('billingMode = :ms', 'nextBillingAt = :nb', 'pendingPlan = :pp', 'cancelAtPeriodEnd = :f');
+    values[':ms'] = BILLING_MODE_SUBSCRIPTION;
+    values[':nb'] = nextBillingAt;
     values[':pp'] = targetPlan;
   } else if (action === 'cancel') {
     if (currentMode !== BILLING_MODE_SUBSCRIPTION) return badRequest('cancel is available only in subscription mode');
-    updates.push('cancelAtPeriodEnd = :t');
+    updates.push('billingMode = :ms', 'nextBillingAt = :nb', 'cancelAtPeriodEnd = :t');
+    values[':ms'] = BILLING_MODE_SUBSCRIPTION;
+    values[':nb'] = nextBillingAt;
+    values[':t'] = true;
   } else if (action === 'resume') {
     if (currentMode !== BILLING_MODE_SUBSCRIPTION) return badRequest('resume is available only in subscription mode');
-    updates.push('cancelAtPeriodEnd = :f');
+    updates.push('billingMode = :ms', 'nextBillingAt = :nb', 'cancelAtPeriodEnd = :f');
+    values[':ms'] = BILLING_MODE_SUBSCRIPTION;
+    values[':nb'] = nextBillingAt;
+  } else if (action === 'free') {
+    if (currentMode !== BILLING_MODE_SUBSCRIPTION) return badRequest('free is available only in subscription mode');
+    updates.push(
+      'billingMode = :mp',
+      'currentPlan = :free',
+      'pendingPlan = :null',
+      'cancelAtPeriodEnd = :f',
+      'nextBillingAt = :null'
+    );
+    values[':mp'] = BILLING_MODE_PREPAID;
+    values[':free'] = 'FREE';
   } else {
-    return badRequest('action must be upgrade|downgrade|cancel|resume');
+    return badRequest('action must be upgrade|downgrade|cancel|resume|free');
   }
 
   const res = await ddb.send(
@@ -1356,6 +1393,26 @@ async function changeTeamSubscription(event, user, room, authz, ctx) {
           ExpressionAttributeValues: {
             ':c': Boolean(stripeSub?.cancel_at_period_end),
             ':ss': stripeSub?.status || updated?.stripeSubscriptionStatus || null,
+            ':u': new Date().toISOString(),
+          },
+          ReturnValues: 'ALL_NEW',
+        })
+      );
+      updated = reflect.Attributes || updated;
+    } else if (action === 'free') {
+      const stripeSub = await stripeCancelSubscriptionNow(secretKey, stripeSubId);
+      const reflect = await ddb.send(
+        new UpdateCommand({
+          TableName: TABLE_NAME,
+          Key: { PK: `ROOM#${room.roomId}`, SK: 'META#BILLING' },
+          UpdateExpression:
+            'SET billingMode = :mp, currentPlan = :free, pendingPlan = :null, cancelAtPeriodEnd = :f, nextBillingAt = :null, stripeSubscriptionStatus = :ss, updatedAt = :u',
+          ExpressionAttributeValues: {
+            ':mp': BILLING_MODE_PREPAID,
+            ':free': 'FREE',
+            ':null': null,
+            ':f': false,
+            ':ss': stripeSub?.status || 'canceled',
             ':u': new Date().toISOString(),
           },
           ReturnValues: 'ALL_NEW',
@@ -1579,6 +1636,65 @@ async function teamLeave(user, room, authz, ctx) {
     result: 'success',
   });
   return json(200, { ok: true });
+}
+
+async function accountDelete(event, user, ctx) {
+  if (!user.fromCognito) return badRequest('account delete requires Cognito login');
+  if (!COGNITO_USER_POOL_ID) return json(500, { message: 'cognito is not configured (missing COGNITO_USER_POOL_ID)' });
+  const cognitoUsername = String(user.cognitoUsername || '').trim();
+  if (!cognitoUsername) return badRequest('cognito username is missing');
+
+  // Room owner must delete their room first.
+  const constraint = await ddb.send(new GetCommand({ TableName: TABLE_NAME, Key: userRoomConstraintKey(user.userKey) }));
+  if (constraint.Item) {
+    auditLog({
+      requestId: ctx.requestId,
+      action: 'account.delete',
+      actor: user.userKey,
+      actorName: user.userName,
+      result: 'denied',
+      reason: 'owner_must_delete_room_first',
+    });
+    return badRequest('room owner must delete team first');
+  }
+
+  const memberships = await listUserRoomMemberships(user.userKey);
+  let removedRoomMemberships = 0;
+  for (const m of memberships) {
+    const roomId = String(m.roomId || '').trim();
+    if (!roomId) continue;
+    try {
+      await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: roomMemberKey(roomId, user.userKey) }));
+      removedRoomMemberships += 1;
+    } catch (_) {
+      // Best effort.
+    }
+  }
+
+  const deletedUserItems = await deleteAllByPk(TABLE_NAME, `USER#${user.userKey}`);
+
+  try {
+    await cognito.send(
+      new AdminDeleteUserCommand({
+        UserPoolId: COGNITO_USER_POOL_ID,
+        Username: cognitoUsername,
+      })
+    );
+  } catch (error) {
+    if (error?.name !== 'UserNotFoundException') throw error;
+  }
+
+  auditLog({
+    requestId: ctx.requestId,
+    action: 'account.delete',
+    actor: user.userKey,
+    actorName: user.userName,
+    removedRoomMemberships,
+    deletedUserItems,
+    result: 'success',
+  });
+
+  return json(200, { ok: true, removedRoomMemberships, deletedUserItems });
 }
 
 async function deleteAllByPk(tableName, pk) {
@@ -2725,6 +2841,7 @@ exports.handler = async (event) => {
     if (method === 'PUT' && path === '/me/display-name') return await updateDisplayName(event, user, ctx);
 
     if (method === 'GET' && path === '/team/me') return await teamMeAuto(event, user, ctx);
+    if (method === 'POST' && path === '/account/delete') return await accountDelete(event, user, ctx);
 
     if (method === 'GET' && path === '/rooms/mine') return await listMyRooms(user);
     if (method === 'POST' && path === '/rooms/switch') return await switchActiveRoom(event, user, ctx);
