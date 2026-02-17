@@ -3,6 +3,49 @@ const { GetCommand, PutCommand, UpdateCommand } = require('@aws-sdk/lib-dynamodb
 const FREE_BYTES_DEFAULT = 512 * 1024 * 1024; // 512MiB
 const GIB_BYTES = 1024 * 1024 * 1024;
 const GBMONTH_DAYS = 30; // Sell "GB-month", internally track "GiB-day" using a fixed 30-day month.
+const BILLING_MODE_PREPAID = 'prepaid';
+const BILLING_MODE_SUBSCRIPTION = 'subscription';
+const SUBSCRIPTION_PLANS = {
+  FREE: { code: 'FREE', monthlyYen: 0, limitBytes: FREE_BYTES_DEFAULT },
+  BASIC: { code: 'BASIC', monthlyYen: 980, limitBytes: GIB_BYTES },
+  PLUS: { code: 'PLUS', monthlyYen: 1980, limitBytes: 5 * GIB_BYTES },
+  PRO: { code: 'PRO', monthlyYen: 2980, limitBytes: 10 * GIB_BYTES },
+};
+
+function normalizeBillingMode(value) {
+  const v = String(value || '').trim().toLowerCase();
+  if (v === BILLING_MODE_SUBSCRIPTION) return BILLING_MODE_SUBSCRIPTION;
+  return BILLING_MODE_PREPAID;
+}
+
+function normalizeSubscriptionPlanCode(value) {
+  const v = String(value || '').trim().toUpperCase();
+  if (SUBSCRIPTION_PLANS[v]) return v;
+  return 'FREE';
+}
+
+function subscriptionPlanLimitBytes(planCode) {
+  const code = normalizeSubscriptionPlanCode(planCode);
+  return SUBSCRIPTION_PLANS[code].limitBytes;
+}
+
+function summarizeSubscription(meta) {
+  const currentPlan = normalizeSubscriptionPlanCode(meta?.currentPlan);
+  const pendingPlanRaw = String(meta?.pendingPlan || '').trim();
+  const pendingPlan = pendingPlanRaw ? normalizeSubscriptionPlanCode(pendingPlanRaw) : null;
+  const limitBytes = subscriptionPlanLimitBytes(currentPlan);
+  return {
+    currentPlan,
+    pendingPlan,
+    cancelAtPeriodEnd: Boolean(meta?.cancelAtPeriodEnd),
+    nextBillingAt: meta?.nextBillingAt || null,
+    limitBytes,
+    stripeCustomerId: meta?.stripeCustomerId || null,
+    stripeSubscriptionId: meta?.stripeSubscriptionId || null,
+    stripeSubscriptionStatus: meta?.stripeSubscriptionStatus || null,
+    stripeSubscriptionItemId: meta?.stripeSubscriptionItemId || null,
+  };
+}
 
 function formatJstDate(date = new Date()) {
   // "en-CA" yields YYYY-MM-DD.
@@ -32,6 +75,15 @@ async function ensureBillingMeta(ddb, { tableName, roomId, roomName, nowIso }) {
     freeBytes: FREE_BYTES_DEFAULT,
     usageBytes: 0,
     gibDaysBalance: 0,
+    billingMode: BILLING_MODE_PREPAID,
+    currentPlan: null,
+    pendingPlan: null,
+    cancelAtPeriodEnd: false,
+    nextBillingAt: null,
+    stripeCustomerId: null,
+    stripeSubscriptionId: null,
+    stripeSubscriptionStatus: null,
+    stripeSubscriptionItemId: null,
     lastChargeJstDate: null,
     createdAt: nowIso,
     updatedAt: nowIso,
@@ -162,11 +214,14 @@ function summarizeBilling(meta) {
   const usageBytes = Number(meta?.usageBytes || 0);
   const gibDaysBalance = Number(meta?.gibDaysBalance || 0);
   const usageGiB = usageBytes / GIB_BYTES;
+  const billingMode = normalizeBillingMode(meta?.billingMode);
 
   const gbMonthEquivalent = gibDaysBalance / GBMONTH_DAYS;
   const estimatedDaysLeft = usageGiB > 0 ? gibDaysBalance / usageGiB : null;
+  const subscription = billingMode === BILLING_MODE_SUBSCRIPTION ? summarizeSubscription(meta) : null;
 
   return {
+    billingMode,
     freeBytes,
     usageBytes,
     usageGiB,
@@ -174,13 +229,35 @@ function summarizeBilling(meta) {
     gbMonthEquivalent,
     estimatedDaysLeft,
     lastChargeJstDate: meta?.lastChargeJstDate || null,
+    subscription,
   };
+}
+
+function isUploadBlockedForBilling(meta) {
+  const billingMode = normalizeBillingMode(meta?.billingMode);
+  const usageBytes = Number(meta?.usageBytes || 0);
+  if (billingMode === BILLING_MODE_SUBSCRIPTION) {
+    const subscription = summarizeSubscription(meta);
+    if (subscription.limitBytes === null) return false;
+    return usageBytes > Number(subscription.limitBytes || 0);
+  }
+
+  const freeBytes = Number(meta?.freeBytes || FREE_BYTES_DEFAULT);
+  const gibDaysBalance = Number(meta?.gibDaysBalance || 0);
+  return gibDaysBalance <= 0 && usageBytes >= freeBytes;
 }
 
 module.exports = {
   FREE_BYTES_DEFAULT,
   GIB_BYTES,
   GBMONTH_DAYS,
+  BILLING_MODE_PREPAID,
+  BILLING_MODE_SUBSCRIPTION,
+  SUBSCRIPTION_PLANS,
+  normalizeBillingMode,
+  normalizeSubscriptionPlanCode,
+  subscriptionPlanLimitBytes,
+  summarizeSubscription,
   formatJstDate,
   ensureBillingMeta,
   getBillingMeta,
@@ -188,4 +265,5 @@ module.exports = {
   addUsageBytes,
   applyDailyChargeForRoom,
   summarizeBilling,
+  isUploadBlockedForBilling,
 };

@@ -13,13 +13,13 @@ Globals:
         PHOTO_BUCKET: !Ref PhotoBucket
         EXPORT_BUCKET: !Ref ExportBucket
         STRIPE_SECRET_KEY: !Ref StripeSecretKey
-        STRIPE_PRICE_1GBM: !Ref StripePrice1gbm
-        STRIPE_PRICE_10GBM: !Ref StripePrice10gbm
-        STRIPE_PRICE_50GBM: !Ref StripePrice50gbm
         STRIPE_CHECKOUT_SUCCESS_URL: !Ref StripeCheckoutSuccessUrl
         STRIPE_CHECKOUT_CANCEL_URL: !Ref StripeCheckoutCancelUrl
         STRIPE_WEBHOOK_SECRET: !Ref StripeWebhookSecret
         STRIPE_ALLOWED_RETURN_ORIGINS: !Ref StripeAllowedReturnOrigins
+        STRIPE_SUB_PRICE_1GB: !Ref StripeSubPrice1gb
+        STRIPE_SUB_PRICE_5GB: !Ref StripeSubPrice5gb
+        STRIPE_SUB_PRICE_10GB: !Ref StripeSubPrice10gb
 
 Parameters:
   ApiThrottleRateLimit:
@@ -76,18 +76,6 @@ Parameters:
     NoEcho: true
     Default: ""
     Description: Stripe webhook signing secret (whsec_*)
-  StripePrice1gbm:
-    Type: String
-    Default: ""
-    Description: Stripe Price ID for 1GB-month (price_*)
-  StripePrice10gbm:
-    Type: String
-    Default: ""
-    Description: Stripe Price ID for 10GB-month (price_*)
-  StripePrice50gbm:
-    Type: String
-    Default: ""
-    Description: Stripe Price ID for 50GB-month (price_*)
   StripeCheckoutSuccessUrl:
     Type: String
     Default: https://main.dn65vena62q5z.amplifyapp.com
@@ -100,6 +88,18 @@ Parameters:
     Type: String
     Default: "http://localhost:5173,http://127.0.0.1:5173,https://main.dn65vena62q5z.amplifyapp.com"
     Description: Comma-separated allowlist for dynamic Stripe return URL origins
+  StripeSubPrice1gb:
+    Type: String
+    Default: ""
+    Description: Stripe Price ID for subscription 1GB plan (price_*)
+  StripeSubPrice5gb:
+    Type: String
+    Default: ""
+    Description: Stripe Price ID for subscription 5GB plan (price_*)
+  StripeSubPrice10gb:
+    Type: String
+    Default: ""
+    Description: Stripe Price ID for subscription 10GB plan (price_*)
 
 Resources:
   UserPool:
@@ -376,24 +376,24 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /team/billing
             Method: GET
-        TeamPurchase:
+        TeamSubscription:
           Type: HttpApi
           Properties:
             ApiId: !Ref HttpApi
-            Path: /team/purchase
-            Method: POST
-        TeamPurchaseCheckout:
-          Type: HttpApi
-          Properties:
-            ApiId: !Ref HttpApi
-            Path: /team/purchase/checkout
-            Method: POST
-        TeamPurchaseConfirm:
-          Type: HttpApi
-          Properties:
-            ApiId: !Ref HttpApi
-            Path: /team/purchase/confirm
+            Path: /team/subscription
             Method: GET
+        TeamSubscriptionChange:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /team/subscription/change
+            Method: POST
+        TeamSubscriptionCheckout:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /team/subscription/checkout
+            Method: POST
         TeamMembers:
           Type: HttpApi
           Properties:

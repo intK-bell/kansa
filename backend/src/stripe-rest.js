@@ -24,14 +24,24 @@ function encodeCheckoutSessionParams({ priceId, successUrl, cancelUrl, metadata 
 }
 
 async function stripePostForm({ secretKey, path, params }) {
-  const res = await fetch(`https://api.stripe.com${path}`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${secretKey}`,
-      'content-type': 'application/x-www-form-urlencoded',
-    },
-    body: params.toString(),
-  });
+  return await stripeRequest({ secretKey, method: 'POST', path, params });
+}
+
+async function stripeRequest({ secretKey, method = 'GET', path, params = null }) {
+  const upper = String(method || 'GET').toUpperCase();
+  let url = `https://api.stripe.com${path}`;
+  const headers = { Authorization: `Bearer ${secretKey}` };
+  const req = { method: upper, headers };
+
+  if (params && upper === 'GET') {
+    const qs = typeof params.toString === 'function' ? params.toString() : new URLSearchParams(params).toString();
+    if (qs) url += `?${qs}`;
+  } else if (params && (upper === 'POST' || upper === 'DELETE')) {
+    headers['content-type'] = 'application/x-www-form-urlencoded';
+    req.body = typeof params.toString === 'function' ? params.toString() : new URLSearchParams(params).toString();
+  }
+
+  const res = await fetch(url, req);
   const text = await res.text();
   let json = null;
   try {
@@ -93,6 +103,7 @@ function verifyStripeWebhook({ rawBody, signatureHeader, webhookSecret, toleranc
 module.exports = {
   encodeForm,
   encodeCheckoutSessionParams,
+  stripeRequest,
   stripePostForm,
   verifyStripeWebhook,
 };

@@ -22,18 +22,19 @@ const {
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const PptxGenJS = require('pptxgenjs');
 
-const { encodeCheckoutSessionParams, stripePostForm } = require('./stripe-rest');
+const { stripeRequest } = require('./stripe-rest');
 
 const {
-  FREE_BYTES_DEFAULT,
-  GBMONTH_DAYS,
-  GIB_BYTES,
+  BILLING_MODE_PREPAID,
+  BILLING_MODE_SUBSCRIPTION,
+  SUBSCRIPTION_PLANS,
   formatJstDate,
   ensureBillingMeta,
-  getBillingMeta,
-  addGibDaysBalance,
   addUsageBytes,
   summarizeBilling,
+  isUploadBlockedForBilling,
+  normalizeSubscriptionPlanCode,
+  subscriptionPlanLimitBytes,
 } = require('./billing');
 
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
@@ -53,6 +54,39 @@ const json = (statusCode, body) => ({
 });
 
 const badRequest = (message) => json(400, { message });
+
+const PLAN_ORDER = ['FREE', 'BASIC', 'PLUS', 'PRO'];
+
+function planRank(planCode) {
+  const code = normalizeSubscriptionPlanCode(planCode);
+  const idx = PLAN_ORDER.indexOf(code);
+  return idx >= 0 ? idx : 0;
+}
+
+function isBillingCycleDue(nextBillingAt, now = new Date()) {
+  const dueAt = Date.parse(String(nextBillingAt || ''));
+  if (!Number.isFinite(dueAt)) return false;
+  return now.getTime() >= dueAt;
+}
+
+function nextBillingBoundaryIsoJst(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+  })
+    .formatToParts(now)
+    .reduce((acc, p) => {
+      if (p.type === 'year' || p.type === 'month') acc[p.type] = Number(p.value);
+      return acc;
+    }, {});
+  const year = Number(parts.year || 1970);
+  const month = Number(parts.month || 1);
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  const utcMs = Date.UTC(nextYear, nextMonth - 1, 1, -9, 0, 0, 0);
+  return new Date(utcMs).toISOString();
+}
 
 function base64UrlFromBuffer(buf) {
   return Buffer.from(buf)
@@ -559,7 +593,76 @@ async function requireActiveMember(room, user, ctx) {
     roomName: room.roomName,
     nowIso,
   });
-  return { ok: true, member, isAdmin: isAdminRole(member.role), billing };
+  const adjusted = await applyPendingSubscriptionIfDue(room, billing, ctx);
+  return { ok: true, member, isAdmin: isAdminRole(member.role), billing: adjusted };
+}
+
+async function applyPendingSubscriptionIfDue(room, billing, ctx) {
+  const mode = String(billing?.billingMode || BILLING_MODE_PREPAID).toLowerCase();
+  if (mode !== BILLING_MODE_SUBSCRIPTION) return billing;
+  if (!isBillingCycleDue(billing?.nextBillingAt)) return billing;
+
+  const nowIso = new Date().toISOString();
+  const usageBytes = Number(billing?.usageBytes || 0);
+  const pendingRaw = String(billing?.pendingPlan || '').trim();
+  const pendingPlan = pendingRaw ? normalizeSubscriptionPlanCode(pendingRaw) : null;
+  const updates = ['updatedAt = :u', 'nextBillingAt = :nb'];
+  const values = {
+    ':u': nowIso,
+    ':nb': nextBillingBoundaryIsoJst(),
+    ':null': null,
+    ':f': false,
+  };
+  const secretKey = process.env.STRIPE_SECRET_KEY || '';
+  const stripeSubId = String(billing?.stripeSubscriptionId || '').trim();
+
+  if (pendingPlan) {
+    const targetLimit = subscriptionPlanLimitBytes(pendingPlan);
+    if (targetLimit !== null && usageBytes > targetLimit) {
+      // Reflect "downgrade skipped on boundary if over limit": clear reservation only.
+      updates.push('pendingPlan = :null');
+    } else {
+      if (secretKey && stripeSubId) {
+        const targetPriceId = subscriptionPriceIdForPlan(pendingPlan);
+        if (targetPriceId) {
+          const stripeSub = await stripeUpdateSubscriptionPlan(secretKey, stripeSubId, targetPriceId, 'none');
+          updates.push('stripeSubscriptionStatus = :ss', 'stripeSubscriptionItemId = :si');
+          values[':ss'] = stripeSub?.status || null;
+          values[':si'] = stripeSub?.items?.data?.[0]?.id || null;
+        }
+      }
+      updates.push('currentPlan = :cp', 'pendingPlan = :null');
+      values[':cp'] = pendingPlan;
+    }
+  }
+
+  if (Boolean(billing?.cancelAtPeriodEnd)) {
+    updates.push('cancelAtPeriodEnd = :f', 'currentPlan = :free', 'pendingPlan = :null');
+    values[':free'] = 'FREE';
+  }
+
+  const res = await ddb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `ROOM#${room.roomId}`, SK: 'META#BILLING' },
+      UpdateExpression: `SET ${updates.join(', ')}`,
+      ExpressionAttributeValues: values,
+      ReturnValues: 'ALL_NEW',
+    })
+  );
+
+  auditLog({
+    requestId: ctx?.requestId || null,
+    action: 'subscription.cycle.apply',
+    roomId: room.roomId,
+    roomName: room.roomName,
+    currentPlan: res.Attributes?.currentPlan || null,
+    pendingPlan: pendingPlan || null,
+    cancelAtPeriodEnd: Boolean(billing?.cancelAtPeriodEnd),
+    result: 'success',
+  });
+
+  return res.Attributes || billing;
 }
 
 function folderScopeForMember(member, isAdmin) {
@@ -576,10 +679,7 @@ function canAccessFolder(folder, user, authz) {
 }
 
 function isUploadBlocked(billing) {
-  const usageBytes = Number(billing?.usageBytes || 0);
-  const freeBytes = Number(billing?.freeBytes || FREE_BYTES_DEFAULT);
-  const gibDaysBalance = Number(billing?.gibDaysBalance || 0);
-  return gibDaysBalance <= 0 && usageBytes >= freeBytes;
+  return isUploadBlockedForBilling(billing);
 }
 
 function pad3(num) {
@@ -1039,20 +1139,246 @@ async function teamBilling(authz) {
   return json(200, { billing });
 }
 
-function parsePurchaseSku(sku) {
-  const value = String(sku || '').trim().toLowerCase();
-  if (value === '1gbm') return { gbMonths: 1, yen: 1000 };
-  if (value === '10gbm') return { gbMonths: 10, yen: 8000 };
-  if (value === '50gbm') return { gbMonths: 50, yen: 35000 };
+function subscriptionPriceIdForPlan(planCode) {
+  const code = normalizeSubscriptionPlanCode(planCode);
+  if (code === 'BASIC') return process.env.STRIPE_SUB_PRICE_1GB || '';
+  if (code === 'PLUS') return process.env.STRIPE_SUB_PRICE_5GB || '';
+  if (code === 'PRO') return process.env.STRIPE_SUB_PRICE_10GB || '';
+  return '';
+}
+
+function planCodeFromSubscriptionPriceId(priceId) {
+  const id = String(priceId || '').trim();
+  if (!id) return null;
+  if (id === String(process.env.STRIPE_SUB_PRICE_1GB || '')) return 'BASIC';
+  if (id === String(process.env.STRIPE_SUB_PRICE_5GB || '')) return 'PLUS';
+  if (id === String(process.env.STRIPE_SUB_PRICE_10GB || '')) return 'PRO';
   return null;
 }
 
-function stripePriceIdForSku(sku) {
-  const value = String(sku || '').trim().toLowerCase();
-  if (value === '1gbm') return process.env.STRIPE_PRICE_1GBM || '';
-  if (value === '10gbm') return process.env.STRIPE_PRICE_10GBM || '';
-  if (value === '50gbm') return process.env.STRIPE_PRICE_50GBM || '';
-  return '';
+function isoFromUnixSec(sec) {
+  const n = Number(sec || 0);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return new Date(n * 1000).toISOString();
+}
+
+async function stripeGetSubscription(secretKey, subscriptionId) {
+  return await stripeRequest({
+    secretKey,
+    method: 'GET',
+    path: `/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,
+  });
+}
+
+async function stripeUpdateSubscriptionPlan(secretKey, subscriptionId, targetPriceId, prorationBehavior) {
+  const sub = await stripeGetSubscription(secretKey, subscriptionId);
+  const itemId = sub?.items?.data?.[0]?.id || '';
+  if (!itemId) throw new Error('stripe subscription item not found');
+  const params = new URLSearchParams();
+  params.append('items[0][id]', itemId);
+  params.append('items[0][price]', targetPriceId);
+  params.append('proration_behavior', prorationBehavior || 'always_invoice');
+  return await stripeRequest({
+    secretKey,
+    method: 'POST',
+    path: `/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,
+    params,
+  });
+}
+
+async function stripeSetCancelAtPeriodEnd(secretKey, subscriptionId, flag) {
+  const params = new URLSearchParams();
+  params.append('cancel_at_period_end', flag ? 'true' : 'false');
+  return await stripeRequest({
+    secretKey,
+    method: 'POST',
+    path: `/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,
+    params,
+  });
+}
+
+async function teamSubscription(room, authz) {
+  if (!authz.isAdmin) return json(403, { message: 'forbidden' });
+  const billing = summarizeBilling(authz.billing);
+  return json(200, {
+    billingMode: billing.billingMode || BILLING_MODE_PREPAID,
+    subscription: billing.subscription || null,
+    usageBytes: Number(billing.usageBytes || 0),
+  });
+}
+
+async function teamSubscriptionCheckout(event, user, room, authz, ctx) {
+  if (!authz.isAdmin) return json(403, { message: 'forbidden' });
+  const secretKey = process.env.STRIPE_SECRET_KEY || '';
+  if (!secretKey) return json(500, { message: 'stripe is not configured (missing STRIPE_SECRET_KEY)' });
+
+  const body = JSON.parse(event.body || '{}');
+  const plan = normalizeSubscriptionPlanCode(body.plan || '');
+  if (!plan || plan === 'FREE') return badRequest('plan is required (BASIC|PLUS|PRO)');
+  const priceId = subscriptionPriceIdForPlan(plan);
+  if (!priceId) return json(500, { message: `stripe is not configured (missing subscription price for ${plan})` });
+
+  const allowedOrigins = parseAllowedReturnOrigins();
+  const fallback = stripeCheckoutUrls();
+  const requestedSuccess = normalizeReturnUrl(body.successUrl);
+  const requestedCancel = normalizeReturnUrl(body.cancelUrl);
+  const successUrl =
+    requestedSuccess && isAllowedReturnUrl(requestedSuccess, allowedOrigins) ? requestedSuccess : fallback.successUrl;
+  const cancelUrl =
+    requestedCancel && isAllowedReturnUrl(requestedCancel, allowedOrigins) ? requestedCancel : fallback.cancelUrl;
+  if (!successUrl || !cancelUrl) return json(500, { message: 'stripe is not configured (missing return urls)' });
+
+  const nowIso = new Date().toISOString();
+  const params = new URLSearchParams();
+  params.append('mode', 'subscription');
+  params.append('line_items[0][price]', priceId);
+  params.append('line_items[0][quantity]', '1');
+  params.append('success_url', successUrl);
+  params.append('cancel_url', cancelUrl);
+  params.append('client_reference_id', room.roomId);
+  params.append('metadata[roomId]', room.roomId);
+  params.append('metadata[roomName]', room.roomName);
+  params.append('metadata[selectedPlan]', plan);
+  params.append('metadata[purchasedBy]', user.userKey);
+  params.append('metadata[purchasedByName]', user.userName);
+  params.append('metadata[createdAt]', nowIso);
+
+  const session = await stripeRequest({ secretKey, method: 'POST', path: '/v1/checkout/sessions', params });
+  auditLog({
+    requestId: ctx.requestId,
+    action: 'subscription.checkout.create',
+    actor: user.userKey,
+    actorName: user.userName,
+    roomId: room.roomId,
+    roomName: room.roomName,
+    plan,
+    stripeSessionId: session.id || null,
+    result: 'success',
+  });
+  return json(200, { url: session.url, sessionId: session.id, plan });
+}
+
+async function changeTeamSubscription(event, user, room, authz, ctx) {
+  if (!authz.isAdmin) return json(403, { message: 'forbidden' });
+  const body = JSON.parse(event.body || '{}');
+  const action = String(body.action || '').trim().toLowerCase();
+  if (!action) return badRequest('action is required (upgrade|downgrade|cancel|resume)');
+
+  const currentMode = String(authz.billing?.billingMode || BILLING_MODE_PREPAID).toLowerCase();
+  if (currentMode !== BILLING_MODE_SUBSCRIPTION) {
+    return badRequest('subscription change is available only in subscription mode');
+  }
+  const currentPlan = normalizeSubscriptionPlanCode(authz.billing?.currentPlan || 'FREE');
+  const targetPlan = body.targetPlan ? normalizeSubscriptionPlanCode(body.targetPlan) : null;
+  const usageBytes = Number(authz.billing?.usageBytes || 0);
+  const nowIso = new Date().toISOString();
+  const nextBillingAt = nextBillingBoundaryIsoJst();
+  const updates = ['billingMode = :m', 'updatedAt = :u', 'nextBillingAt = :nb'];
+  const values = {
+    ':m': BILLING_MODE_SUBSCRIPTION,
+    ':u': nowIso,
+    ':nb': nextBillingAt,
+    ':null': null,
+    ':f': false,
+    ':t': true,
+  };
+
+  if (action === 'upgrade') {
+    if (!targetPlan) return badRequest('targetPlan is required for upgrade');
+    if (planRank(targetPlan) <= planRank(currentPlan)) return badRequest('targetPlan must be higher than currentPlan');
+    updates.push('currentPlan = :cp', 'pendingPlan = :null', 'cancelAtPeriodEnd = :f');
+    values[':cp'] = targetPlan;
+  } else if (action === 'downgrade') {
+    if (!targetPlan) return badRequest('targetPlan is required for downgrade');
+    if (planRank(targetPlan) >= planRank(currentPlan)) return badRequest('targetPlan must be lower than currentPlan');
+    const targetLimit = subscriptionPlanLimitBytes(targetPlan);
+    if (targetLimit !== null && usageBytes > targetLimit) {
+      return badRequest(
+        `current usage (${usageBytes} bytes) exceeds target plan limit (${targetLimit} bytes); cannot schedule downgrade`
+      );
+    }
+    updates.push('pendingPlan = :pp', 'cancelAtPeriodEnd = :f');
+    values[':pp'] = targetPlan;
+  } else if (action === 'cancel') {
+    if (currentMode !== BILLING_MODE_SUBSCRIPTION) return badRequest('cancel is available only in subscription mode');
+    updates.push('cancelAtPeriodEnd = :t');
+  } else if (action === 'resume') {
+    if (currentMode !== BILLING_MODE_SUBSCRIPTION) return badRequest('resume is available only in subscription mode');
+    updates.push('cancelAtPeriodEnd = :f');
+  } else {
+    return badRequest('action must be upgrade|downgrade|cancel|resume');
+  }
+
+  const res = await ddb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `ROOM#${room.roomId}`, SK: 'META#BILLING' },
+      UpdateExpression: `SET ${updates.join(', ')}`,
+      ExpressionAttributeValues: values,
+      ReturnValues: 'ALL_NEW',
+    })
+  );
+
+  let updated = res.Attributes || authz.billing;
+  const secretKey = process.env.STRIPE_SECRET_KEY || '';
+  const stripeSubId = String(updated?.stripeSubscriptionId || '').trim();
+  if (secretKey && stripeSubId) {
+    if (action === 'upgrade') {
+      const targetPriceId = subscriptionPriceIdForPlan(targetPlan);
+      if (!targetPriceId) return json(500, { message: `stripe price not configured for plan ${targetPlan}` });
+      const stripeSub = await stripeUpdateSubscriptionPlan(secretKey, stripeSubId, targetPriceId, 'always_invoice');
+      const itemId = stripeSub?.items?.data?.[0]?.id || null;
+      const stripePlan = planCodeFromSubscriptionPriceId(stripeSub?.items?.data?.[0]?.price?.id) || targetPlan;
+      const reflect = await ddb.send(
+        new UpdateCommand({
+          TableName: TABLE_NAME,
+          Key: { PK: `ROOM#${room.roomId}`, SK: 'META#BILLING' },
+          UpdateExpression:
+            'SET currentPlan = :cp, pendingPlan = :null, stripeSubscriptionStatus = :ss, stripeSubscriptionItemId = :si, updatedAt = :u',
+          ExpressionAttributeValues: {
+            ':cp': stripePlan,
+            ':null': null,
+            ':ss': stripeSub?.status || 'active',
+            ':si': itemId,
+            ':u': new Date().toISOString(),
+          },
+          ReturnValues: 'ALL_NEW',
+        })
+      );
+      updated = reflect.Attributes || updated;
+    } else if (action === 'cancel' || action === 'resume') {
+      const stripeSub = await stripeSetCancelAtPeriodEnd(secretKey, stripeSubId, action === 'cancel');
+      const reflect = await ddb.send(
+        new UpdateCommand({
+          TableName: TABLE_NAME,
+          Key: { PK: `ROOM#${room.roomId}`, SK: 'META#BILLING' },
+          UpdateExpression: 'SET cancelAtPeriodEnd = :c, stripeSubscriptionStatus = :ss, updatedAt = :u',
+          ExpressionAttributeValues: {
+            ':c': Boolean(stripeSub?.cancel_at_period_end),
+            ':ss': stripeSub?.status || updated?.stripeSubscriptionStatus || null,
+            ':u': new Date().toISOString(),
+          },
+          ReturnValues: 'ALL_NEW',
+        })
+      );
+      updated = reflect.Attributes || updated;
+    }
+  }
+
+  auditLog({
+    requestId: ctx?.requestId || null,
+    action: 'subscription.change',
+    actor: user.userKey,
+    actorName: user.userName,
+    roomId: room.roomId,
+    roomName: room.roomName,
+    changeAction: action,
+    currentPlan,
+    targetPlan: targetPlan || null,
+    result: 'success',
+  });
+
+  return json(200, { ok: true, billing: summarizeBilling(updated) });
 }
 
 function stripeCheckoutUrls() {
@@ -1091,136 +1417,6 @@ function isAllowedReturnUrl(url, allowedOrigins) {
   } catch (_) {
     return false;
   }
-}
-
-async function teamPurchaseCheckout(event, user, room, authz, ctx) {
-  if (!authz.isAdmin) return json(403, { message: 'forbidden' });
-  const secretKey = process.env.STRIPE_SECRET_KEY || '';
-  if (!secretKey) return json(500, { message: 'stripe is not configured (missing STRIPE_SECRET_KEY)' });
-
-  const body = JSON.parse(event.body || '{}');
-  const parsed = parsePurchaseSku(body.sku);
-  if (!parsed) return badRequest('sku is required (1gbm|10gbm|50gbm)');
-  const priceId = stripePriceIdForSku(body.sku);
-  if (!priceId) return json(500, { message: 'stripe is not configured (missing price id)' });
-
-  const allowedOrigins = parseAllowedReturnOrigins();
-  const fallback = stripeCheckoutUrls();
-  const requestedSuccess = normalizeReturnUrl(body.successUrl);
-  const requestedCancel = normalizeReturnUrl(body.cancelUrl);
-
-  const successUrl =
-    requestedSuccess && isAllowedReturnUrl(requestedSuccess, allowedOrigins) ? requestedSuccess : fallback.successUrl;
-  const cancelUrl =
-    requestedCancel && isAllowedReturnUrl(requestedCancel, allowedOrigins) ? requestedCancel : fallback.cancelUrl;
-  if (!successUrl || !cancelUrl) return json(500, { message: 'stripe is not configured (missing return urls)' });
-
-  const nowIso = new Date().toISOString();
-  const params = encodeCheckoutSessionParams({
-    priceId,
-    successUrl,
-    cancelUrl,
-    metadata: {
-      sku: String(body.sku || '').trim().toLowerCase(),
-      gbMonths: String(parsed.gbMonths),
-      roomId: room.roomId,
-      roomName: room.roomName,
-      purchasedBy: user.userKey,
-      purchasedByName: user.userName,
-      createdAt: nowIso,
-    },
-  });
-
-  const session = await stripePostForm({ secretKey, path: '/v1/checkout/sessions', params });
-
-  auditLog({
-    requestId: ctx.requestId,
-    action: 'billing.checkout.create',
-    actor: user.userKey,
-    actorName: user.userName,
-    roomId: room.roomId,
-    roomName: room.roomName,
-    sku: String(body.sku || ''),
-    stripeSessionId: session.id || null,
-    result: 'success',
-  });
-
-  return json(200, { url: session.url, sessionId: session.id });
-}
-
-async function teamPurchaseConfirm(event, room, authz) {
-  // Frontend polls this endpoint after returning from Stripe Checkout.
-  // We confirm the webhook has already credited the room by checking the session marker.
-  if (!authz.isAdmin) return json(403, { message: 'forbidden' });
-  const qs = event.queryStringParameters || {};
-  const sessionId = String(qs.sessionId || qs.session_id || '').trim();
-  if (!sessionId) return badRequest('sessionId is required');
-
-  const res = await ddb.send(
-    new GetCommand({
-      TableName: TABLE_NAME,
-      Key: { PK: `ROOM#${room.roomId}`, SK: `STRIPE_SESSION#${sessionId}` },
-    })
-  );
-  return json(200, { ok: true, processed: Boolean(res.Item) });
-}
-
-async function teamPurchase(event, user, room, authz, ctx) {
-  // Deprecated manual credit endpoint. Keep it for emergency/dev only.
-  // Use Stripe Checkout (/team/purchase/checkout) + webhook crediting in normal operation.
-  if ((process.env.ALLOW_MANUAL_CREDIT || '').toLowerCase() !== 'true') {
-    return json(410, { message: 'purchase endpoint moved to stripe checkout' });
-  }
-  if (!authz.isAdmin) return json(403, { message: 'forbidden' });
-  const body = JSON.parse(event.body || '{}');
-  const parsed = parsePurchaseSku(body.sku);
-  if (!parsed) return badRequest('sku is required (1gbm|10gbm|50gbm)');
-
-  const nowIso = new Date().toISOString();
-  const deltaGibDays = parsed.gbMonths * GBMONTH_DAYS;
-
-  const updated = await addGibDaysBalance(ddb, {
-    tableName: TABLE_NAME,
-    roomId: room.roomId,
-    deltaGibDays,
-    nowIso,
-  });
-
-  const purchaseId = randomUUID();
-  await ddb.send(
-    new PutCommand({
-      TableName: TABLE_NAME,
-      Item: {
-        PK: `ROOM#${room.roomId}`,
-        SK: `PURCHASE#${nowIso}#${purchaseId}`,
-        type: 'billing_purchase',
-        roomId: room.roomId,
-        roomName: room.roomName,
-        sku: body.sku,
-        gbMonths: parsed.gbMonths,
-        deltaGibDays,
-        yen: parsed.yen,
-        purchasedBy: user.userKey,
-        purchasedByName: user.userName,
-        createdAt: nowIso,
-      },
-    })
-  );
-
-  auditLog({
-    requestId: ctx.requestId,
-    action: 'billing.purchase',
-    actor: user.userKey,
-    actorName: user.userName,
-    roomId: room.roomId,
-    roomName: room.roomName,
-    sku: body.sku,
-    gbMonths: parsed.gbMonths,
-    yen: parsed.yen,
-    result: 'success',
-  });
-
-  return json(200, { ok: true, billing: summarizeBilling(updated) });
 }
 
 async function listTeamMembers(room, authz) {
@@ -1589,7 +1785,42 @@ async function listFolders(room, user, authz) {
     const base = applyResolvedDisplayName(item, nameMap);
     return { ...base, hasPassword: folderHasPassword(base) };
   });
-  return json(200, { items: hydrated });
+  const withUsage = await Promise.all(
+    hydrated.map(async (folder) => {
+      const usageBytes = await sumFolderUsageBytes(folder.folderId, room.roomName);
+      return { ...folder, usageBytes };
+    })
+  );
+  return json(200, { items: withUsage });
+}
+
+async function sumFolderUsageBytes(folderId, roomName) {
+  let lastEvaluatedKey = null;
+  let total = 0;
+  do {
+    const res = await ddb.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        IndexName: 'GSI1',
+        KeyConditionExpression: 'GSI1PK = :pk and begins_with(GSI1SK, :sk)',
+        ExpressionAttributeValues: {
+          ':pk': `FOLDER#${folderId}`,
+          ':sk': 'PHOTO#',
+        },
+        ProjectionExpression: 'totalBytes, originalBytes, previewBytes, roomName',
+        ExclusiveStartKey: lastEvaluatedKey || undefined,
+      })
+    );
+    (res.Items || []).forEach((photo) => {
+      if (!isRoomMatch(photo.roomName, roomName)) return;
+      const bytes =
+        Number(photo.totalBytes || 0) ||
+        Number(photo.originalBytes || 0) + Number(photo.previewBytes || 0);
+      total += Math.max(0, bytes);
+    });
+    lastEvaluatedKey = res.LastEvaluatedKey || null;
+  } while (lastEvaluatedKey);
+  return total;
 }
 
 async function createFolder(event, user, room, ctx) {
@@ -2511,12 +2742,12 @@ exports.handler = async (event) => {
     if (method === 'POST' && path === '/invites/revoke') return await revokeInvite(event, user, room, authz, ctx);
 
     if (method === 'GET' && path === '/team/billing') return await teamBilling(authz);
-    if (method === 'POST' && path === '/team/purchase') return await teamPurchase(event, user, room, authz, ctx);
-    if (method === 'POST' && path === '/team/purchase/checkout') {
-      return await teamPurchaseCheckout(event, user, room, authz, ctx);
+    if (method === 'GET' && path === '/team/subscription') return await teamSubscription(room, authz);
+    if (method === 'POST' && path === '/team/subscription/checkout') {
+      return await teamSubscriptionCheckout(event, user, room, authz, ctx);
     }
-    if (method === 'GET' && path === '/team/purchase/confirm') {
-      return await teamPurchaseConfirm(event, room, authz);
+    if (method === 'POST' && path === '/team/subscription/change') {
+      return await changeTeamSubscription(event, user, room, authz, ctx);
     }
     if (method === 'GET' && path === '/team/members') return await listTeamMembers(room, authz);
     if (method === 'PUT' && p.userKey && path.endsWith(`/team/members/${p.userKey}`)) {

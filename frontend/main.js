@@ -338,9 +338,9 @@ const els = {
   billingGraphRemaining: document.querySelector('#billing-graph-remaining'),
   billingGraphUsedLabel: document.querySelector('#billing-graph-used-label'),
   billingGraphRemainLabel: document.querySelector('#billing-graph-remain-label'),
-  purchase1Btn: document.querySelector('#purchase-1gbm'),
-  purchase10Btn: document.querySelector('#purchase-10gbm'),
-  purchase50Btn: document.querySelector('#purchase-50gbm'),
+  subscribeBasicBtn: document.querySelector('#subscribe-basic'),
+  subscribePlusBtn: document.querySelector('#subscribe-plus'),
+  subscribeProBtn: document.querySelector('#subscribe-pro'),
   lowStorageModal: document.querySelector('#low-storage-modal'),
   lowStorageCloseBtn: document.querySelector('#low-storage-close-btn'),
   lowStorageMessage: document.querySelector('#low-storage-message'),
@@ -530,11 +530,14 @@ function storagePromptKey() {
 function computeStorageStats(billing) {
   const usageBytes = Math.max(0, Number(billing?.usageBytes || 0));
   const freeBytes = Math.max(0, Number(billing?.freeBytes || 0));
-  const usedBytes = Math.min(usageBytes, freeBytes);
-  const freeRemainBytes = Math.max(0, freeBytes - usageBytes);
-  const usedRatio = freeBytes > 0 ? Math.min(100, (usedBytes / freeBytes) * 100) : 0;
+  const mode = String(billing?.billingMode || 'prepaid').toLowerCase();
+  const planLimitBytes = Math.max(0, Number(billing?.subscription?.limitBytes || 0));
+  const capacityBytes = mode === 'subscription' && planLimitBytes > 0 ? planLimitBytes : freeBytes;
+  const usedBytes = Math.min(usageBytes, capacityBytes);
+  const freeRemainBytes = Math.max(0, capacityBytes - usageBytes);
+  const usedRatio = capacityBytes > 0 ? Math.min(100, (usedBytes / capacityBytes) * 100) : 0;
   const remainRatio = Math.max(0, 100 - usedRatio);
-  return { usageBytes, freeBytes, usedBytes, freeRemainBytes, usedRatio, remainRatio };
+  return { usageBytes, freeBytes, capacityBytes, usedBytes, freeRemainBytes, usedRatio, remainRatio };
 }
 
 function syncTopStorageGraphWidth() {
@@ -563,14 +566,7 @@ function renderTopStorageGraph() {
   if (els.billingGraphTopRemainLabel) {
     els.billingGraphTopRemainLabel.textContent = `残り ${formatBytes(stats.freeRemainBytes)}`;
   }
-  const extraGbm = Number(state.billing?.gbMonthEquivalent || 0);
-  const shouldShowExtra = stats.freeBytes > 0 && stats.freeRemainBytes <= 0;
-  if (els.billingGraphTopSubmeta) {
-    els.billingGraphTopSubmeta.classList.toggle('hidden', !shouldShowExtra);
-  }
-  if (els.billingGraphTopExtraLabel) {
-    els.billingGraphTopExtraLabel.textContent = `追加残り ${extraGbm.toFixed(2)} GB・月 相当`;
-  }
+  if (els.billingGraphTopSubmeta) els.billingGraphTopSubmeta.classList.add('hidden');
   els.billingGraphTop.classList.remove('hidden');
 }
 
@@ -586,13 +582,15 @@ function renderBillingBar() {
   const b = state.billing;
   const freeRemainBytes = Math.max(0, Number(b.freeBytes || 0) - Number(b.usageBytes || 0));
   const blocked = state.uploadBlocked;
+  const plan = String(b?.subscription?.currentPlan || 'FREE').toUpperCase();
 
   const parts = [];
+  parts.push(`プラン:${planToDisplayLabel(plan)}`);
   if (state.ownerUserKey && state.userKey) {
     parts.push(state.ownerUserKey === state.userKey ? '作成者' : '参加者');
   }
   if (blocked) parts.push('アップロード停止中（残量不足）');
-  if (!blocked && Number(b.gbMonthEquivalent || 0) <= 0 && freeRemainBytes > 0) parts.push('無料枠で利用中');
+  if (!blocked && plan === 'FREE' && freeRemainBytes > 0) parts.push('無料枠で利用中');
   if (state.isAdmin) parts.push('管理者');
 
   renderTopStorageGraph();
@@ -628,6 +626,23 @@ function renderStorageGraph() {
   els.billingGraph.classList.remove('hidden');
 }
 
+function syncSubscriptionPlanButtons() {
+  const mode = String(state.billing?.billingMode || 'prepaid').toLowerCase();
+  const currentPlan = String(state.billing?.subscription?.currentPlan || 'FREE').toUpperCase();
+  const planButtons = [
+    { plan: 'BASIC', button: els.subscribeBasicBtn, label: '1GBプラン (¥980/月)' },
+    { plan: 'PLUS', button: els.subscribePlusBtn, label: '5GBプラン (¥1,980/月)' },
+    { plan: 'PRO', button: els.subscribeProBtn, label: '10GBプラン (¥2,980/月)' },
+  ];
+  planButtons.forEach(({ plan, button, label }) => {
+    if (!button) return;
+    const isCurrent = mode === 'subscription' && currentPlan === plan;
+    button.textContent = isCurrent ? `${label}（現在のプラン）` : label;
+    button.disabled = isCurrent;
+    button.setAttribute('aria-pressed', isCurrent ? 'true' : 'false');
+  });
+}
+
 function maybePromptLowStorage() {
   if (!state.isAdmin || !state.billing || !els.lowStorageModal) return;
   const stats = computeStorageStats(state.billing);
@@ -640,11 +655,11 @@ function maybePromptLowStorage() {
     return;
   }
   if (localStorage.getItem(key) === '1') return;
-  const extra = Number(state.billing.gbMonthEquivalent || 0).toFixed(2);
   if (els.lowStorageMessage) {
+    const plan = String(state.billing?.subscription?.currentPlan || 'FREE').toUpperCase();
     els.lowStorageMessage.textContent = `容量を追加しますか？（現在の残り: ${formatBytes(
       stats.freeRemainBytes
-    )} / 追加残り: ${extra} GB・月）`;
+    )} / 現在プラン: ${planToDisplayLabel(plan)}）`;
   }
   els.lowStorageModal.classList.remove('hidden');
   localStorage.setItem(key, '1');
@@ -755,35 +770,41 @@ async function scrollToPhotoList() {
   els.photoList.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-function skuToProductLabel(sku) {
-  const v = String(sku || '').trim().toLowerCase();
-  if (v === '1gbm') return '1GB';
-  if (v === '10gbm') return '10GB';
-  if (v === '50gbm') return '50GB';
+function planToProductLabel(plan) {
+  const v = String(plan || '').trim().toUpperCase();
+  if (v === 'BASIC') return '1GB';
+  if (v === 'PLUS') return '5GB';
+  if (v === 'PRO') return '10GB';
   return null;
+}
+
+function planToDisplayLabel(plan) {
+  const v = String(plan || '').trim().toUpperCase();
+  const product = planToProductLabel(v);
+  if (product) return `${product}プラン`;
+  if (v === 'FREE') return '無料プラン';
+  return v || '不明';
 }
 
 function clearPurchaseParamsFromUrl() {
   const url = new URL(window.location.href);
-  ['purchase', 'sku', 'session_id', 'sessionId'].forEach((k) => url.searchParams.delete(k));
+  ['subscription', 'plan', 'session_id', 'sessionId'].forEach((k) => url.searchParams.delete(k));
   window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
 }
 
 async function handleStripePurchaseReturn() {
-  // Stripe Checkout success redirect. We only show the toast once the webhook credit is confirmed.
+  // Stripe Checkout success redirect for subscription mode.
   const url = new URL(window.location.href);
-  const purchase = url.searchParams.get('purchase');
-  if (!purchase) return;
-
-  if (purchase !== 'success') {
+  const subscription = url.searchParams.get('subscription');
+  if (!subscription) return;
+  if (subscription !== 'success') {
     clearPurchaseParamsFromUrl();
     return;
   }
 
-  const sku = url.searchParams.get('sku') || '';
-  const sessionId = url.searchParams.get('session_id') || url.searchParams.get('sessionId') || '';
-  const label = skuToProductLabel(sku);
-  if (!label || !sessionId) {
+  const plan = url.searchParams.get('plan') || '';
+  const label = planToProductLabel(plan);
+  if (!label) {
     clearPurchaseParamsFromUrl();
     return;
   }
@@ -799,15 +820,16 @@ async function handleStripePurchaseReturn() {
   }
   await loadAdminPanel();
 
-  // Poll until webhook credits are applied (session marker exists).
+  // Poll until subscription info reflects the selected plan.
   const maxAttempts = 45; // ~45s
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
-      const res = await api(`/team/purchase/confirm?sessionId=${encodeURIComponent(sessionId)}`, { method: 'GET' });
-      if (res && res.processed) {
+      const res = await api('/team/subscription', { method: 'GET' });
+      const currentPlan = String(res?.subscription?.currentPlan || '').toUpperCase();
+      if (currentPlan === String(plan).toUpperCase()) {
         await loadTeamMe();
         await loadAdminPanel();
-        showToast(`追加残りに購入した商品名（${label}）が追加されました。`);
+        showToast(`プランを${label}へ更新しました。`);
         clearPurchaseParamsFromUrl();
         return;
       }
@@ -819,7 +841,7 @@ async function handleStripePurchaseReturn() {
 
   // Timed out. Don't loop on refresh.
   clearPurchaseParamsFromUrl();
-  showToast('決済反映に少し時間がかかっとるばい。しばらくして容量表示ば確認してね。');
+  showToast('決済反映に少し時間がかかっとるばい。しばらくしてプラン表示ば確認してね。');
 }
 
 function preserveCurrentView(photoId) {
@@ -1044,6 +1066,7 @@ async function loadTeamMe() {
   }
   setAdminUiVisibility();
   renderBillingBar();
+  syncSubscriptionPlanButtons();
 }
 
 async function loadAdminPanel() {
@@ -1123,7 +1146,13 @@ async function loadAdminPanel() {
       } else {
         folders.forEach((f) => {
           const row = el('div', { class: 'member-row' });
-          const left = el('div', {}, `${f.folderCode || ''} ${f.title || f.folderId}（作成:${f.createdByName || f.createdBy}）`);
+          const left = el(
+            'div',
+            {},
+            `${f.folderCode || ''} ${f.title || f.folderId}（作成:${f.createdByName || f.createdBy} / 容量:${formatBytes(
+              Number(f.usageBytes || 0)
+            )}）`
+          );
           row.appendChild(left);
           const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
           const delBtn = el('button', { type: 'button', class: 'danger' }, '削除');
@@ -1150,17 +1179,21 @@ async function loadAdminPanel() {
   if (els.billingStatus && state.billing) {
     const b = state.billing;
     const stats = computeStorageStats(b);
-    els.billingStatus.textContent = `使用量 ${formatBytes(b.usageBytes)} / 無料 ${formatBytes(
-      b.freeBytes
-    )}（残り ${formatBytes(stats.freeRemainBytes)}） / 追加残り ${Number(
-      b.gbMonthEquivalent || 0
-    ).toFixed(2)} GB・月 相当`;
+    const plan = String(b?.subscription?.currentPlan || 'FREE').toUpperCase();
+    const capacityLabel =
+      String(b?.billingMode || 'prepaid').toLowerCase() === 'subscription'
+        ? `プラン容量 ${formatBytes(stats.capacityBytes)}`
+        : `無料 ${formatBytes(b.freeBytes)}`;
+    els.billingStatus.textContent = `使用量 ${formatBytes(b.usageBytes)} / ${capacityLabel}（残り ${formatBytes(
+      stats.freeRemainBytes
+    )}） / プラン ${planToDisplayLabel(plan)}`;
     renderStorageGraph();
     maybePromptLowStorage();
   } else {
     if (els.billingStatus) els.billingStatus.textContent = '';
     if (els.billingGraph) els.billingGraph.classList.add('hidden');
   }
+  syncSubscriptionPlanButtons();
 }
 
 async function setInviteUrlText(url) {
@@ -1986,13 +2019,13 @@ if (els.teamAdminBackBtn && els.teamAdminCard) {
   };
 }
 
-async function purchaseSku(sku) {
+async function startSubscriptionCheckout(plan) {
   const base = window.location.origin + window.location.pathname;
-  const successUrl = `${base}?purchase=success&sku=${encodeURIComponent(sku)}&session_id={CHECKOUT_SESSION_ID}`;
+  const successUrl = `${base}?subscription=success&plan=${encodeURIComponent(plan)}&session_id={CHECKOUT_SESSION_ID}`;
   const cancelUrl = base;
-  const res = await api('/team/purchase/checkout', {
+  const res = await api('/team/subscription/checkout', {
     method: 'POST',
-    body: JSON.stringify({ sku, successUrl, cancelUrl }),
+    body: JSON.stringify({ plan, successUrl, cancelUrl }),
   });
   if (res && res.url) {
     window.location.href = res.url;
@@ -2001,9 +2034,9 @@ async function purchaseSku(sku) {
   throw new Error('Stripe決済URLが取得できませんでした。');
 }
 
-if (els.purchase1Btn) els.purchase1Btn.onclick = safeAction(() => purchaseSku('1gbm'), '購入');
-if (els.purchase10Btn) els.purchase10Btn.onclick = safeAction(() => purchaseSku('10gbm'), '購入');
-if (els.purchase50Btn) els.purchase50Btn.onclick = safeAction(() => purchaseSku('50gbm'), '購入');
+if (els.subscribeBasicBtn) els.subscribeBasicBtn.onclick = safeAction(() => startSubscriptionCheckout('BASIC'), '購入');
+if (els.subscribePlusBtn) els.subscribePlusBtn.onclick = safeAction(() => startSubscriptionCheckout('PLUS'), '購入');
+if (els.subscribeProBtn) els.subscribeProBtn.onclick = safeAction(() => startSubscriptionCheckout('PRO'), '購入');
 if (els.lowStorageChargeBtn) {
   els.lowStorageChargeBtn.onclick = safeAction(async () => {
     closeLowStorageModal();
@@ -2012,7 +2045,10 @@ if (els.lowStorageChargeBtn) {
       setTeamAdminMode(true);
       await loadAdminPanel();
     }
-    await purchaseSku('1gbm');
+    const usage = Number(state.billing?.usageBytes || 0);
+    const gib = 1024 * 1024 * 1024;
+    const recommended = usage > 5 * gib ? 'PRO' : usage > gib ? 'PLUS' : 'BASIC';
+    await startSubscriptionCheckout(recommended);
   }, '容量チャージ');
 }
 
