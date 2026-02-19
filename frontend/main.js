@@ -1730,11 +1730,18 @@ async function renderPhotos() {
         photoEditWrap.innerHTML = '';
         const input = el('input', { class: 'js-photo-name-input' });
         input.value = photo.fileName || '';
+        const clearBtn = el('button', { class: 'icon-btn js-photo-name-clear', type: 'button', title: '入力を消去' }, '×');
         const saveBtn = el('button', { class: 'js-photo-name-save', type: 'button' }, '保存');
         const cancelBtn = el('button', { class: 'js-photo-name-cancel danger', type: 'button' }, '取消');
         photoEditWrap.appendChild(input);
+        photoEditWrap.appendChild(clearBtn);
         photoEditWrap.appendChild(saveBtn);
         photoEditWrap.appendChild(cancelBtn);
+
+        clearBtn.onclick = () => {
+          input.value = '';
+          input.focus();
+        };
 
         saveBtn.onclick = async () => {
           const nextFileName = input.value.trim();

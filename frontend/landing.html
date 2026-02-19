@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Photo Hub for 監査 | プロダクトランディングページ</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <script type="text/javascript">
+      (function(c,l,a,r,i,t,y){
+          c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+          t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+          y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+      })(window, document, "clarity", "script", "vjnd5j5tbz");
+    </script>
+    <style>
+      :root {
+        --bg: #f7f5ef;
+        --ink: #1f2a33;
+        --brand: #0f766e;
+        --accent: #f59e0b;
+        --card: #fffdf9;
+        --line: #d7d2c8;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 20% 0%, #d7efe8 0%, transparent 40%),
+          radial-gradient(circle at 90% 10%, #ffe6b8 0%, transparent 35%),
+          var(--bg);
+        line-height: 1.7;
+      }
+      .wrap {
+        width: min(1080px, 92%);
+        margin: 0 auto;
+      }
+      .hero {
+        padding: 72px 0 40px;
+      }
+      .badge {
+        display: inline-block;
+        padding: 6px 12px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #ffffffcc;
+        font-size: 13px;
+      }
+      h1 {
+        font-size: clamp(32px, 5vw, 58px);
+        line-height: 1.15;
+        margin: 16px 0 12px;
+      }
+      .lead {
+        font-size: clamp(16px, 2vw, 20px);
+        max-width: 760px;
+        margin-bottom: 0;
+      }
+      .grid {
+        display: grid;
+        gap: 16px;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        margin: 28px 0 52px;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 20px;
+      }
+      .card h3 {
+        margin: 0 0 6px;
+        font-size: 24px;
+      }
+      .price {
+        font-size: 30px;
+        font-weight: 700;
+        margin: 4px 0 2px;
+        color: var(--brand);
+      }
+      .muted {
+        font-size: 13px;
+        color: #5a6670;
+      }
+      section {
+        padding: 0 0 26px;
+      }
+      h2 {
+        font-size: clamp(24px, 3vw, 34px);
+        margin: 0 0 12px;
+      }
+      .flow {
+        counter-reset: step;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 12px;
+      }
+      .flow li {
+        background: #fff;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 14px 16px 14px 54px;
+        position: relative;
+      }
+      .flow li::before {
+        counter-increment: step;
+        content: counter(step);
+        position: absolute;
+        top: 50%;
+        left: 14px;
+        transform: translateY(-50%);
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: var(--brand);
+        color: #fff;
+        font-weight: 700;
+        display: grid;
+        place-items: center;
+      }
+      .cta {
+        margin: 20px 0 48px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .btn {
+        border: none;
+        cursor: pointer;
+        padding: 12px 16px;
+        border-radius: 12px;
+        font-weight: 700;
+      }
+      .btn-primary {
+        background: var(--brand);
+        color: #fff;
+      }
+      .btn-sub {
+        background: #fff;
+        color: var(--ink);
+        border: 1px solid var(--line);
+      }
+      .legal {
+        font-size: 13px;
+        color: #4f5b65;
+        border-top: 1px solid var(--line);
+        padding: 20px 0 36px;
+      }
+      @media (max-width: 1080px) {
+        .grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+      @media (max-width: 820px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="hero">
+        <span class="badge">監査写真コメントアプリ</span>
+        <h1>Photo Hub for 監査</h1>
+        <p class="lead">
+          現場写真の共有・確認・コメントを、監査運用に合わせてシンプルに。<br />
+          パワーポイントでレポートできる、監査向けフォト管理サービスです。
+        </p>
+      </header>
+
+      <section aria-labelledby="plans-title">
+        <h2 id="plans-title">料金プラン（税込・月額）</h2>
+        <div class="grid">
+          <article class="card">
+            <h3>無料プラン</h3>
+            <p class="price">¥0<span class="muted"> / 月</span></p>
+            <p>まず試したい方向け。無料枠（512MB）まで使えます。</p>
+          </article>
+          <article class="card">
+            <h3>1GBプラン</h3>
+            <p class="price">¥980<span class="muted"> / 月</span></p>
+            <p>小規模チーム向け。まず運用を始めるための基本プラン。</p>
+          </article>
+          <article class="card">
+            <h3>5GBプラン</h3>
+            <p class="price">¥1,980<span class="muted"> / 月</span></p>
+            <p>運用が安定して写真点数が増えてきたチーム向け。</p>
+          </article>
+          <article class="card">
+            <h3>10GBプラン</h3>
+            <p class="price">¥2,980<span class="muted"> / 月</span></p>
+            <p>複数案件・複数拠点で継続運用するチーム向け。</p>
+          </article>
+        </div>
+      </section>
+
+      <section aria-labelledby="apply-title">
+        <h2 id="apply-title">申込方法</h2>
+        <ol class="flow">
+          <li>本ウェブサイトを通じてお申し込みいただきます。</li>
+          <li>無料枠を超えて利用を続ける場合、管理者がサブスクプラン（1GB/5GB/10GB）を選択します。</li>
+          <li>クレジットカード（Stripeによる決済代行）で決済します。</li>
+          <li>初回は有料プラン申込時に決済、以後は有効期間中に毎月自動決済されます。</li>
+        </ol>
+        <div class="cta">
+          <button id="to-app" class="btn btn-primary" type="button">申込ページへ進む</button>
+          <button id="to-legal" class="btn btn-sub" type="button">特定商取引法に基づく表記・利用規約・プライバシーポリシーを見る</button>
+        </div>
+      </section>
+
+      <section class="legal" aria-label="company-info">
+        <p><strong>販売事業者:</strong> あおき業務企画</p>
+        <p><strong>商品名:</strong> Photo Hub for 監査</p>
+        <p><strong>販売方法:</strong> 本ウェブサイトを通じたご案内・お申し込み</p>
+      </section>
+    </main>
+
+    <script>
+      (function () {
+        var appUrl = "./index.html";
+        var legalUrl = "./legal.html";
+        var appButton = document.getElementById("to-app");
+        var legalButton = document.getElementById("to-legal");
+        if (appButton) appButton.addEventListener("click", function () { window.location.href = appUrl; });
+        if (legalButton) legalButton.addEventListener("click", function () { window.location.href = legalUrl; });
+      })();
+    </script>
+  </body>
+</html>
