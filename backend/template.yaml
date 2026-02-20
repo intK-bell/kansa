@@ -37,11 +37,11 @@ Parameters:
     Description: Unique Cognito hosted UI domain prefix
   CognitoCallbackUrl:
     Type: String
-    Default: https://main.dn65vena62q5z.amplifyapp.com
+    Default: https://ph4k.aokigk.com
     Description: Cognito app client callback URL
   CognitoLogoutUrl:
     Type: String
-    Default: https://main.dn65vena62q5z.amplifyapp.com
+    Default: https://ph4k.aokigk.com
     Description: Cognito app client logout URL
   CognitoLocalCallbackUrl:
     Type: String
@@ -79,15 +79,15 @@ Parameters:
     Description: Stripe webhook signing secret (whsec_*)
   StripeCheckoutSuccessUrl:
     Type: String
-    Default: https://main.dn65vena62q5z.amplifyapp.com
+    Default: https://ph4k.aokigk.com
     Description: Stripe Checkout success URL (app page)
   StripeCheckoutCancelUrl:
     Type: String
-    Default: https://main.dn65vena62q5z.amplifyapp.com
+    Default: https://ph4k.aokigk.com
     Description: Stripe Checkout cancel URL (app page)
   StripeAllowedReturnOrigins:
     Type: String
-    Default: "http://localhost:5173,http://127.0.0.1:5173,https://main.dn65vena62q5z.amplifyapp.com"
+    Default: "http://localhost:5173,http://127.0.0.1:5173,https://ph4k.aokigk.com"
     Description: Comma-separated allowlist for dynamic Stripe return URL origins
   StripeSubPrice1gb:
     Type: String
