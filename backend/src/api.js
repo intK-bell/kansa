@@ -1,5 +1,4 @@
-const { randomUUID } = require('node:crypto');
-const { pbkdf2Sync, randomBytes, timingSafeEqual } = require('node:crypto');
+const { randomUUID, createHash, pbkdf2Sync, randomBytes, timingSafeEqual } = require('node:crypto');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { CognitoIdentityProviderClient, AdminDeleteUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
 const {
@@ -136,6 +135,58 @@ function auditLog(entry) {
       ...entry,
     })
   );
+}
+
+function isConditionalCheckFailed(error) {
+  return String(error?.name || '') === 'ConditionalCheckFailedException';
+}
+
+function photoHashKey(folderId, contentSha256) {
+  return { PK: `FOLDER#${folderId}`, SK: `PHOTOHASH#${contentSha256}` };
+}
+
+async function sha256ForS3Object(key) {
+  const res = await s3.send(new GetObjectCommand({ Bucket: PHOTO_BUCKET, Key: key }));
+  const body = res?.Body;
+  if (!body || typeof body[Symbol.asyncIterator] !== 'function') {
+    throw new Error('OBJECT_BODY_STREAM_UNAVAILABLE');
+  }
+  const hash = createHash('sha256');
+  for await (const chunk of body) {
+    hash.update(chunk);
+  }
+  return hash.digest('hex');
+}
+
+async function tryDeleteUploadedObjects(originalS3Key, previewS3Key) {
+  if (originalS3Key) {
+    try {
+      await s3.send(new DeleteObjectCommand({ Bucket: PHOTO_BUCKET, Key: originalS3Key }));
+    } catch (_) {
+      // Best-effort cleanup only.
+    }
+  }
+  if (previewS3Key) {
+    try {
+      await s3.send(new DeleteObjectCommand({ Bucket: PHOTO_BUCKET, Key: previewS3Key }));
+    } catch (_) {
+      // Best-effort cleanup only.
+    }
+  }
+}
+
+async function tryDeletePhotoHashMapping(folderId, contentSha256) {
+  if (!folderId || !contentSha256) return;
+  try {
+    await ddb.send(
+      new DeleteCommand({
+        TableName: TABLE_NAME,
+        Key: photoHashKey(folderId, contentSha256),
+      })
+    );
+  } catch (_) {
+    // Keep delete/purge resilient even if mapping cleanup fails.
+  }
 }
 
 function getUserIdentity(event) {
@@ -2113,9 +2164,6 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
     });
   }
 
-  const folderCode = folder.folderCode || 'F000';
-  const photoCode = await nextPhotoCode(folderId, folderCode);
-
   // Count original + derived objects (e.g., preview/thumbnail) toward usage.
   let originalBytes = 0;
   let previewBytes = 0;
@@ -2135,8 +2183,42 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
     }
   }
   const totalBytes = originalBytes + previewBytes;
+  let contentSha256 = null;
+  try {
+    contentSha256 = await sha256ForS3Object(originalS3Key);
+  } catch (_) {
+    return badRequest('original object not found (upload may not be completed)');
+  }
 
   const now = new Date().toISOString();
+  const hashItem = {
+    ...photoHashKey(folderId, contentSha256),
+    type: 'photo_hash',
+    folderId,
+    roomName: room.roomName,
+    photoId: body.photoId,
+    originalS3Key,
+    createdAt: now,
+  };
+  try {
+    await ddb.send(
+      new PutCommand({
+        TableName: TABLE_NAME,
+        Item: hashItem,
+        ConditionExpression: 'attribute_not_exists(PK) and attribute_not_exists(SK)',
+      })
+    );
+  } catch (error) {
+    if (isConditionalCheckFailed(error)) {
+      await tryDeleteUploadedObjects(originalS3Key, previewS3Key);
+      return json(409, { message: 'duplicate photo already exists in this folder' });
+    }
+    throw error;
+  }
+
+  const folderCode = folder.folderCode || 'F000';
+  const photoCode = await nextPhotoCode(folderId, folderCode);
+
   const item = {
     PK: `PHOTO#${body.photoId}`,
     SK: 'META',
@@ -2151,6 +2233,7 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
     originalBytes,
     previewBytes,
     totalBytes,
+    contentSha256,
     fileName: body.fileName || null,
     createdBy: user.userKey,
     createdByName: user.userName,
@@ -2159,7 +2242,12 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
     GSI1SK: `PHOTO#${now}#${body.photoId}`,
   };
 
-  await ddb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
+  try {
+    await ddb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
+  } catch (error) {
+    await tryDeletePhotoHashMapping(folderId, contentSha256);
+    throw error;
+  }
   if (totalBytes) {
     await addUsageBytes(ddb, {
       tableName: TABLE_NAME,
@@ -2209,6 +2297,7 @@ async function deletePhoto(photoId, user, room, authz, ctx) {
   }
 
   await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: { PK: `PHOTO#${photoId}`, SK: 'META' } }));
+  await tryDeletePhotoHashMapping(item.folderId, item.contentSha256);
   if (item.s3Key) await s3.send(new DeleteObjectCommand({ Bucket: PHOTO_BUCKET, Key: item.s3Key }));
   if (item.previewKey) await s3.send(new DeleteObjectCommand({ Bucket: PHOTO_BUCKET, Key: item.previewKey }));
 
@@ -2656,6 +2745,7 @@ async function purgePhotoByItem(photoItem, room, ctx, actor) {
   if (!isRoomMatch(photoItem.roomName, room.roomName)) return;
 
   await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: { PK: `PHOTO#${photoItem.photoId}`, SK: 'META' } }));
+  await tryDeletePhotoHashMapping(photoItem.folderId, photoItem.contentSha256);
   if (photoItem.s3Key) await s3.send(new DeleteObjectCommand({ Bucket: PHOTO_BUCKET, Key: photoItem.s3Key }));
   if (photoItem.previewKey) await s3.send(new DeleteObjectCommand({ Bucket: PHOTO_BUCKET, Key: photoItem.previewKey }));
   await deleteAllCommentsForPhoto(photoItem.photoId);

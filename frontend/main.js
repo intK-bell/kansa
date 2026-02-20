@@ -1207,6 +1207,7 @@ async function loadAdminPanel() {
             if (!ok) return;
             await api(`/folders/${f.folderId}`, { method: 'DELETE' });
             await loadFolders();
+            await loadTeamMe();
             await loadAdminPanel();
           }, 'フォルダ削除');
           actions.appendChild(delBtn);
@@ -1423,6 +1424,10 @@ async function uploadFiles() {
 
   setUploadLoading(true);
   try {
+    const totalFiles = files.length;
+    let uploadedCount = 0;
+    let duplicateCount = 0;
+
     const resizeToJpeg = async (file, maxLongSide = 2048, quality = 0.82) => {
       // Best-effort client-side resize; if anything fails, fall back to original.
       let bitmap = null;
@@ -1472,59 +1477,82 @@ async function uploadFiles() {
     };
 
     for (const file of files) {
-      const folderId = state.selectedFolder.folderId;
-      const up = await api(`/folders/${folderId}/photos/upload-url`, {
-        method: 'POST',
-        headers: { ...folderPasswordHeader(folderId) },
-        body: JSON.stringify({ fileName: file.name, contentType: file.type || 'image/jpeg' }),
-      });
-
-      let putRes;
       try {
-        putRes = await fetch(up.originalUploadUrl, {
-          method: 'PUT',
-          headers: { 'content-type': file.type || 'image/jpeg' },
-          body: file,
+        const folderId = state.selectedFolder.folderId;
+        const up = await api(`/folders/${folderId}/photos/upload-url`, {
+          method: 'POST',
+          headers: { ...folderPasswordHeader(folderId) },
+          body: JSON.stringify({ fileName: file.name, contentType: file.type || 'image/jpeg' }),
         });
-      } catch (error) {
-        throw new Error(`画像アップロード通信エラー: ${asMessage(error)}`);
-      }
-      if (!putRes.ok) {
-        throw new Error(`画像アップロード失敗(${putRes.status})`);
-      }
 
-      const resized = await resizeToJpeg(file, 2048, 0.82);
-      if (resized) {
-        let previewRes;
+        let putRes;
         try {
-          previewRes = await fetch(up.previewUploadUrl, {
+          putRes = await fetch(up.originalUploadUrl, {
             method: 'PUT',
-            headers: { 'content-type': 'image/jpeg' },
-            body: resized,
+            headers: { 'content-type': file.type || 'image/jpeg' },
+            body: file,
           });
         } catch (error) {
-          throw new Error(`リサイズ画像アップロード通信エラー: ${asMessage(error)}`);
+          throw new Error(`画像アップロード通信エラー: ${asMessage(error)}`);
         }
-        if (!previewRes.ok) {
-          throw new Error(`リサイズ画像アップロード失敗(${previewRes.status})`);
+        if (!putRes.ok) {
+          throw new Error(`画像アップロード失敗(${putRes.status})`);
         }
-      }
 
-      await api(`/folders/${folderId}/photos`, {
-        method: 'POST',
-        headers: { ...folderPasswordHeader(folderId) },
-        body: JSON.stringify({
-          photoId: up.photoId,
-          originalS3Key: up.originalS3Key,
-          previewS3Key: resized ? up.previewS3Key : null,
-          fileName: file.name,
-        }),
-      });
+        const resized = await resizeToJpeg(file, 2048, 0.82);
+        if (resized) {
+          let previewRes;
+          try {
+            previewRes = await fetch(up.previewUploadUrl, {
+              method: 'PUT',
+              headers: { 'content-type': 'image/jpeg' },
+              body: resized,
+            });
+          } catch (error) {
+            throw new Error(`リサイズ画像アップロード通信エラー: ${asMessage(error)}`);
+          }
+          if (!previewRes.ok) {
+            throw new Error(`リサイズ画像アップロード失敗(${previewRes.status})`);
+          }
+        }
+
+        await api(`/folders/${folderId}/photos`, {
+          method: 'POST',
+          headers: { ...folderPasswordHeader(folderId) },
+          body: JSON.stringify({
+            photoId: up.photoId,
+            originalS3Key: up.originalS3Key,
+            previewS3Key: resized ? up.previewS3Key : null,
+            fileName: file.name,
+          }),
+        });
+        uploadedCount += 1;
+      } catch (error) {
+        const message = asMessage(error);
+        if (message.includes('APIエラー(409)')) {
+          duplicateCount += 1;
+          continue;
+        }
+        throw error;
+      }
     }
 
     els.photoFiles.value = '';
-    await loadPhotos();
-    await scrollToPhotoList();
+    if (uploadedCount > 0) {
+      await loadPhotos();
+      await scrollToPhotoList();
+    }
+    if (duplicateCount > 0) {
+      if (totalFiles === 1) {
+        showError('同じ写真は同じフォルダにアップロードできません（重複を検知しました）。');
+        return;
+      }
+      if (duplicateCount === totalFiles) {
+        showError('すべて重複なのでアップロードができません。');
+        return;
+      }
+      showToast(`${duplicateCount}件は重複のためスキップしました。`);
+    }
   } catch (error) {
     const message = asMessage(error);
     if (message.includes('APIエラー(402)')) {
