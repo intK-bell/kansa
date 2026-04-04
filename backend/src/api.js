@@ -1,4 +1,5 @@
 const { randomUUID, createHash, pbkdf2Sync, randomBytes, timingSafeEqual } = require('node:crypto');
+const path = require('node:path');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { CognitoIdentityProviderClient, AdminDeleteUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
 const {
@@ -31,6 +32,7 @@ const {
   SUBSCRIPTION_PLANS,
   formatJstDate,
   ensureBillingMeta,
+  getBillingMeta,
   addUsageBytes,
   summarizeBilling,
   isUploadBlockedForBilling,
@@ -105,6 +107,104 @@ function planRank(planCode) {
   const code = normalizeSubscriptionPlanCode(planCode);
   const idx = PLAN_ORDER.indexOf(code);
   return idx >= 0 ? idx : 0;
+}
+
+async function countRoomFolders(roomName) {
+  const res = await ddb.send(
+    new QueryCommand({
+      TableName: TABLE_NAME,
+      KeyConditionExpression: 'PK = :pk and begins_with(SK, :sk)',
+      ExpressionAttributeValues: {
+        ':pk': 'ORG#DEFAULT',
+        ':sk': 'FOLDER#',
+      },
+      ProjectionExpression: 'folderId, roomName',
+    })
+  );
+  return (res.Items || []).filter((item) => isRoomMatch(item.roomName, roomName)).length;
+}
+
+function freePlanConstraintSummary({ usageBytes, folderCount }) {
+  const usageLimitBytes = Number(SUBSCRIPTION_PLANS.FREE?.limitBytes || 0);
+  const folderLimit = 2;
+  const unmet = [];
+  if (usageBytes >= usageLimitBytes) unmet.push('usageBytes');
+  if (folderCount > folderLimit) unmet.push('folderCount');
+  return {
+    usageBytes,
+    usageLimitBytes,
+    folderCount,
+    folderLimit,
+    unmet,
+    ok: unmet.length === 0,
+  };
+}
+
+function freePlanConstraintMessage(constraints) {
+  const lines = ['フリープランへの切り替えは、以下を満たす必要があります。', '・容量が512MB未満', '・フォルダの数が2つ以下'];
+  if (constraints.unmet.includes('usageBytes')) {
+    lines.push(`・現在の容量: ${constraints.usageBytes} bytes`);
+  }
+  if (constraints.unmet.includes('folderCount')) {
+    lines.push(`・現在のフォルダ数: ${constraints.folderCount}`);
+  }
+  return lines.join('\n');
+}
+
+function isFreePlanBilling(meta) {
+  const billingMode = String(meta?.billingMode || BILLING_MODE_PREPAID).toLowerCase();
+  const currentPlan = normalizeSubscriptionPlanCode(meta?.currentPlan || 'FREE');
+  return billingMode !== BILLING_MODE_SUBSCRIPTION || currentPlan === 'FREE';
+}
+
+const PPT_WATERMARK_PATH = path.resolve(__dirname, '../../frontend/favicon.webp');
+
+function addFreePlanWatermarks(slide, imageBox) {
+  const cols = 3;
+  const rows = 2;
+  const cellW = imageBox.w / cols;
+  const cellH = imageBox.h / rows;
+  const markW = Math.min(1.35, cellW * 0.68);
+  const markH = Math.min(1.35, cellH * 0.68);
+  for (let row = 0; row < rows; row += 1) {
+    for (let col = 0; col < cols; col += 1) {
+      const centerX = imageBox.x + cellW * col + cellW / 2;
+      const centerY = imageBox.y + cellH * row + cellH / 2;
+      slide.addImage({
+        path: PPT_WATERMARK_PATH,
+        x: centerX - markW / 2,
+        y: centerY - markH / 2,
+        w: markW,
+        h: markH,
+        transparency: 70,
+      });
+    }
+  }
+}
+
+const FREE_PLAN_ARCHIVE_DAYS = 30;
+const FREE_PLAN_ARCHIVE_MS = FREE_PLAN_ARCHIVE_DAYS * 24 * 60 * 60 * 1000;
+
+function isPhotoArchivedForFreePlan(photo, nowMs = Date.now()) {
+  const createdAtMs = Date.parse(String(photo?.createdAt || ''));
+  if (!Number.isFinite(createdAtMs)) return false;
+  return nowMs - createdAtMs >= FREE_PLAN_ARCHIVE_MS;
+}
+
+function splitArchivedPhotosForFreePlan(items, isFreePlan, nowMs = Date.now()) {
+  if (!isFreePlan) {
+    return { visible: items, archivedCount: 0 };
+  }
+  const visible = [];
+  let archivedCount = 0;
+  for (const item of items) {
+    if (isPhotoArchivedForFreePlan(item, nowMs)) {
+      archivedCount += 1;
+      continue;
+    }
+    visible.push(item);
+  }
+  return { visible, archivedCount };
 }
 
 function isBillingCycleDue(nextBillingAt, now = new Date()) {
@@ -1461,6 +1561,31 @@ async function changeTeamSubscription(event, user, room, authz, ctx) {
     values[':nb'] = nextBillingAt;
   } else if (action === 'free') {
     if (currentMode !== BILLING_MODE_SUBSCRIPTION) return badRequest('free is available only in subscription mode');
+    const folderCount = await countRoomFolders(room.roomName);
+    const constraints = freePlanConstraintSummary({ usageBytes, folderCount });
+    if (!constraints.ok) {
+      auditLog({
+        requestId: ctx?.requestId || null,
+        action: 'subscription.change',
+        actor: user.userKey,
+        actorName: user.userName,
+        roomId: room.roomId,
+        roomName: room.roomName,
+        changeAction: action,
+        currentPlan,
+        targetPlan: 'FREE',
+        result: 'rejected',
+        reason: 'free_plan_requirements_not_met',
+        unmet: constraints.unmet,
+        usageBytes,
+        folderCount,
+      });
+      return json(409, {
+        message: freePlanConstraintMessage(constraints),
+        code: 'FREE_PLAN_REQUIREMENTS_NOT_MET',
+        constraints,
+      });
+    }
     updates.push(
       'billingMode = :mp',
       'currentPlan = :free',
@@ -2073,6 +2198,24 @@ async function createFolder(event, user, room, ctx) {
   const folderPassword = String(body.folderPassword || '').trim();
   if (folderPassword && folderPassword.length > 64) return badRequest('folderPassword is too long');
 
+  const billing = await getBillingMeta(ddb, { tableName: TABLE_NAME, roomId: room.roomId });
+  const billingMode = String(billing?.billingMode || BILLING_MODE_PREPAID).toLowerCase();
+  const currentPlan = normalizeSubscriptionPlanCode(billing?.currentPlan || 'FREE');
+  const isFreePlan = billingMode !== BILLING_MODE_SUBSCRIPTION || currentPlan === 'FREE';
+  if (isFreePlan) {
+    const folderCount = await countRoomFolders(room.roomName);
+    if (folderCount >= 2) {
+      return json(409, {
+        message: 'フリープランではフォルダは2つまでです。有料プランで無制限になります。',
+        code: 'FREE_PLAN_FOLDER_LIMIT_EXCEEDED',
+        constraints: {
+          folderCount,
+          folderLimit: 2,
+        },
+      });
+    }
+  }
+
   const folderId = randomUUID();
   const folderCode = await nextFolderCode();
   const now = new Date().toISOString();
@@ -2137,8 +2280,11 @@ async function listPhotos(event, folderId, user, room, authz) {
   );
 
   const items = (res.Items || []).filter((item) => isRoomMatch(item.roomName, room.roomName));
+  const isFreePlan = isFreePlanBilling(authz.billing);
+  const split = splitArchivedPhotosForFreePlan(items, isFreePlan);
+  const visibleItems = split.visible;
   const nameMap = await loadDisplayNameMap(items.map((item) => item.createdBy));
-  const hydrated = items.map((item) => applyResolvedDisplayName(item, nameMap));
+  const hydrated = visibleItems.map((item) => applyResolvedDisplayName(item, nameMap));
 
   const withUrls = await Promise.all(
     hydrated.map(async (photo) => {
@@ -2153,7 +2299,12 @@ async function listPhotos(event, folderId, user, room, authz) {
     })
   );
 
-  return json(200, { items: withUrls });
+  return json(200, {
+    items: withUrls,
+    archivedCount: split.archivedCount,
+    archiveMode: isFreePlan ? 'hidden' : 'visible',
+    archiveDays: FREE_PLAN_ARCHIVE_DAYS,
+  });
 }
 
 async function createUploadUrl(event, folderId, body, user, room, authz) {
@@ -2724,6 +2875,8 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
   if (!canAccessFolder(folder, user, authz)) return json(403, { message: 'forbidden' });
   const pw = authz?.isAdmin ? { ok: true } : verifyFolderPassword(folder, event);
   if (!pw.ok) return json(403, { message: 'invalid folder password' });
+  const billing = await getBillingMeta(ddb, { tableName: TABLE_NAME, roomId: room.roomId });
+  const isFreePlanExport = isFreePlanBilling(billing);
 
   const photosRes = await ddb.send(
     new QueryCommand({
@@ -2738,13 +2891,22 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
   );
 
   const photos = (photosRes.Items || []).filter((item) => isRoomMatch(item.roomName, room.roomName));
+  const split = splitArchivedPhotosForFreePlan(photos, isFreePlanExport);
+  const exportPhotos = split.visible;
+  if (!exportPhotos.length) {
+    return json(409, {
+      message: split.archivedCount > 0 ? '30日を過ぎた写真はアーカイブ済みのため、フリープランではPPT出力できません。' : '出力できる写真がありません。',
+      code: 'NO_EXPORTABLE_PHOTOS',
+      archivedCount: split.archivedCount,
+    });
+  }
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_WIDE';
   const exportAt = new Date();
   const exportStamp = formatJstCompactTimestamp(exportAt);
   const downloadFileName = `${sanitizeDownloadFileName(folder.title, 'folder')}_${exportStamp}.pptx`;
 
-  for (const photo of photos) {
+  for (const photo of exportPhotos) {
     const slide = pptx.addSlide();
     slide.addText(`${folder.folderCode || 'F000'} ${folder.title}`, {
       x: 0.5,
@@ -2792,6 +2954,9 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
       // Export the normalized preview first to avoid EXIF-based distortion in PowerPoint.
       sizing: { type: 'contain', x: imageX, y: imageY, w: imageW, h: imageH },
     });
+    if (isFreePlanExport) {
+      addFreePlanWatermarks(slide, { x: imageX, y: imageY, w: imageW, h: imageH });
+    }
 
     const commentsRes = await ddb.send(
       new QueryCommand({

@@ -37,6 +37,7 @@ const state = {
   folders: [],
   folderUnreadMap: {},
   selectedFolder: null,
+  selectedFolderArchive: null,
   photos: [],
   openAccordions: new Set(),
   restoreScrollY: null,
@@ -149,10 +150,12 @@ function resetRoomContext() {
   state.folders = [];
   state.folderUnreadMap = {};
   state.selectedFolder = null;
+  state.selectedFolderArchive = null;
   state.photos = [];
   state.openAccordions.clear();
   state.restoreScrollY = null;
   if (els.folderDetail) els.folderDetail.classList.add('hidden');
+  renderPhotoArchiveNote();
   closeLowStorageModal();
   renderBillingBar();
   setAdminUiVisibility();
@@ -340,6 +343,8 @@ const els = {
   billingGraphRemaining: document.querySelector('#billing-graph-remaining'),
   billingGraphUsedLabel: document.querySelector('#billing-graph-used-label'),
   billingGraphRemainLabel: document.querySelector('#billing-graph-remain-label'),
+  billingPlanGuide: document.querySelector('#billing-plan-guide'),
+  billingArchiveNote: document.querySelector('#billing-archive-note'),
   subscribeFreeBtn: document.querySelector('#subscribe-free'),
   subscribeBasicBtn: document.querySelector('#subscribe-basic'),
   subscribePlusBtn: document.querySelector('#subscribe-plus'),
@@ -370,6 +375,7 @@ const els = {
   folderSelect: document.querySelector('#folder-select'),
   folderDetail: document.querySelector('#folder-detail'),
   folderDetailTitle: document.querySelector('#folder-detail-title'),
+  photoArchiveNote: document.querySelector('#photo-archive-note'),
   folderPasswordSet: document.querySelector('#folder-password-set'),
   setFolderPasswordBtn: document.querySelector('#set-folder-password-btn'),
   photoFiles: document.querySelector('#photo-files'),
@@ -562,6 +568,61 @@ function formatBytes(bytes) {
   return `${Math.round(n / mib)}MB`;
 }
 
+function parseApiErrorBody(error) {
+  if (error && typeof error === 'object' && error.body && typeof error.body === 'object') {
+    return error.body;
+  }
+  const raw = asMessage(error);
+  const match = raw.match(/APIエラー\(\d+\):\s*(\{[\s\S]*\})$/);
+  if (!match) return null;
+  try {
+    return JSON.parse(match[1]);
+  } catch (_) {
+    return null;
+  }
+}
+
+function currentFolderLimit() {
+  const mode = String(state.billing?.billingMode || 'prepaid').toLowerCase();
+  const currentPlan = String(state.billing?.subscription?.currentPlan || 'FREE').toUpperCase();
+  return mode !== 'subscription' || currentPlan === 'FREE' ? 2 : null;
+}
+
+function folderUsageSummary() {
+  const count = Array.isArray(state.folders) ? state.folders.length : 0;
+  const limit = currentFolderLimit();
+  return limit === null ? `フォルダ ${count} / 無制限` : `フォルダ ${count} / ${limit}`;
+}
+
+function freePlanGuideText() {
+  const limit = currentFolderLimit();
+  return limit === null
+    ? '1GB〜10GBプラン: フォルダ無制限 / 3年保存 / PPT透かしなし'
+    : 'フリープラン: フォルダ2個 / 30日保存 / PPT透かしあり';
+}
+
+function freePlanRequirementDialogText(constraints = {}) {
+  const lines = ['フリープランへの切り替えは、以下を満たす必要があります。', '・容量が512MB未満', '・フォルダの数が2つ以下'];
+  const unmet = Array.isArray(constraints.unmet) ? constraints.unmet : [];
+  if (unmet.includes('usageBytes')) {
+    lines.push(`・現在の容量: ${formatBytes(Number(constraints.usageBytes || 0))}`);
+  }
+  if (unmet.includes('folderCount')) {
+    lines.push(`・現在のフォルダ数: ${Number(constraints.folderCount || 0)}`);
+  }
+  return lines.join('\n');
+}
+
+function renderPhotoArchiveNote() {
+  if (!els.photoArchiveNote) return;
+  const archived = state.selectedFolderArchive || null;
+  if (!archived || Number(archived.archivedCount || 0) <= 0 || archived.archiveMode !== 'hidden') {
+    els.photoArchiveNote.textContent = '';
+    return;
+  }
+  els.photoArchiveNote.textContent = `${archived.archivedCount}件の写真は${archived.archiveDays || 30}日保存後にアーカイブされ、現在は非表示です。アーカイブ済みデータも容量に含まれます。有料プランにすると再表示されます。`;
+}
+
 function storagePromptKey() {
   const rid = state.roomId || state.roomName || 'unknown';
   return `kansa_low_storage_prompted_${rid}`;
@@ -606,7 +667,10 @@ function renderTopStorageGraph() {
   if (els.billingGraphTopRemainLabel) {
     els.billingGraphTopRemainLabel.textContent = `残り ${formatBytes(stats.freeRemainBytes)}`;
   }
-  if (els.billingGraphTopSubmeta) els.billingGraphTopSubmeta.classList.add('hidden');
+  if (els.billingGraphTopExtraLabel) {
+    els.billingGraphTopExtraLabel.textContent = folderUsageSummary();
+  }
+  if (els.billingGraphTopSubmeta) els.billingGraphTopSubmeta.classList.remove('hidden');
   els.billingGraphTop.classList.remove('hidden');
 }
 
@@ -1332,6 +1396,12 @@ async function api(path, options = {}) {
 
   if (!res.ok) {
     const text = await res.text();
+    let body = null;
+    try {
+      body = text ? JSON.parse(text) : null;
+    } catch (_) {
+      body = null;
+    }
     if (res.status === 401) {
       clearAuth();
       showAuthSetup();
@@ -1340,7 +1410,10 @@ async function api(path, options = {}) {
       resetRoomContext();
       showRoomSetup();
     }
-    throw new Error(`APIエラー(${res.status}): ${text || 'unknown error'}`);
+    const err = new Error(`APIエラー(${res.status}): ${text || 'unknown error'}`);
+    err.status = res.status;
+    err.body = body;
+    throw err;
   }
 
   return res.json();
@@ -1482,17 +1555,25 @@ async function loadAdminPanel() {
     const b = state.billing;
     const stats = computeStorageStats(b);
     const plan = String(b?.subscription?.currentPlan || 'FREE').toUpperCase();
+    const folderSummary = folderUsageSummary();
     const capacityLabel =
       String(b?.billingMode || 'prepaid').toLowerCase() === 'subscription'
         ? `プラン容量 ${formatBytes(stats.capacityBytes)}`
         : `無料 ${formatBytes(b.freeBytes)}`;
     els.billingStatus.textContent = `使用量 ${formatBytes(b.usageBytes)} / ${capacityLabel}（残り ${formatBytes(
       stats.freeRemainBytes
-    )}） / プラン ${planToDisplayLabel(plan)}`;
+    )}） / ${folderSummary} / プラン ${planToDisplayLabel(plan)}`;
+    if (els.billingPlanGuide) els.billingPlanGuide.textContent = freePlanGuideText();
+    if (els.billingArchiveNote) {
+      els.billingArchiveNote.textContent =
+        '※ 30日保存後はアーカイブへ移動し、アーカイブは容量に含まれます。\n※ フリープランへ戻す際の容量判定にはアーカイブ済みデータも含みます。';
+    }
     renderStorageGraph();
     maybePromptLowStorage();
   } else {
     if (els.billingStatus) els.billingStatus.textContent = '';
+    if (els.billingPlanGuide) els.billingPlanGuide.textContent = '';
+    if (els.billingArchiveNote) els.billingArchiveNote.textContent = '';
     if (els.billingGraph) els.billingGraph.classList.add('hidden');
   }
   syncSubscriptionPlanButtons();
@@ -1647,8 +1728,10 @@ async function selectFolder(folder) {
 async function selectFolderById(folderId) {
   if (!folderId) {
     state.selectedFolder = null;
+    state.selectedFolderArchive = null;
     clearUploadDrafts();
     els.folderDetail.classList.add('hidden');
+    renderPhotoArchiveNote();
     return;
   }
   const folder = state.folders.find((f) => f.folderId === folderId);
@@ -1663,6 +1746,12 @@ async function loadPhotos() {
     headers: { ...folderPasswordHeader(folderId) },
   });
   state.photos = data.items || [];
+  state.selectedFolderArchive = {
+    archivedCount: Number(data.archivedCount || 0),
+    archiveMode: data.archiveMode || 'visible',
+    archiveDays: Number(data.archiveDays || 30),
+  };
+  renderPhotoArchiveNote();
   await renderPhotos();
   await refreshFolderUnread([state.selectedFolder.folderId]);
   renderFolders();
@@ -1852,6 +1941,15 @@ function formatDateTime(value) {
 
 async function renderPhotos() {
   els.photoList.innerHTML = '';
+  if (!state.photos.length) {
+    const archived = state.selectedFolderArchive || null;
+    const emptyText =
+      archived && Number(archived.archivedCount || 0) > 0 && archived.archiveMode === 'hidden'
+        ? '表示中の写真はなかです。30日を過ぎた写真はアーカイブされとるばい。'
+        : '写真はまだなかです。';
+    els.photoList.appendChild(el('div', { class: 'muted' }, emptyText));
+    return;
+  }
   for (const photo of state.photos) {
     const card = el('div', { class: 'photo-card' });
 
@@ -2351,10 +2449,20 @@ els.createFolderBtn.onclick = safeAction(async () => {
   const title = els.folderTitle.value.trim();
   if (!title) return;
   const folderPassword = String(els.folderPassword?.value || '').trim();
-  const created = await api('/folders', {
-    method: 'POST',
-    body: JSON.stringify({ title, folderPassword: folderPassword || null }),
-  });
+  let created;
+  try {
+    created = await api('/folders', {
+      method: 'POST',
+      body: JSON.stringify({ title, folderPassword: folderPassword || null }),
+    });
+  } catch (error) {
+    const body = parseApiErrorBody(error);
+    if (body?.code === 'FREE_PLAN_FOLDER_LIMIT_EXCEEDED') {
+      window.alert(body.message || 'フリープランではフォルダは2つまでです。有料プランで無制限になります。');
+      return;
+    }
+    throw error;
+  }
   els.folderTitle.value = '';
   if (els.folderPassword) els.folderPassword.value = '';
   showToast(`フォルダ：${created.title} を作成しました。`);
@@ -2447,18 +2555,22 @@ if (els.subscribePlusBtn) els.subscribePlusBtn.onclick = safeAction(() => startS
 if (els.subscribeProBtn) els.subscribeProBtn.onclick = safeAction(() => startSubscriptionCheckout('PRO'), '購入');
 if (els.subscribeFreeBtn) {
   els.subscribeFreeBtn.onclick = safeAction(async () => {
-    const usage = Number(state.billing?.usageBytes || 0);
-    const free = Number(state.billing?.freeBytes || 0);
-    const overFree = usage > free;
-    const warn = overFree
-      ? 'フリープランへ戻すと、無料枠(512MB)を超えた分はアップロード停止になります。戻してよかですか？'
-      : 'フリープランへ戻してよかですか？';
-    const ok = window.confirm(warn);
+    const ok = window.confirm('フリープランへ戻してよかですか？');
     if (!ok) return;
-    await api('/team/subscription/change', { method: 'POST', body: JSON.stringify({ action: 'free' }) });
+    try {
+      await api('/team/subscription/change', { method: 'POST', body: JSON.stringify({ action: 'free' }) });
+    } catch (error) {
+      const body = parseApiErrorBody(error);
+      if (body?.code === 'FREE_PLAN_REQUIREMENTS_NOT_MET') {
+        window.alert(freePlanRequirementDialogText(body.constraints || {}));
+        return;
+      }
+      throw error;
+    }
     await loadTeamMe();
+    await loadFolders();
     await loadAdminPanel();
-    showToast('フリープランへ戻しました。');
+    window.alert('フリープランに戻りました。\n\n現在の上限は、容量512MB未満・フォルダ2個までです。');
   }, 'フリープラン変更');
 }
 if (els.lowStorageChargeBtn) {
