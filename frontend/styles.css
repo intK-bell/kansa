@@ -598,6 +598,10 @@ button.is-loading::before {
   background: var(--card-soft);
 }
 
+.photo-card-image {
+  cursor: zoom-in;
+}
+
 .comment {
   font-size: 13px;
   padding: 2px 6px 3px;
@@ -772,6 +776,32 @@ button.is-loading::before {
   padding: 16px;
   box-shadow: 0 16px 38px rgba(0, 0, 0, 0.28);
   animation: modalIn 0.14s ease-out;
+}
+
+.photo-preview-card {
+  width: min(1080px, 100%);
+}
+
+.photo-preview-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 12px;
+  min-height: min(72vh, 680px);
+  background: var(--card-soft);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.photo-preview-image {
+  max-width: 100%;
+  max-height: min(68vh, 640px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 10px;
+  background: var(--card);
 }
 
 .modal-header {

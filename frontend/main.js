@@ -348,6 +348,10 @@ const els = {
   lowStorageCloseBtn: document.querySelector('#low-storage-close-btn'),
   lowStorageMessage: document.querySelector('#low-storage-message'),
   lowStorageChargeBtn: document.querySelector('#low-storage-charge-btn'),
+  photoPreviewModal: document.querySelector('#photo-preview-modal'),
+  photoPreviewTitle: document.querySelector('#photo-preview-title'),
+  photoPreviewImage: document.querySelector('#photo-preview-image'),
+  photoPreviewCloseBtn: document.querySelector('#photo-preview-close-btn'),
   deleteTeamBtn: document.querySelector('#delete-team-btn'),
   createInviteBtn: document.querySelector('#create-invite-btn'),
   revokeInviteBtn: document.querySelector('#revoke-invite-btn'),
@@ -416,6 +420,30 @@ function closeLowStorageModal() {
   if (els.lowStorageModal) {
     els.lowStorageModal.classList.add('hidden');
   }
+}
+
+function closePhotoPreviewModal() {
+  if (els.photoPreviewModal) {
+    els.photoPreviewModal.classList.add('hidden');
+  }
+  if (els.photoPreviewImage) {
+    els.photoPreviewImage.removeAttribute('src');
+  }
+  if (els.photoPreviewTitle) {
+    els.photoPreviewTitle.textContent = '写真全体表示';
+  }
+}
+
+function openPhotoPreview(photo) {
+  if (!els.photoPreviewModal || !els.photoPreviewImage) return;
+  const imageUrl = photo?.viewUrl || photo?.previewUrl || '';
+  if (!imageUrl) return;
+  els.photoPreviewImage.src = imageUrl;
+  els.photoPreviewImage.alt = photo?.fileName || photo?.originalName || photo?.photoId || '写真プレビュー';
+  if (els.photoPreviewTitle) {
+    els.photoPreviewTitle.textContent = photo?.fileName || photo?.originalName || photo?.photoCode || '写真全体表示';
+  }
+  els.photoPreviewModal.classList.remove('hidden');
 }
 
 function showAuthSetup() {
@@ -888,6 +916,17 @@ function renderUploadDrafts() {
       alt: draft.originalName || `draft-${index + 1}`,
       loading: 'lazy',
     });
+    thumb.addEventListener('click', () => {
+      openPhotoPreview(draft);
+    });
+    thumb.addEventListener('keydown', (event) => {
+      if (!event || (event.key !== 'Enter' && event.key !== ' ')) return;
+      event.preventDefault();
+      openPhotoPreview(draft);
+    });
+    thumb.tabIndex = 0;
+    thumb.setAttribute('role', 'button');
+    thumb.setAttribute('aria-label', `${draft.originalName || `draft-${index + 1}`} を全体表示`);
     thumb.addEventListener('error', () => {
       thumb.classList.add('hidden');
     });
@@ -1816,7 +1855,23 @@ async function renderPhotos() {
   for (const photo of state.photos) {
     const card = el('div', { class: 'photo-card' });
 
-    const img = el('img', { src: photo.viewUrl || '', alt: photo.fileName || photo.photoId });
+    const img = el('img', {
+      class: 'photo-card-image',
+      src: photo.viewUrl || '',
+      alt: photo.fileName || photo.photoId,
+      loading: 'lazy',
+    });
+    img.onclick = () => {
+      openPhotoPreview(photo);
+    };
+    img.onkeydown = (event) => {
+      if (!event || (event.key !== 'Enter' && event.key !== ' ')) return;
+      event.preventDefault();
+      openPhotoPreview(photo);
+    };
+    img.tabIndex = 0;
+    img.setAttribute('role', 'button');
+    img.setAttribute('aria-label', `${photo.fileName || photo.photoId} を全体表示`);
     card.appendChild(img);
 
     const codeRow = el('div');
@@ -2079,6 +2134,7 @@ if (els.logoutBtn) {
     closeRoomSwitchModal();
     closeRoomCreateModal();
     closeHelpModal();
+    closePhotoPreviewModal();
 
     if (hasCognitoConfig()) {
       const logoutUrl = new URL(`https://${COGNITO_DOMAIN}.auth.${COGNITO_REGION}.amazoncognito.com/logout`);
@@ -2131,6 +2187,20 @@ if (els.helpModal) {
   els.helpModal.onclick = (e) => {
     if (e && e.target === els.helpModal) {
       closeHelpModal();
+    }
+  };
+}
+
+if (els.photoPreviewCloseBtn) {
+  els.photoPreviewCloseBtn.onclick = () => {
+    closePhotoPreviewModal();
+  };
+}
+
+if (els.photoPreviewModal) {
+  els.photoPreviewModal.onclick = (e) => {
+    if (e && e.target === els.photoPreviewModal) {
+      closePhotoPreviewModal();
     }
   };
 }

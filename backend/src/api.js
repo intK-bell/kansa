@@ -21,6 +21,7 @@ const {
 } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const PptxGenJS = require('pptxgenjs');
+const imageSize = require('image-size');
 
 const { stripeRequest } = require('./stripe-rest');
 
@@ -197,6 +198,41 @@ async function sha256ForS3Object(key) {
     hash.update(chunk);
   }
   return hash.digest('hex');
+}
+
+async function readS3ObjectBuffer(key) {
+  const res = await s3.send(new GetObjectCommand({ Bucket: PHOTO_BUCKET, Key: key }));
+  const body = res?.Body;
+  if (!body) {
+    throw new Error('OBJECT_BODY_STREAM_UNAVAILABLE');
+  }
+  if (typeof body.transformToByteArray === 'function') {
+    return Buffer.from(await body.transformToByteArray());
+  }
+  if (typeof body[Symbol.asyncIterator] === 'function') {
+    const chunks = [];
+    for await (const chunk of body) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+  }
+  throw new Error('OBJECT_BODY_STREAM_UNAVAILABLE');
+}
+
+function resolveExportSlideLayout(dimensions) {
+  const width = Number(dimensions?.width || 0);
+  const height = Number(dimensions?.height || 0);
+  const isPortrait = width > 0 && height > width;
+  if (isPortrait) {
+    return {
+      image: { x: 0.6, y: 1.15, w: 5.1, h: 5.75 },
+      comments: { x: 5.95, y: 1.15, w: 6.75, h: 5.75 },
+    };
+  }
+  return {
+    image: { x: 0.5, y: 1.15, w: 8.3, h: 5.2 },
+    comments: { x: 9.0, y: 1.15, w: 3.8, h: 5.2 },
+  };
 }
 
 async function tryDeleteUploadedObjects(originalS3Key, previewS3Key) {
@@ -2727,16 +2763,26 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
     });
 
     const exportImageKey = photo.previewKey || photo.s3Key;
+    let imageBuffer = null;
+    let imageDimensions = null;
+    try {
+      imageBuffer = await readS3ObjectBuffer(exportImageKey);
+      imageDimensions = imageSize(imageBuffer);
+    } catch (_) {
+      imageBuffer = null;
+      imageDimensions = null;
+    }
     const signed = await getSignedUrl(
       s3,
       new GetObjectCommand({ Bucket: PHOTO_BUCKET, Key: exportImageKey }),
       { expiresIn: 300 }
     );
 
-    const imageX = 0.5;
-    const imageY = 1.2;
-    const imageW = 8.5;
-    const imageH = 4.8;
+    const layout = resolveExportSlideLayout(imageDimensions);
+    const imageX = layout.image.x;
+    const imageY = layout.image.y;
+    const imageW = layout.image.w;
+    const imageH = layout.image.h;
     slide.addImage({
       path: signed,
       x: imageX,
@@ -2767,10 +2813,10 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
     });
 
     slide.addText(commentLines.length ? commentLines.join('\n') : 'コメントなし', {
-      x: 9.2,
-      y: 1.2,
-      w: 3.8,
-      h: 4.8,
+      x: layout.comments.x,
+      y: layout.comments.y,
+      w: layout.comments.w,
+      h: layout.comments.h,
       fontSize: 10,
       valign: 'top',
       color: '333333',
