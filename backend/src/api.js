@@ -187,7 +187,7 @@ function isFreePlanBilling(meta) {
   return billingMode !== BILLING_MODE_SUBSCRIPTION || currentPlan === 'FREE';
 }
 
-const PPT_WATERMARK_PATH = path.resolve(__dirname, '../../frontend/favicon.webp');
+const PPT_WATERMARK_PATH = path.resolve(__dirname, 'favicon.webp');
 
 function addFreePlanWatermarks(slide, imageBox) {
   const cols = 3;
