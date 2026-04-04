@@ -59,6 +59,47 @@ const badRequest = (message) => json(400, { message });
 
 const PLAN_ORDER = ['FREE', 'BASIC', 'PLUS', 'PRO'];
 
+function formatJstCompactTimestamp(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type) => parts.find((part) => part.type === type)?.value || '';
+  return `${get('year')}${get('month')}${get('day')}${get('hour')}${get('minute')}`;
+}
+
+function formatJstDisplayDateTime(value) {
+  if (!value) return '日時不明';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '日時不明';
+  const parts = new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type) => parts.find((part) => part.type === type)?.value || '';
+  return `${get('year')}/${get('month')}/${get('day')} ${get('hour')}:${get('minute')} JST`;
+}
+
+function sanitizeDownloadFileName(value, fallback = 'folder') {
+  const normalized = String(value || '')
+    .normalize('NFKC')
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[. ]+$/g, '');
+  return normalized || fallback;
+}
+
 function planRank(planCode) {
   const code = normalizeSubscriptionPlanCode(planCode);
   const idx = PLAN_ORDER.indexOf(code);
@@ -2663,6 +2704,9 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
   const photos = (photosRes.Items || []).filter((item) => isRoomMatch(item.roomName, room.roomName));
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_WIDE';
+  const exportAt = new Date();
+  const exportStamp = formatJstCompactTimestamp(exportAt);
+  const downloadFileName = `${sanitizeDownloadFileName(folder.title, 'folder')}_${exportStamp}.pptx`;
 
   for (const photo of photos) {
     const slide = pptx.addSlide();
@@ -2682,9 +2726,10 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
       fontSize: 11,
     });
 
+    const exportImageKey = photo.previewKey || photo.s3Key;
     const signed = await getSignedUrl(
       s3,
-      new GetObjectCommand({ Bucket: PHOTO_BUCKET, Key: photo.s3Key }),
+      new GetObjectCommand({ Bucket: PHOTO_BUCKET, Key: exportImageKey }),
       { expiresIn: 300 }
     );
 
@@ -2698,7 +2743,7 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
       y: imageY,
       w: imageW,
       h: imageH,
-      // Keep original aspect ratio and fit inside the frame.
+      // Export the normalized preview first to avoid EXIF-based distortion in PowerPoint.
       sizing: { type: 'contain', x: imageX, y: imageY, w: imageW, h: imageH },
     });
 
@@ -2717,7 +2762,8 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
     const commentNameMap = await loadDisplayNameMap(comments.map((c) => c.createdBy));
     const commentLines = comments.map((c, idx) => {
       const createdByName = commentNameMap[c.createdBy] || c.createdByName || 'unknown';
-      return `${idx + 1}. ${c.text} (${createdByName})`;
+      const stampedBy = `${formatJstDisplayDateTime(c.createdAt)} ${createdByName}`;
+      return `${idx + 1}. ${c.text}\n${stampedBy}`;
     });
 
     slide.addText(commentLines.length ? commentLines.join('\n') : 'コメントなし', {
@@ -2734,7 +2780,7 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
   const pptxBuffer = await pptx.write({ outputType: 'nodebuffer' });
   // Include roomId/folderId in the key so we can delete exports on folder/team deletion.
   const safeTitle = String(folder.title || 'folder').replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 40) || 'folder';
-  const key = `exports/${room.roomId}/${folderId}/${safeTitle}_${Date.now()}.pptx`;
+  const key = `exports/${room.roomId}/${folderId}/${safeTitle}_${exportStamp}.pptx`;
   await s3.send(
     new PutObjectCommand({
       Bucket: EXPORT_BUCKET,
@@ -2747,7 +2793,11 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
 
   const downloadUrl = await getSignedUrl(
     s3,
-    new GetObjectCommand({ Bucket: EXPORT_BUCKET, Key: key }),
+    new GetObjectCommand({
+      Bucket: EXPORT_BUCKET,
+      Key: key,
+      ResponseContentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(downloadFileName)}`,
+    }),
     { expiresIn: 600 }
   );
   auditLog({
