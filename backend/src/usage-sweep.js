@@ -8,7 +8,7 @@ const TABLE_NAME = process.env.TABLE_NAME;
 
 const json = (statusCode, body) => ({
   statusCode,
-  headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' },
+  headers: { 'content-type': 'application/json' },
   body: JSON.stringify(body),
 });
 

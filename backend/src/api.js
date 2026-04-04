@@ -48,12 +48,42 @@ const TABLE_NAME = process.env.TABLE_NAME;
 const PHOTO_BUCKET = process.env.PHOTO_BUCKET;
 const EXPORT_BUCKET = process.env.EXPORT_BUCKET;
 const COGNITO_USER_POOL_ID = process.env.COGNITO_USER_POOL_ID || '';
+const CORS_ALLOWED_ORIGINS = new Set(
+  String(process.env.CORS_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+);
+
+function getHeaderValue(headers, name) {
+  const target = String(name || '').toLowerCase();
+  for (const [key, value] of Object.entries(headers || {})) {
+    if (String(key).toLowerCase() === target) return value;
+  }
+  return '';
+}
+
+function resolveCorsOrigin(event) {
+  const origin = String(getHeaderValue(event?.headers || {}, 'origin') || '').trim();
+  return origin && CORS_ALLOWED_ORIGINS.has(origin) ? origin : '';
+}
+
+function applyCorsHeaders(event, response) {
+  const headers = { ...(response?.headers || {}) };
+  const origin = resolveCorsOrigin(event);
+  if (origin) {
+    headers['access-control-allow-origin'] = origin;
+    headers.vary = headers.vary ? `${headers.vary}, Origin` : 'Origin';
+  } else {
+    delete headers['access-control-allow-origin'];
+  }
+  return { ...(response || {}), headers };
+}
 
 const json = (statusCode, body) => ({
   statusCode,
   headers: {
     'content-type': 'application/json',
-    'access-control-allow-origin': '*',
   },
   body: JSON.stringify(body),
 });
@@ -3311,6 +3341,7 @@ async function updateFolderPassword(event, folderId, user, room, authz, ctx) {
 }
 
 exports.handler = async (event) => {
+  const finish = (response) => applyCorsHeaders(event, response);
   try {
     const method = event.requestContext.http.method;
     const path = event.requestContext.http.path;
@@ -3322,73 +3353,73 @@ exports.handler = async (event) => {
     const body = event.body ? JSON.parse(event.body) : {};
     const ctx = { requestId: event.requestContext?.requestId || null };
 
-    if (method === 'GET' && path === '/me') return await getMe(user);
-    if (method === 'PUT' && path === '/me/display-name') return await updateDisplayName(event, user, ctx);
+    if (method === 'GET' && path === '/me') return finish(await getMe(user));
+    if (method === 'PUT' && path === '/me/display-name') return finish(await updateDisplayName(event, user, ctx));
 
-    if (method === 'GET' && path === '/team/me') return await teamMeAuto(event, user, ctx);
-    if (method === 'POST' && path === '/account/delete') return await accountDelete(event, user, ctx);
+    if (method === 'GET' && path === '/team/me') return finish(await teamMeAuto(event, user, ctx));
+    if (method === 'POST' && path === '/account/delete') return finish(await accountDelete(event, user, ctx));
 
-    if (method === 'GET' && path === '/rooms/mine') return await listMyRooms(user);
-    if (method === 'POST' && path === '/rooms/switch') return await switchActiveRoom(event, user, ctx);
+    if (method === 'GET' && path === '/rooms/mine') return finish(await listMyRooms(user));
+    if (method === 'POST' && path === '/rooms/switch') return finish(await switchActiveRoom(event, user, ctx));
 
-    if (method === 'POST' && path === '/invites/accept') return await acceptInvite(event, user, ctx);
+    if (method === 'POST' && path === '/invites/accept') return finish(await acceptInvite(event, user, ctx));
 
-    if (isRoomCreate) return await createRoom(event, user, ctx);
+    if (isRoomCreate) return finish(await createRoom(event, user, ctx));
 
     room = await resolveRoomForRequest(event, user);
     const authzRes = await requireActiveMember(room, user, ctx);
-    if (!authzRes.ok) return authzRes.response;
+    if (!authzRes.ok) return finish(authzRes.response);
     const authz = authzRes;
 
-    if (method === 'POST' && path === '/invites/create') return await createInvite(event, user, room, authz, ctx);
-    if (method === 'POST' && path === '/invites/revoke') return await revokeInvite(event, user, room, authz, ctx);
+    if (method === 'POST' && path === '/invites/create') return finish(await createInvite(event, user, room, authz, ctx));
+    if (method === 'POST' && path === '/invites/revoke') return finish(await revokeInvite(event, user, room, authz, ctx));
 
-    if (method === 'GET' && path === '/team/billing') return await teamBilling(authz);
-    if (method === 'GET' && path === '/team/subscription') return await teamSubscription(room, authz);
+    if (method === 'GET' && path === '/team/billing') return finish(await teamBilling(authz));
+    if (method === 'GET' && path === '/team/subscription') return finish(await teamSubscription(room, authz));
     if (method === 'POST' && path === '/team/subscription/checkout') {
-      return await teamSubscriptionCheckout(event, user, room, authz, ctx);
+      return finish(await teamSubscriptionCheckout(event, user, room, authz, ctx));
     }
     if (method === 'POST' && path === '/team/subscription/change') {
-      return await changeTeamSubscription(event, user, room, authz, ctx);
+      return finish(await changeTeamSubscription(event, user, room, authz, ctx));
     }
-    if (method === 'GET' && path === '/team/members') return await listTeamMembers(room, authz);
+    if (method === 'GET' && path === '/team/members') return finish(await listTeamMembers(room, authz));
     if (method === 'PUT' && p.userKey && path.endsWith(`/team/members/${p.userKey}`)) {
-      return await updateTeamMember(p.userKey, event, user, room, authz, ctx);
+      return finish(await updateTeamMember(p.userKey, event, user, room, authz, ctx));
     }
-    if (method === 'POST' && path === '/team/leave') return await teamLeave(user, room, authz, ctx);
-    if (method === 'POST' && path === '/team/delete') return await teamDelete(event, user, room, authz, ctx);
+    if (method === 'POST' && path === '/team/leave') return finish(await teamLeave(user, room, authz, ctx));
+    if (method === 'POST' && path === '/team/delete') return finish(await teamDelete(event, user, room, authz, ctx));
 
-    if (method === 'GET' && path === '/folders') return await listFolders(room, user, authz);
-    if (method === 'POST' && path === '/folders') return await createFolder(event, user, room, ctx);
+    if (method === 'GET' && path === '/folders') return finish(await listFolders(room, user, authz));
+    if (method === 'POST' && path === '/folders') return finish(await createFolder(event, user, room, ctx));
     if (method === 'DELETE' && p.folderId && path.endsWith(`/folders/${p.folderId}`)) {
-      return await deleteFolder(event, p.folderId, user, room, authz, ctx);
+      return finish(await deleteFolder(event, p.folderId, user, room, authz, ctx));
     }
     if (method === 'PUT' && p.folderId && path.endsWith(`/folders/${p.folderId}/password`)) {
-      return await updateFolderPassword(event, p.folderId, user, room, authz, ctx);
+      return finish(await updateFolderPassword(event, p.folderId, user, room, authz, ctx));
     }
 
     if (method === 'GET' && p.folderId && path.endsWith(`/folders/${p.folderId}/photos`)) {
-      return await listPhotos(event, p.folderId, user, room, authz);
+      return finish(await listPhotos(event, p.folderId, user, room, authz));
     }
     if (method === 'POST' && p.folderId && path.endsWith(`/folders/${p.folderId}/photos/upload-url`)) {
-      return await createUploadUrl(event, p.folderId, body, user, room, authz);
+      return finish(await createUploadUrl(event, p.folderId, body, user, room, authz));
     }
     if (method === 'POST' && p.folderId && path.endsWith(`/folders/${p.folderId}/photos`)) {
-      return await finalizePhoto(event, p.folderId, body, user, room, authz, ctx);
+      return finish(await finalizePhoto(event, p.folderId, body, user, room, authz, ctx));
     }
 
     if (method === 'DELETE' && p.photoId && path.endsWith(`/photos/${p.photoId}`)) {
-      return await deletePhoto(p.photoId, user, room, authz, ctx);
+      return finish(await deletePhoto(p.photoId, user, room, authz, ctx));
     }
     if (method === 'PUT' && p.photoId && path.endsWith(`/photos/${p.photoId}`)) {
-      return await updatePhoto(p.photoId, body, user, room, authz, ctx);
+      return finish(await updatePhoto(p.photoId, body, user, room, authz, ctx));
     }
 
     if (method === 'GET' && p.photoId && path.endsWith(`/photos/${p.photoId}/comments`)) {
-      return await listComments(p.photoId, room);
+      return finish(await listComments(p.photoId, room));
     }
     if (method === 'POST' && p.photoId && path.endsWith(`/photos/${p.photoId}/comments`)) {
-      return await createComment(p.photoId, body, user, room, ctx);
+      return finish(await createComment(p.photoId, body, user, room, ctx));
     }
     if (
       method === 'DELETE' &&
@@ -3396,7 +3427,7 @@ exports.handler = async (event) => {
       p.commentId &&
       path.endsWith(`/photos/${p.photoId}/comments/${p.commentId}`)
     ) {
-      return await deleteComment(p.photoId, p.commentId, user, room, authz, ctx);
+      return finish(await deleteComment(p.photoId, p.commentId, user, room, authz, ctx));
     }
     if (
       method === 'PUT' &&
@@ -3404,29 +3435,29 @@ exports.handler = async (event) => {
       p.commentId &&
       path.endsWith(`/photos/${p.photoId}/comments/${p.commentId}`)
     ) {
-      return await updateComment(p.photoId, p.commentId, body, user, room, authz, ctx);
+      return finish(await updateComment(p.photoId, p.commentId, body, user, room, authz, ctx));
     }
 
     if (method === 'POST' && p.folderId && path.endsWith(`/folders/${p.folderId}/export`)) {
-      return await exportFolder(event, p.folderId, user, room, authz, ctx);
+      return finish(await exportFolder(event, p.folderId, user, room, authz, ctx));
     }
 
-    return json(404, { message: 'not found' });
+    return finish(json(404, { message: 'not found' }));
   } catch (error) {
     if (error.message === 'MISSING_USER_KEY') {
-      return json(401, { message: 'unauthorized' });
+      return finish(json(401, { message: 'unauthorized' }));
     }
     if (error.message === 'MISSING_ROOM') {
       // Room selection is membership-based. Missing room means the user must create/join via invite URL.
-      return json(403, { message: 'no active room' });
+      return finish(json(403, { message: 'no active room' }));
     }
     if (error.message === 'INVALID_ROOM') {
-      return json(403, { message: 'invalid room credentials' });
+      return finish(json(403, { message: 'invalid room credentials' }));
     }
     if (error.message === 'INVALID_DISPLAY_NAME_LENGTH') {
-      return badRequest('displayName must be 40 characters or fewer');
+      return finish(badRequest('displayName must be 40 characters or fewer'));
     }
     console.error(error);
-    return json(500, { message: 'internal server error' });
+    return finish(json(500, { message: 'internal server error' }));
   }
 };

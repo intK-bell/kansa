@@ -12,10 +12,36 @@ const { verifyStripeWebhook } = require('./stripe-rest');
 const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 const TABLE_NAME = process.env.TABLE_NAME;
+const CORS_ALLOWED_ORIGINS = new Set(
+  String(process.env.CORS_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+);
+
+function getHeaderValue(headers, name) {
+  const target = String(name || '').toLowerCase();
+  for (const [key, value] of Object.entries(headers || {})) {
+    if (String(key).toLowerCase() === target) return value;
+  }
+  return '';
+}
+
+function applyCorsHeaders(event, response) {
+  const headers = { ...(response?.headers || {}) };
+  const origin = String(getHeaderValue(event?.headers || {}, 'origin') || '').trim();
+  if (origin && CORS_ALLOWED_ORIGINS.has(origin)) {
+    headers['access-control-allow-origin'] = origin;
+    headers.vary = headers.vary ? `${headers.vary}, Origin` : 'Origin';
+  } else {
+    delete headers['access-control-allow-origin'];
+  }
+  return { ...(response || {}), headers };
+}
 
 const json = (statusCode, body) => ({
   statusCode,
-  headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' },
+  headers: { 'content-type': 'application/json' },
   body: JSON.stringify(body),
 });
 
@@ -242,8 +268,9 @@ async function syncSubscriptionByEventObject(obj, mode) {
 }
 
 exports.handler = async (event) => {
+  const finish = (response) => applyCorsHeaders(event, response);
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
-  if (!webhookSecret) return json(500, { message: 'stripe webhook is not configured' });
+  if (!webhookSecret) return finish(json(500, { message: 'stripe webhook is not configured' }));
 
   const rawBody = getRawBody(event);
   const sig = (event.headers || {})['stripe-signature'] || (event.headers || {})['Stripe-Signature'] || '';
@@ -258,14 +285,14 @@ exports.handler = async (event) => {
         reason: verified.reason,
       })
     );
-    return json(400, { message: 'invalid signature' });
+    return finish(json(400, { message: 'invalid signature' }));
   }
 
   let payload;
   try {
     payload = JSON.parse(rawBody);
   } catch (_) {
-    return json(400, { message: 'invalid json' });
+    return finish(json(400, { message: 'invalid json' }));
   }
 
   const type = payload.type;
@@ -274,31 +301,31 @@ exports.handler = async (event) => {
   if (type === 'checkout.session.completed') {
     if (String(obj?.mode || '') === 'subscription') {
       const synced = await syncSubscriptionFromCheckoutSession(obj);
-      return json(200, { ok: true, subscription: synced });
+      return finish(json(200, { ok: true, subscription: synced }));
     }
-    return json(200, { ok: true, ignored: true, mode: obj?.mode || null });
+    return finish(json(200, { ok: true, ignored: true, mode: obj?.mode || null }));
   }
 
   if (type === 'invoice.paid') {
     const out = await syncSubscriptionByEventObject(obj, 'invoice.paid');
-    return json(200, { ok: true, subscription: out });
+    return finish(json(200, { ok: true, subscription: out }));
   }
 
   if (type === 'invoice.payment_failed') {
     const out = await syncSubscriptionByEventObject(obj, 'invoice.payment_failed');
-    return json(200, { ok: true, subscription: out });
+    return finish(json(200, { ok: true, subscription: out }));
   }
 
   if (type === 'customer.subscription.updated') {
     const out = await syncSubscriptionByEventObject(obj, 'customer.subscription.updated');
-    return json(200, { ok: true, subscription: out });
+    return finish(json(200, { ok: true, subscription: out }));
   }
 
   if (type === 'customer.subscription.deleted') {
     const out = await syncSubscriptionByEventObject(obj, 'customer.subscription.deleted');
-    return json(200, { ok: true, subscription: out });
+    return finish(json(200, { ok: true, subscription: out }));
   }
 
   // Ignore other event types.
-  return json(200, { ok: true, ignored: true, type });
+  return finish(json(200, { ok: true, ignored: true, type }));
 };

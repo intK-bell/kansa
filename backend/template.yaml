@@ -13,6 +13,7 @@ Globals:
         PHOTO_BUCKET: !Ref PhotoBucket
         EXPORT_BUCKET: !Ref ExportBucket
         COGNITO_USER_POOL_ID: !Ref UserPool
+        CORS_ALLOWED_ORIGINS: !Join [",", !Ref FrontendAllowedOrigins]
         STRIPE_SECRET_KEY: !Ref StripeSecretKey
         STRIPE_CHECKOUT_SUCCESS_URL: !Ref StripeCheckoutSuccessUrl
         STRIPE_CHECKOUT_CANCEL_URL: !Ref StripeCheckoutCancelUrl
@@ -31,6 +32,10 @@ Parameters:
     Type: Number
     Default: 100
     Description: API Gateway default route burst limit
+  FrontendAllowedOrigins:
+    Type: CommaDelimitedList
+    Default: "http://localhost:5173,http://127.0.0.1:5173,https://ph4k.aokigk.com"
+    Description: Allowed origins for frontend access and S3 browser access
   CognitoDomainPrefix:
     Type: String
     Default: photohub4kansa
@@ -162,6 +167,7 @@ Resources:
   HttpApi:
     Type: AWS::Serverless::HttpApi
     Properties:
+      DisableExecuteApiEndpoint: true
       Auth:
         DefaultAuthorizer: CognitoJwtAuthorizer
         Authorizers:
@@ -187,10 +193,7 @@ Resources:
           - PUT
           - DELETE
           - OPTIONS
-        AllowOrigins:
-          - !Ref CognitoCallbackUrl
-          - !Ref CognitoLocalCallbackUrl
-          - !Ref CognitoLocalCallbackUrlAlt
+        AllowOrigins: !Ref FrontendAllowedOrigins
 
   AuditTable:
     Type: AWS::DynamoDB::Table
@@ -230,12 +233,22 @@ Resources:
         RestrictPublicBuckets: true
       CorsConfiguration:
         CorsRules:
-          - AllowedHeaders: ["*"]
-            AllowedMethods: [GET, PUT, POST, DELETE]
-            AllowedOrigins: ["*"]
+          - AllowedHeaders:
+              - content-type
+              - x-amz-*
+            AllowedMethods:
+              - GET
+              - PUT
+            AllowedOrigins: !Ref FrontendAllowedOrigins
 
   ExportBucket:
     Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
 
   ApiFunction:
     Type: AWS::Serverless::Function
