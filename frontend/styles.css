@@ -447,6 +447,113 @@ button:disabled {
   color: var(--muted);
 }
 
+.upload-meta-card {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  background: var(--card-soft);
+}
+
+.upload-meta-actions {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.upload-meta-list {
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.upload-submit-area {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.upload-draft-row {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px;
+  background: var(--card);
+}
+
+.upload-draft-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.upload-draft-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.upload-draft-remove {
+  min-width: 32px;
+  padding: 4px 8px;
+}
+
+.upload-draft-thumb {
+  display: block;
+  width: 112px;
+  height: 84px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  object-fit: cover;
+  background: var(--card-soft);
+}
+
+.upload-draft-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.upload-draft-field {
+  display: grid;
+  gap: 6px;
+}
+
+.upload-draft-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.upload-draft-field input,
+.upload-draft-field textarea {
+  width: 100%;
+}
+
+button.is-loading {
+  position: relative;
+  padding-left: 36px;
+}
+
+button.is-loading::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin-top: -7px;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
 #photo-files {
   max-width: 100%;
   width: 100%;
@@ -600,6 +707,15 @@ button:disabled {
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
   }
 }
 
@@ -814,5 +930,19 @@ body.dark .room-row {
   .row input,
   .row textarea {
     width: 100%;
+  }
+
+  .upload-draft-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .upload-draft-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .upload-draft-head-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 }

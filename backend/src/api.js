@@ -2140,6 +2140,11 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
   const originalS3Key = body.originalS3Key || body.s3Key || null;
   const previewS3Key = body.previewS3Key || null;
   if (!body.photoId || !originalS3Key) return badRequest('photoId and originalS3Key are required');
+  const fileName = String(body.fileName || '').trim();
+  const initialComment = String(body.initialComment || '').trim();
+  if (!fileName) return badRequest('fileName is required');
+  if (fileName.length > 20) return badRequest('fileName must be 20 chars or less');
+  if (initialComment.length > 50) return badRequest('initialComment must be 50 chars or less');
   const folderRes = await ddb.send(
     new GetCommand({
       TableName: TABLE_NAME,
@@ -2234,13 +2239,19 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
     previewBytes,
     totalBytes,
     contentSha256,
-    fileName: body.fileName || null,
+    fileName,
     createdBy: user.userKey,
     createdByName: user.userName,
     createdAt: now,
     GSI1PK: `FOLDER#${folderId}`,
     GSI1SK: `PHOTO#${now}#${body.photoId}`,
   };
+  if (initialComment) {
+    item.latestCommentAt = now;
+    item.latestCommentBy = user.userKey;
+    item.latestCommentByName = user.userName;
+    item.updatedAt = now;
+  }
 
   try {
     await ddb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
@@ -2256,6 +2267,29 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
       nowIso: now,
     });
   }
+  let commentId = null;
+  if (initialComment) {
+    commentId = randomUUID();
+    await ddb.send(
+      new PutCommand({
+        TableName: TABLE_NAME,
+        Item: {
+          PK: `PHOTO#${body.photoId}`,
+          SK: `COMMENT#${now}#${commentId}`,
+          type: 'comment',
+          photoId: body.photoId,
+          commentId,
+          roomName: room.roomName,
+          text: initialComment,
+          createdBy: user.userKey,
+          createdByName: user.userName,
+          createdAt: now,
+          GSI1PK: `PHOTO#${body.photoId}`,
+          GSI1SK: `COMMENT#${now}#${commentId}`,
+        },
+      })
+    );
+  }
   auditLog({
     requestId: ctx.requestId,
     action: 'photo.create',
@@ -2268,6 +2302,17 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
     bytes: totalBytes,
     result: 'success',
   });
+  if (commentId) {
+    auditLog({
+      requestId: ctx.requestId,
+      action: 'comment.create',
+      actor: user.userKey,
+      actorName: user.userName,
+      photoId: body.photoId,
+      commentId,
+      result: 'success',
+    });
+  }
   return json(201, item);
 }
 

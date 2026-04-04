@@ -173,19 +173,32 @@
           <select id="folder-select">
             <option value="">フォルダを選択してください</option>
           </select>
+          <div class="row" style="margin-top:10px;">
+            <input id="folder-password-set" placeholder="フォルダパスワード（空で解除）" type="password" />
+            <button id="set-folder-password-btn" type="button" class="hidden">鍵を設定/解除</button>
+          </div>
+          <div class="row" style="margin-top:10px;">
+            <button id="export-btn">PowerPoint出力</button>
+          </div>
         </section>
 
         <section id="folder-detail" class="card hidden">
           <h2 id="folder-detail-title"></h2>
           <div class="row">
             <input id="photo-files" type="file" accept="image/*" multiple />
-            <button id="upload-btn">複数アップロード</button>
-            <span id="upload-loading" class="upload-loading hidden">アップロード中...</span>
-            <button id="export-btn">PowerPoint出力</button>
           </div>
-          <div class="row" style="margin-top:10px;">
-            <input id="folder-password-set" placeholder="フォルダパスワード（空で解除）" type="password" />
-            <button id="set-folder-password-btn" type="button" class="hidden">鍵を設定/解除</button>
+          <div id="upload-meta-card" class="upload-meta-card hidden">
+            <div class="upload-meta-actions">
+              <button id="apply-name-sequence-btn" type="button">1つ目の写真名を連番で反映</button>
+              <button id="apply-comment-bulk-btn" type="button">1つ目のコメントを全件に反映</button>
+              <button id="cancel-upload-drafts-btn" type="button" class="danger">キャンセル</button>
+              <button id="upload-btn">アップロード</button>
+            </div>
+            <p id="upload-meta-status" class="muted" style="margin:8px 0 0;"></p>
+            <div id="upload-meta-list" class="upload-meta-list"></div>
+            <div class="upload-submit-area">
+              <span id="upload-loading" class="upload-loading hidden">アップロード中...</span>
+            </div>
           </div>
           <div id="photo-list" class="photo-grid"></div>
         </section>

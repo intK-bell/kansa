@@ -42,6 +42,7 @@ const state = {
   restoreScrollY: null,
   season: 'spring',
   isUploading: false,
+  uploadDrafts: [],
 };
 
 const SEASONS = new Set(['spring', 'summer', 'autumn', 'winter']);
@@ -370,6 +371,12 @@ const els = {
   photoFiles: document.querySelector('#photo-files'),
   uploadBtn: document.querySelector('#upload-btn'),
   uploadLoading: document.querySelector('#upload-loading'),
+  uploadMetaCard: document.querySelector('#upload-meta-card'),
+  uploadMetaList: document.querySelector('#upload-meta-list'),
+  uploadMetaStatus: document.querySelector('#upload-meta-status'),
+  applyCommentBulkBtn: document.querySelector('#apply-comment-bulk-btn'),
+  applyNameSequenceBtn: document.querySelector('#apply-name-sequence-btn'),
+  cancelUploadDraftsBtn: document.querySelector('#cancel-upload-drafts-btn'),
   exportBtn: document.querySelector('#export-btn'),
   photoList: document.querySelector('#photo-list'),
   errorBox: document.querySelector('#error-box'),
@@ -747,13 +754,222 @@ function setUploadLoading(isLoading) {
   state.isUploading = isLoading;
   if (els.uploadBtn) {
     els.uploadBtn.disabled = isLoading;
+    els.uploadBtn.classList.toggle('is-loading', isLoading);
+    els.uploadBtn.textContent = isLoading ? 'アップロード中...' : 'アップロード';
   }
   if (els.photoFiles) {
     els.photoFiles.disabled = isLoading;
   }
+  if (els.applyCommentBulkBtn) els.applyCommentBulkBtn.disabled = isLoading;
+  if (els.applyNameSequenceBtn) els.applyNameSequenceBtn.disabled = isLoading;
+  if (els.cancelUploadDraftsBtn) els.cancelUploadDraftsBtn.disabled = isLoading;
   if (els.uploadLoading) {
     els.uploadLoading.classList.toggle('hidden', !isLoading);
   }
+}
+
+function sanitizePhotoName(rawValue, fallbackName = '') {
+  const source = String(rawValue || fallbackName || '').trim();
+  if (!source) return '';
+  const lastDot = source.lastIndexOf('.');
+  const base = lastDot > 0 ? source.slice(0, lastDot) : source;
+  return base.trim().slice(0, 20);
+}
+
+function revokeUploadDraftPreview(draft) {
+  if (!draft?.previewUrl) return;
+  try {
+    URL.revokeObjectURL(draft.previewUrl);
+  } catch (_) {
+    // Ignore preview cleanup errors.
+  }
+}
+
+function revokeAllUploadDraftPreviews() {
+  state.uploadDrafts.forEach((draft) => {
+    revokeUploadDraftPreview(draft);
+  });
+}
+
+function clearUploadDrafts() {
+  revokeAllUploadDraftPreviews();
+  state.uploadDrafts = [];
+  if (els.photoFiles) els.photoFiles.value = '';
+  renderUploadDrafts();
+}
+
+function rebuildUploadDrafts(files) {
+  revokeAllUploadDraftPreviews();
+  state.uploadDrafts = files.map((file, index) => ({
+    localId: `${Date.now()}_${index}_${file.name}`,
+    file,
+    originalName: file.name,
+    photoName: sanitizePhotoName(file.name),
+    initialComment: '',
+    previewUrl: URL.createObjectURL(file),
+  }));
+  renderUploadDrafts();
+}
+
+function padSequenceNumber(value) {
+  return String(value).padStart(3, '0');
+}
+
+function syncUploadDraftsFromDom() {
+  if (!els.uploadMetaList) return;
+  const rowNodes = els.uploadMetaList.querySelectorAll('.upload-draft-row[data-draft-id]');
+  rowNodes.forEach((row) => {
+    const draftId = row.getAttribute('data-draft-id');
+    if (!draftId) return;
+    const draft = state.uploadDrafts.find((item) => item.localId === draftId);
+    if (!draft) return;
+    const nameInput = row.querySelector('.js-upload-draft-name');
+    const commentInput = row.querySelector('.js-upload-draft-comment');
+    if (nameInput) draft.photoName = String(nameInput.value || '').slice(0, 20);
+    if (commentInput) draft.initialComment = String(commentInput.value || '').slice(0, 50);
+  });
+}
+
+function validateUploadDrafts() {
+  syncUploadDraftsFromDom();
+  const errors = [];
+  state.uploadDrafts.forEach((draft, index) => {
+    const photoName = String(draft.photoName || '').trim();
+    const initialComment = String(draft.initialComment || '').trim();
+    if (!photoName) {
+      errors.push(`${index + 1}行目: 写真名は必須です。`);
+    } else if (photoName.length > 20) {
+      errors.push(`${index + 1}行目: 写真名は20文字以内にしてください。`);
+    }
+    if (initialComment.length > 50) {
+      errors.push(`${index + 1}行目: 初回コメントは50文字以内にしてください。`);
+    }
+  });
+  return errors;
+}
+
+function renderUploadDrafts() {
+  if (!els.uploadMetaCard || !els.uploadMetaList || !els.uploadMetaStatus) return;
+  const hasDrafts = state.uploadDrafts.length > 0;
+  const showBulkActions = state.uploadDrafts.length >= 2;
+  els.uploadMetaCard.classList.toggle('hidden', !hasDrafts);
+  if (els.applyCommentBulkBtn) els.applyCommentBulkBtn.classList.toggle('hidden', !showBulkActions);
+  if (els.applyNameSequenceBtn) els.applyNameSequenceBtn.classList.toggle('hidden', !showBulkActions);
+  els.uploadMetaList.innerHTML = '';
+  if (!hasDrafts) {
+    els.uploadMetaStatus.textContent = '';
+    return;
+  }
+
+  els.uploadMetaStatus.textContent = `${state.uploadDrafts.length}件の写真をアップロード対象に追加しています。`;
+  state.uploadDrafts.forEach((draft, index) => {
+    const row = el('div', { class: 'upload-draft-row', 'data-draft-id': draft.localId });
+    const head = el('div', { class: 'upload-draft-head' });
+    head.appendChild(el('strong', {}, `${index + 1}. ${draft.originalName}`));
+    const headActions = el('div', { class: 'upload-draft-head-actions' });
+    headActions.appendChild(el('span', { class: 'muted' }, `${formatBytes(draft.file.size || 0)}`));
+    const removeBtn = el(
+      'button',
+      { class: 'icon-btn danger upload-draft-remove', type: 'button', title: 'この写真を除外' },
+      '✕'
+    );
+    removeBtn.addEventListener('click', () => {
+      revokeUploadDraftPreview(draft);
+      state.uploadDrafts = state.uploadDrafts.filter((item) => item.localId !== draft.localId);
+      renderUploadDrafts();
+    });
+    headActions.appendChild(removeBtn);
+    head.appendChild(headActions);
+    row.appendChild(head);
+
+    const thumb = el('img', {
+      class: 'upload-draft-thumb',
+      src: draft.previewUrl || '',
+      alt: draft.originalName || `draft-${index + 1}`,
+      loading: 'lazy',
+    });
+    thumb.addEventListener('error', () => {
+      thumb.classList.add('hidden');
+    });
+    row.appendChild(thumb);
+
+    const grid = el('div', { class: 'upload-draft-grid' });
+
+    const nameField = el('label', { class: 'upload-draft-field' });
+    nameField.appendChild(el('span', { class: 'upload-draft-label' }, '写真名'));
+    const nameInput = el('input', {
+      class: 'js-upload-draft-name',
+      type: 'text',
+      maxlength: '20',
+      value: draft.photoName,
+      placeholder: '写真名',
+    });
+    const syncName = (event) => {
+      draft.photoName = String(event.target.value || '').slice(0, 20);
+    };
+    nameInput.addEventListener('input', syncName);
+    nameInput.addEventListener('change', syncName);
+    nameField.appendChild(nameInput);
+    grid.appendChild(nameField);
+
+    const commentField = el('label', { class: 'upload-draft-field' });
+    commentField.appendChild(el('span', { class: 'upload-draft-label' }, '初回コメント'));
+    const commentInput = el('textarea', {
+      class: 'js-upload-draft-comment',
+      rows: '2',
+      maxlength: '50',
+      placeholder: '初回コメント（任意）',
+    });
+    commentInput.value = draft.initialComment || '';
+    const syncComment = (event) => {
+      draft.initialComment = String(event.target.value || '').slice(0, 50);
+    };
+    commentInput.addEventListener('input', syncComment);
+    commentInput.addEventListener('change', syncComment);
+    commentField.appendChild(commentInput);
+    grid.appendChild(commentField);
+
+    row.appendChild(grid);
+    els.uploadMetaList.appendChild(row);
+  });
+}
+
+function applyBulkComment() {
+  if (!state.uploadDrafts.length) return;
+  syncUploadDraftsFromDom();
+  const nextComment = String(state.uploadDrafts[0]?.initialComment || '').slice(0, 50);
+  if (!nextComment) {
+    window.alert('1つ目のコメントを先に入力してください。');
+    return;
+  }
+  if (!window.confirm('1つ目のコメントを全件に反映してよかですか？既存入力は上書きされます。')) return;
+  state.uploadDrafts.forEach((draft) => {
+    draft.initialComment = nextComment;
+  });
+  renderUploadDrafts();
+}
+
+function applySequencedPhotoNames() {
+  if (!state.uploadDrafts.length) return;
+  syncUploadDraftsFromDom();
+  const baseName = String(state.uploadDrafts[0]?.photoName || '').trim();
+  if (!baseName) {
+    window.alert('1行目の写真名を先に入力してください。');
+    return;
+  }
+  if (!window.confirm('1つ目の写真名を連番で反映してよかですか？既存入力は上書きされます。')) return;
+  const suffixLength = 4;
+  const baseForSequence = baseName.slice(0, Math.max(0, 20 - suffixLength));
+  state.uploadDrafts.forEach((draft, index) => {
+    draft.photoName = `${baseForSequence}_${padSequenceNumber(index + 1)}`;
+  });
+  renderUploadDrafts();
+}
+
+function cancelUploadDrafts() {
+  if (!state.uploadDrafts.length) return;
+  if (!window.confirm('選択した写真と入力内容を破棄してよかですか？')) return;
+  clearUploadDrafts();
 }
 
 function asMessage(error) {
@@ -1372,6 +1588,7 @@ function renderFolders() {
 }
 
 async function selectFolder(folder) {
+  clearUploadDrafts();
   if (folder.hasPassword && !state.folderPasswordById[folder.folderId]) {
     const entered = window.prompt('このフォルダは鍵付きです。パスワードを入力してください。', '');
     if (entered === null) return;
@@ -1391,6 +1608,7 @@ async function selectFolder(folder) {
 async function selectFolderById(folderId) {
   if (!folderId) {
     state.selectedFolder = null;
+    clearUploadDrafts();
     els.folderDetail.classList.add('hidden');
     return;
   }
@@ -1419,12 +1637,17 @@ async function loadPhotos() {
 
 async function uploadFiles() {
   if (state.isUploading) return;
-  const files = Array.from(els.photoFiles.files || []);
-  if (!files.length) return;
+  syncUploadDraftsFromDom();
+  const drafts = state.uploadDrafts.slice();
+  if (!drafts.length) return;
+  const validationErrors = validateUploadDrafts();
+  if (validationErrors.length) {
+    throw new Error(validationErrors[0]);
+  }
 
   setUploadLoading(true);
   try {
-    const totalFiles = files.length;
+    const totalFiles = drafts.length;
     let uploadedCount = 0;
     let duplicateCount = 0;
 
@@ -1476,7 +1699,8 @@ async function uploadFiles() {
       return blob || null;
     };
 
-    for (const file of files) {
+    for (const draft of drafts) {
+      const file = draft.file;
       try {
         const folderId = state.selectedFolder.folderId;
         const up = await api(`/folders/${folderId}/photos/upload-url`, {
@@ -1523,7 +1747,8 @@ async function uploadFiles() {
             photoId: up.photoId,
             originalS3Key: up.originalS3Key,
             previewS3Key: resized ? up.previewS3Key : null,
-            fileName: file.name,
+            fileName: String(draft.photoName || '').trim(),
+            initialComment: String(draft.initialComment || '').trim() || null,
           }),
         });
         uploadedCount += 1;
@@ -1537,10 +1762,15 @@ async function uploadFiles() {
       }
     }
 
-    els.photoFiles.value = '';
+    clearUploadDrafts();
     if (uploadedCount > 0) {
       await loadPhotos();
       await scrollToPhotoList();
+      if (duplicateCount > 0) {
+        showToast(`${uploadedCount}/${totalFiles}件アップロード完了。${duplicateCount}件は重複のためスキップしました。`);
+      } else {
+        showToast(`${uploadedCount}/${totalFiles}件アップロード完了。`);
+      }
     }
     if (duplicateCount > 0) {
       if (totalFiles === 1) {
@@ -1551,7 +1781,7 @@ async function uploadFiles() {
         showError('すべて重複なのでアップロードができません。');
         return;
       }
-      showToast(`${duplicateCount}件は重複のためスキップしました。`);
+      if (uploadedCount === 0) showToast(`${duplicateCount}件は重複のためスキップしました。`);
     }
   } catch (error) {
     const message = asMessage(error);
@@ -2066,6 +2296,31 @@ els.uploadBtn.onclick = safeAction(async () => {
   if (state.isUploading) return;
   await uploadFiles();
 }, '写真アップロード');
+
+if (els.photoFiles) {
+  els.photoFiles.addEventListener('change', (event) => {
+    const files = Array.from(event.target.files || []);
+    rebuildUploadDrafts(files);
+  });
+}
+
+if (els.applyCommentBulkBtn) {
+  els.applyCommentBulkBtn.onclick = () => {
+    applyBulkComment();
+  };
+}
+
+if (els.applyNameSequenceBtn) {
+  els.applyNameSequenceBtn.onclick = () => {
+    applySequencedPhotoNames();
+  };
+}
+
+if (els.cancelUploadDraftsBtn) {
+  els.cancelUploadDraftsBtn.onclick = () => {
+    cancelUploadDrafts();
+  };
+}
 
 els.exportBtn.onclick = safeAction(async () => {
   if (!state.selectedFolder) return;
