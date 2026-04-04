@@ -2324,6 +2324,8 @@ if (els.cancelUploadDraftsBtn) {
 
 els.exportBtn.onclick = safeAction(async () => {
   if (!state.selectedFolder) return;
+  const confirmed = window.confirm('このフォルダの写真をPowerPoint出力します。よかですか？');
+  if (!confirmed) return;
   const preOpened = window.open('', '_blank');
   try {
     const folderId = state.selectedFolder.folderId;
