@@ -1445,6 +1445,51 @@ async function stripeCancelSubscriptionNow(secretKey, subscriptionId) {
   });
 }
 
+async function cancelStripeSubscriptionForTeamDelete(room, billing, ctx) {
+  const currentMode = String(billing?.billingMode || '').toLowerCase();
+  const stripeSubscriptionId = String(billing?.stripeSubscriptionId || '').trim();
+  const noSubscription = {
+    attempted: false,
+    stripeSubscriptionId: stripeSubscriptionId || null,
+    result: 'not_required',
+  };
+
+  if (currentMode !== BILLING_MODE_SUBSCRIPTION || !stripeSubscriptionId) {
+    return noSubscription;
+  }
+
+  const secretKey = process.env.STRIPE_SECRET_KEY || '';
+  if (!secretKey) {
+    const error = new Error('stripe is not configured (missing STRIPE_SECRET_KEY)');
+    error.result = 'config_missing';
+    throw error;
+  }
+
+  try {
+    const canceled = await stripeCancelSubscriptionNow(secretKey, stripeSubscriptionId);
+    const status = String(canceled?.status || '').toLowerCase();
+    const endedAt = Number(canceled?.ended_at || 0);
+    const effectiveResult = status === 'canceled' || endedAt > 0 ? 'canceled' : status || 'unknown';
+    return {
+      attempted: true,
+      stripeSubscriptionId,
+      result: effectiveResult,
+      canceled,
+    };
+  } catch (error) {
+    if (Number(error?.statusCode || 0) === 404) {
+      return {
+        attempted: true,
+        stripeSubscriptionId,
+        result: 'not_found',
+      };
+    }
+    error.result = 'cancel_failed';
+    error.stripeSubscriptionId = stripeSubscriptionId;
+    throw error;
+  }
+}
+
 async function teamSubscription(room, authz) {
   if (!authz.isAdmin) return json(403, { message: 'forbidden' });
   const billing = summarizeBilling(authz.billing);
@@ -1978,6 +2023,47 @@ async function teamDelete(event, user, room, authz, ctx) {
   if (!room.createdBy || room.createdBy !== user.userKey) return json(403, { message: 'forbidden' });
 
   const nowIso = new Date().toISOString();
+  const billingMeta = authz.billing || (await getBillingMeta(ddb, { tableName: TABLE_NAME, roomId: room.roomId }));
+  let stripeCancellation = {
+    attempted: false,
+    stripeSubscriptionId: String(billingMeta?.stripeSubscriptionId || '').trim() || null,
+    result: 'not_required',
+  };
+
+  try {
+    stripeCancellation = await cancelStripeSubscriptionForTeamDelete(room, billingMeta, ctx);
+  } catch (error) {
+    auditLog({
+      requestId: ctx.requestId,
+      action: 'team.delete',
+      actor: user.userKey,
+      actorName: user.userName,
+      roomId: room.roomId,
+      roomName: room.roomName,
+      stripeSubscriptionId: error?.stripeSubscriptionId || stripeCancellation.stripeSubscriptionId || null,
+      stripeCancellationAttempted: true,
+      stripeCancellationResult: error?.result || 'cancel_failed',
+      result: 'denied',
+      reason: error?.message || 'stripe cancellation failed',
+    });
+    return json(409, {
+      message: '課金停止の確認に失敗したため、お部屋を削除できませんでした。時間をおいて再度お試しください。',
+    });
+  }
+
+  if (stripeCancellation.attempted && stripeCancellation.stripeSubscriptionId) {
+    try {
+      await ddb.send(
+        new DeleteCommand({
+          TableName: TABLE_NAME,
+          Key: { PK: `STRIPE_SUB#${stripeCancellation.stripeSubscriptionId}`, SK: 'META#ROOM' },
+        })
+      );
+    } catch (_) {
+      // Ignore best-effort cleanup.
+    }
+  }
+
   let purgedFolders = 0;
   let purgedPhotos = 0;
   let deletedMembers = 0;
@@ -2081,6 +2167,9 @@ async function teamDelete(event, user, room, authz, ctx) {
     actorName: user.userName,
     roomId: room.roomId,
     roomName: room.roomName,
+    stripeSubscriptionId: stripeCancellation.stripeSubscriptionId || null,
+    stripeCancellationAttempted: Boolean(stripeCancellation.attempted),
+    stripeCancellationResult: stripeCancellation.result || 'not_required',
     purgedFolders,
     purgedPhotos,
     deletedMembers,

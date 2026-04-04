@@ -2590,7 +2590,9 @@ if (els.lowStorageChargeBtn) {
 
 if (els.deleteTeamBtn) {
   els.deleteTeamBtn.onclick = safeAction(async () => {
-    const ok = window.confirm('このお部屋を削除すると、フォルダ/写真/コメント/課金情報も全て消えます。よかですか？');
+    const ok = window.confirm(
+      'このお部屋を削除すると、フォルダ/写真/コメント/課金情報が全て削除され、Stripeの定期課金も即時停止されます。よかですか？'
+    );
     if (!ok) return;
     const ok2 = window.confirm('本当によかですか？（取り消せません）');
     if (!ok2) return;

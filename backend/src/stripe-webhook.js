@@ -100,6 +100,14 @@ async function findRoomBySubscriptionId(subscriptionId) {
 }
 
 async function updateBillingMeta(roomId, fields, nowIso = new Date().toISOString()) {
+  const existing = await ddb.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `ROOM#${roomId}`, SK: 'META#BILLING' },
+    })
+  );
+  if (!existing.Item) return null;
+
   const names = {};
   const values = { ':u': nowIso };
   const sets = ['updatedAt = :u'];
@@ -187,6 +195,7 @@ async function syncSubscriptionByEventObject(obj, mode) {
     if (nextBillingAt) fields.nextBillingAt = nextBillingAt;
     if (planFromInvoice) fields.currentPlan = planFromInvoice;
     const updated = await updateBillingMeta(roomId, fields, nowIso);
+    if (!updated) return { ok: true, roomId, skipped: true, reason: 'billing_meta_not_found' };
     return { ok: true, roomId, billing: summarizeBilling(updated) };
   }
 
@@ -194,6 +203,7 @@ async function syncSubscriptionByEventObject(obj, mode) {
     const fields = { stripeSubscriptionStatus: 'past_due' };
     if (nextBillingAt) fields.nextBillingAt = nextBillingAt;
     const updated = await updateBillingMeta(roomId, fields, nowIso);
+    if (!updated) return { ok: true, roomId, skipped: true, reason: 'billing_meta_not_found' };
     return { ok: true, roomId, billing: summarizeBilling(updated) };
   }
 
@@ -207,6 +217,7 @@ async function syncSubscriptionByEventObject(obj, mode) {
     if (nextBillingAt) fields.nextBillingAt = nextBillingAt;
     if (planFromSub) fields.currentPlan = normalizeSubscriptionPlanCode(planFromSub);
     const updated = await updateBillingMeta(roomId, fields, nowIso);
+    if (!updated) return { ok: true, roomId, skipped: true, reason: 'billing_meta_not_found' };
     return { ok: true, roomId, billing: summarizeBilling(updated) };
   }
 
@@ -223,6 +234,7 @@ async function syncSubscriptionByEventObject(obj, mode) {
       },
       nowIso
     );
+    if (!updated) return { ok: true, roomId, skipped: true, reason: 'billing_meta_not_found' };
     return { ok: true, roomId, billing: summarizeBilling(updated) };
   }
 
