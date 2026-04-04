@@ -42,7 +42,7 @@ fields @timestamp, action, actorName, actor, photoId, commentId, result, reason
 
 ```js
 window.KANSA_CONFIG = {
-  apiBase: 'https://0nhz8sat7j.execute-api.ap-northeast-1.amazonaws.com',
+  apiBase: 'https://api.ph4k.aokigk.com',
   photoBucket: 'kansa-backend-photobucket-ufurvgtp4oqi',
 };
 ```

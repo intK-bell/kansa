@@ -167,7 +167,6 @@ Resources:
   HttpApi:
     Type: AWS::Serverless::HttpApi
     Properties:
-      DisableExecuteApiEndpoint: true
       Auth:
         DefaultAuthorizer: CognitoJwtAuthorizer
         Authorizers:
