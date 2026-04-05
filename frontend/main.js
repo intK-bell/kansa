@@ -1594,6 +1594,21 @@ async function loadAdminPanel() {
           );
           row.appendChild(left);
           const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
+          const resetBtn = el('button', { type: 'button' }, 'パスワード解除');
+          resetBtn.disabled = !f.hasPassword;
+          resetBtn.onclick = safeAction(async () => {
+            const ok = window.confirm(`フォルダ「${f.title || f.folderId}」のパスワードを解除してよろしいですか？`);
+            if (!ok) return;
+            await api(`/folders/${f.folderId}/password`, {
+              method: 'PUT',
+              body: JSON.stringify({ folderPassword: '' }),
+            });
+            delete state.folderPasswordById[f.folderId];
+            showToast('フォルダのパスワードを解除しました。');
+            await loadFolders();
+            await loadAdminPanel();
+          }, 'フォルダパスワード解除');
+          actions.appendChild(resetBtn);
           const delBtn = el('button', { type: 'button', class: 'danger' }, '削除');
           delBtn.onclick = safeAction(async () => {
             const ok = window.confirm(`フォルダ「${f.title || f.folderId}」を削除してよかですか？（写真とコメントも消えます）`);
