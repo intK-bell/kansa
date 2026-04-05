@@ -9,26 +9,37 @@
     />
     <title>Photo Hub for 監査 | プロダクトランディングページ</title>
     <link rel="icon" type="image/webp" href="./favicon.webp" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Zen+Old+Mincho:wght@500;700&display=swap"
+    />
     <style>
       :root {
-        --bg: #f7f5ef;
-        --ink: #1f2a33;
-        --brand: #0f766e;
-        --accent: #f59e0b;
-        --card: #fffdf9;
-        --line: #d7d2c8;
+        --font-ui: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+        --font-heading: "Zen Old Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+        --bg: #edf2fa;
+        --bg-glow: #dbe7f7;
+        --card: #f7f9fc;
+        --card-soft: #f1f5fb;
+        --ink: #1f2937;
+        --muted: #6b7280;
+        --brand: #5f79a9;
+        --brand-hover: #546c98;
+        --brand-active: #4a6088;
+        --danger: #7d2f52;
+        --line: #c3cfe2;
+        --shadow: 0 16px 38px rgba(22, 31, 48, 0.12);
       }
       * {
         box-sizing: border-box;
       }
       body {
         margin: 0;
-        font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif;
+        font-family: var(--font-ui);
         color: var(--ink);
-        background:
-          radial-gradient(circle at 20% 0%, #d7efe8 0%, transparent 40%),
-          radial-gradient(circle at 90% 10%, #ffe6b8 0%, transparent 35%),
-          var(--bg);
+        background: radial-gradient(circle at top left, var(--bg-glow), var(--bg));
         line-height: 1.7;
       }
       .wrap {
@@ -47,9 +58,18 @@
         font-size: 13px;
       }
       h1 {
+        font-family: var(--font-heading);
+        font-weight: 700;
+        letter-spacing: 0.02em;
         font-size: clamp(32px, 5vw, 58px);
         line-height: 1.15;
         margin: 16px 0 12px;
+      }
+      h2,
+      h3 {
+        font-family: var(--font-heading);
+        font-weight: 700;
+        letter-spacing: 0.015em;
       }
       .lead {
         font-size: clamp(16px, 2vw, 20px);
@@ -65,8 +85,9 @@
       .card {
         background: var(--card);
         border: 1px solid var(--line);
-        border-radius: 18px;
+        border-radius: 16px;
         padding: 20px;
+        box-shadow: var(--shadow);
       }
       .card h3 {
         margin: 0 0 6px;
@@ -80,7 +101,7 @@
       }
       .muted {
         font-size: 13px;
-        color: #5a6670;
+        color: var(--muted);
       }
       section {
         padding: 0 0 26px;
@@ -98,11 +119,12 @@
         gap: 12px;
       }
       .flow li {
-        background: #fff;
+        background: var(--card);
         border: 1px solid var(--line);
         border-radius: 14px;
         padding: 14px 16px 14px 54px;
         position: relative;
+        box-shadow: 0 8px 20px rgba(22, 31, 48, 0.08);
       }
       .flow li::before {
         counter-increment: step;
@@ -127,24 +149,38 @@
         gap: 10px;
       }
       .btn {
-        border: none;
+        border: 1px solid transparent;
         cursor: pointer;
         padding: 12px 16px;
         border-radius: 12px;
         font-weight: 700;
+        transition: background-color 0.14s ease, transform 0.08s ease, border-color 0.14s ease;
       }
       .btn-primary {
         background: var(--brand);
         color: #fff;
       }
       .btn-sub {
-        background: #fff;
+        background: var(--card);
         color: var(--ink);
         border: 1px solid var(--line);
       }
+      .btn-primary:hover {
+        background: var(--brand-hover);
+      }
+      .btn-primary:active {
+        background: var(--brand-active);
+        transform: translateY(1px);
+      }
+      .btn-sub:hover {
+        background: var(--card-soft);
+      }
+      .btn-sub:active {
+        transform: translateY(1px);
+      }
       .legal {
         font-size: 13px;
-        color: #4f5b65;
+        color: var(--muted);
         border-top: 1px solid var(--line);
         padding: 20px 0 36px;
       }
@@ -169,21 +205,23 @@
       .plan-table table {
         width: 100%;
         border-collapse: collapse;
-        background: rgba(255, 255, 255, 0.92);
-        border-radius: 18px;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 16px;
         overflow: hidden;
+        box-shadow: var(--shadow);
       }
 
       .plan-table th,
       .plan-table td {
         padding: 14px 16px;
-        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        border-bottom: 1px solid var(--line);
         text-align: left;
         vertical-align: top;
       }
 
       .plan-table thead th {
-        background: rgba(15, 23, 42, 0.06);
+        background: var(--card-soft);
         font-weight: 700;
       }
 
@@ -200,7 +238,7 @@
         <h1>Photo Hub for 監査</h1>
         <p class="lead">
           現場写真の共有・確認・コメントを、監査運用に合わせてシンプルに。<br />
-          パワーポイントでレポートできる、監査向けフォト管理サービスです。
+          PowerPointでレポートできる、監査向けフォト管理サービスです。
         </p>
       </header>
 

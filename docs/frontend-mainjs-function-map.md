@@ -1,88 +1,155 @@
 # frontend/main.js 関数マップ
 
 対象: `frontend/main.js`  
-更新日: 2026-02-18  
-目的: 長い単一ファイルの読み順と、主要機能ごとの関数関係を素早く把握する。
+更新日: 2026-04-05  
+目的: `main.js` の関数をざっくり棚卸しして、あとで目次コメントやファイル分割をしやすくする。
 
-## 1. 入口と全体像
-- エントリーポイント: `initUser()`
-- 主な遷移:
-1. `initTheme()`
-2. 認証復元 (`completeLoginFromCallback`, `parseJwt`)
-3. ユーザー準備 (`ensureDisplayName`)
-4. ルーム解決 (`/invites/accept` または `/team/me`)
-5. `showRoomSetup()` か `showApp()`
+## 1. 見方
+- 行番号は関数定義の開始位置。
+- 役割ごとにゆるくまとめている。厳密な責務分離ではなく、読む順の補助を優先。
+- イベントバインドや DOM 定数は対象外。関数だけを列挙。
 
-## 2. 主要フロー
+## 2. 起動・認証まわり
+- `6: normalizeCognitoDomain`
+- `114: hasCognitoConfig`
+- `118: parseJwt`
+- `130: clearAuth`
+- `168: supportsPkce`
+- `172: randomString`
+- `186: sha256`
+- `193: base64UrlEncode`
+- `201: startLogin`
+- `227: startSignup`
+- `252: completeLoginFromCallback`
+- `837: fetchMe`
+- `841: saveDisplayName`
+- `848: ensureDisplayName`
+- `1209: initUser`
 
-### 認証/起動
-- `initUser`
-- `showAuthSetup`
-- `showRoomSetup`
-- `showApp`
+## 3. 状態・共通ユーティリティ
+- `52: el`
+- `65: detectCurrentSeason`
+- `73: normalizeSeason`
+- `77: readStateKey`
+- `81: getReadState`
+- `89: setReadState`
+- `93: getLatestIncomingCommentAt`
+- `99: isUnread`
+- `105: markAsRead`
+- `571: showError`
+- `577: clearError`
+- `583: formatBytes`
+- `591: parseApiErrorBody`
+- `1103: asMessage`
+- `1109: safeAction`
+- `1121: scrollToPhotoList`
+- `1202: preserveCurrentView`
 
-### ルーム切替/入室
-- `openRoomSwitchModal`
-- `renderMyRooms`
-- `loadMyRooms`
-- `createRoomAndEnter`
+## 4. モーダル・画面表示切替
+- `140: resetRoomContext`
+- `404: closeMenu`
+- `410: closeTeamAdminPanel`
+- `415: closeRoomCreateModal`
+- `421: closeFolderCreateModal`
+- `427: closeFolderPasswordModal`
+- `433: closeThemeModal`
+- `439: closeHelpModal`
+- `445: closeLowStorageModal`
+- `451: closePhotoPreviewModal`
+- `463: openPhotoPreview`
+- `475: showAuthSetup`
+- `488: openHelpModal`
+- `493: openRoomCreateModal`
+- `502: openFolderCreateModal`
+- `516: openThemeModal`
+- `527: openFolderPasswordModal`
+- `540: setTeamAdminMode`
+- `546: setMenuActionVisibility`
+- `1275: showRoomSetup`
+- `1406: showApp`
 
-### 課金/容量表示
-- `computeStorageStats`
-- `renderTopStorageGraph`
-- `renderBillingBar`
-- `renderStorageGraph`
-- `syncSubscriptionPlanButtons`
-- `maybePromptLowStorage`
-- `startSubscriptionCheckout`
-- `handleStripePurchaseReturn`
+## 5. 課金・テーマ・上部ステータス
+- `605: currentFolderLimit`
+- `611: folderUsageSummary`
+- `617: freePlanGuideText`
+- `624: freePlanRequirementDialogText`
+- `636: renderPhotoArchiveNote`
+- `646: storagePromptKey`
+- `651: computeStorageStats`
+- `664: syncTopStorageGraphWidth`
+- `674: renderTopStorageGraph`
+- `697: renderBillingBar`
+- `725: setAdminUiVisibility`
+- `737: renderStorageGraph`
+- `755: syncSubscriptionPlanButtons`
+- `778: maybePromptLowStorage`
+- `800: applyTheme`
+- `811: applySeason`
+- `820: initTheme`
+- `827: showToast`
+- `1128: planToProductLabel`
+- `1136: planToDisplayLabel`
+- `1144: clearPurchaseParamsFromUrl`
+- `1150: handleStripePurchaseReturn`
+- `2694: startSubscriptionCheckout`
 
-### 管理画面
-- `loadAdminPanel`
-  - `/team/members`, `/folders` 読み込み
-  - フォルダ容量表示 (`usageBytes`)
-  - 容量グラフ/ステータス更新
+## 6. ルーム・チーム管理
+- `1294: renderMyRooms`
+- `1322: renderRoomSelect`
+- `1350: loadMyRooms`
+- `1361: switchRoomById`
+- `1371: getOwnedRoomForGuard`
+- `1383: showOwnerDeleteGuard`
+- `1487: loadTeamMe`
+- `1513: loadAdminPanel`
+- `1665: setInviteUrlText`
+- `2562: createRoomAndEnter`
 
-### アカウント削除ガード（最新）
-- `getOwnedRoomForGuard`
-  - `/rooms/mine` から「作成者として所有する部屋」を判定
-- `showOwnerDeleteGuard`
-  - 作成部屋にいる場合: 「このお部屋を削除（全データ）」案内
-  - 別部屋にいる場合: confirmで作成部屋へ移動提案
-- `accountDeleteBtn` ハンドラ
-  - 所有部屋チェック -> ブロック
-  - 問題なければ二重確認 -> `/account/delete`
+## 7. API ラッパ
+- `1424: headers`
+- `1440: folderPasswordHeader`
+- `1446: api`
 
-### 投稿/写真
-- `loadFolders` -> `renderFolders`
-- `selectFolder` / `selectFolderById`
-- `loadPhotos` -> `renderPhotos`
-- `uploadFiles`
-- `loadComments`
+## 8. アップロード下書き・投稿準備
+- `870: setUploadLoading`
+- `888: sanitizePhotoName`
+- `896: revokeUploadDraftPreview`
+- `905: revokeAllUploadDraftPreviews`
+- `911: clearUploadDrafts`
+- `918: rebuildUploadDrafts`
+- `931: padSequenceNumber`
+- `935: syncUploadDraftsFromDom`
+- `950: validateUploadDrafts`
+- `968: renderUploadDrafts`
+- `1065: applyBulkComment`
+- `1080: applySequencedPhotoNames`
+- `1097: cancelUploadDrafts`
+- `1875: uploadFiles`
 
-## 3. APIラッパ
-- `headers(method)`
-- `folderPasswordHeader(folderId)`
-- `api(path, options)`
+## 9. フォルダ・写真・コメント表示
+- `1709: loadFolders`
+- `1727: computeFolderUnread`
+- `1739: refreshFolderUnread`
+- `1760: renderFolders`
+- `1797: selectFolder`
+- `1836: selectFolderById`
+- `1851: loadPhotos`
+- `2037: loadComments`
+- `2042: canDelete`
+- `2046: formatDateTime`
+- `2051: renderPhotos`
 
-## 4. 状態更新の起点
-- `loadTeamMe()` が `state.billing`, `state.isAdmin`, `state.uploadBlocked`, `state.ownerUserKey` を更新
-- 表示系は基本 `loadTeamMe` の結果を元に再描画
-- ルーム切替直後は `resetRoomContext()` -> `showApp()` で再同期
+## 10. 最初に読む場所
+1. `1209: initUser`
+2. `1406: showApp`
+3. `1487: loadTeamMe`
+4. 対象機能のセクション
 
-## 5. イベント定義の場所
-- ファイル後半の `if (els.xxx) { ... }` にボタン処理を集約
-- 重要ハンドラ:
-  - `deleteTeamBtn`: `/team/delete`
-  - `accountDeleteBtn`: `/account/delete`（二重確認あり）
-  - `subscribe*Btn`: `/team/subscription/checkout`
-  - `subscribeFreeBtn`: `/team/subscription/change` (`action: free`)
-
-## 6. 変更時の読む順（推奨）
-1. `initUser`
-2. `showApp`
-3. `loadTeamMe`
-4. 変更対象ごとの入口
-   - 課金: `renderBillingBar` / `computeStorageStats` / `syncSubscriptionPlanButtons`
-   - 管理画面: `loadAdminPanel`
-   - アカウント削除: `getOwnedRoomForGuard` / `showOwnerDeleteGuard` / `accountDeleteBtn` ハンドラ
+## 11. 次にコード側へ入れる目次案
+- 起動・認証
+- UI 共通
+- 課金表示
+- ルーム/チーム管理
+- API ラッパ
+- アップロード下書き
+- フォルダ/写真/コメント

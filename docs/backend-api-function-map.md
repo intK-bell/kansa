@@ -1,79 +1,157 @@
 # backend/src/api.js 関数マップ
 
 対象: `backend/src/api.js`  
-更新日: 2026-02-18  
-目的: 長い `api.js` の「全体構造」「入口」「主要依存」を短時間で把握できるようにする。
+更新日: 2026-04-05  
+目的: `api.js` の関数をざっくり棚卸しして、あとで目次コメントや分割単位を決めやすくする。
 
-## 1. エントリーポイント
-- `exports.handler`
+## 1. 見方
+- 行番号は関数定義の開始位置。
+- 役割ごとにゆるくまとめている。厳密なアーキテクチャ境界ではない。
+- `exports.handler` の分岐詳細は `docs/backend-api-endpoints.md` と合わせて見る前提。
 
-処理の大枠:
-1. `getUser(event)` でユーザー解決
-2. ルーム不要エンドポイントを先に分岐
-3. ルーム必須エンドポイントは `resolveRoomForRequest` + `requireActiveMember` を通す
-4. 各 handler に委譲
-5. 共通エラーを `401/403/400/500` に正規化
+## 2. 共通レスポンス・日付・小物ユーティリティ
+- `58: getHeaderValue`
+- `66: resolveCorsOrigin`
+- `71: applyCorsHeaders`
+- `83: json`
+- `91: badRequest`
+- `95: formatJstCompactTimestamp`
+- `109: formatJstDisplayDateTime`
+- `126: sanitizeDownloadFileName`
+- `136: planRank`
+- `240: isBillingCycleDue`
+- `246: nextBillingBoundaryIsoJst`
+- `302: auditLog`
+- `312: isConditionalCheckFailed`
+- `955: pad3`
+- `1429: isoFromUnixSec`
 
-## 2. 主要ドメイン別の関数群
+## 3. フリープラン制約・課金補助
+- `142: countRoomFolders`
+- `157: freePlanConstraintSummary`
+- `173: freePlanConstraintMessage`
+- `184: isFreePlanBilling`
+- `218: isPhotoArchivedForFreePlan`
+- `224: splitArchivedPhotosForFreePlan`
+- `870: applyPendingSubscriptionIfDue`
+- `951: isUploadBlocked`
+- `1412: subscriptionPriceIdForPlan`
+- `1420: planCodeFromSubscriptionPriceId`
+- `1769: stripeCheckoutUrls`
+- `1776: parseAllowedReturnOrigins`
+- `1784: normalizeReturnUrl`
+- `1798: isAllowedReturnUrl`
 
-### 認証・ユーザー
-- `getUserIdentity`, `ensureUserProfile`, `getUser`
-- `getMe`, `updateDisplayName`
-- `accountDelete`（Cognitoユーザー削除 + データ整理）
+## 4. パスワード・トークン・識別子生成
+- `265: base64UrlFromBuffer`
+- `273: makeInviteToken`
+- `278: hashRoomPassword`
+- `285: verifyRoomPassword`
+- `624: getFolderPassword`
+- `629: verifyFolderPassword`
+- `637: folderHasPassword`
+- `641: roomMemberKey`
+- `645: userRoomMemberKey`
+- `649: userRoomConstraintKey`
 
-### ルーム解決・メンバーシップ
-- `resolveActiveRoomForUser`, `listUserRoomMemberships`, `setActiveRoomForUser`
-- `resolveRoomForRequest`
-- `ensureRoomMember`, `requireActiveMember`
-- `roomMemberKey`, `userRoomMemberKey`, `userRoomConstraintKey`
-- `normalizeFolderScope`, `normalizeMemberStatus`, `isAdminRole`
+## 5. S3・エクスポート・クリーンアップ補助
+- `192: addFreePlanWatermarks`
+- `316: photoHashKey`
+- `320: sha256ForS3Object`
+- `333: readS3ObjectBuffer`
+- `352: resolveExportSlideLayout`
+- `368: tryDeleteUploadedObjects`
+- `385: tryDeletePhotoHashMapping`
+- `3146: deleteAllCommentsForPhoto`
+- `3168: purgePhotoByItem`
+- `3203: deleteS3Prefix`
 
-### 招待
-- `makeInviteToken`
-- `createInvite`, `revokeInvite`, `acceptInvite`
+## 6. ユーザー解決・プロフィール
+- `399: getUserIdentity`
+- `427: normalizeDisplayName`
+- `434: ensureUserProfile`
+- `475: getUser`
+- `501: decodeText`
+- `1096: getActiveRoomIdForUser`
+- `1101: getMe`
+- `1109: updateDisplayName`
+- `1969: accountDelete`
 
-### チーム/課金
-- `teamMe`, `teamMeAuto`, `teamBilling`
-- サブスク: `teamSubscription`, `teamSubscriptionCheckout`, `changeTeamSubscription`, `applyPendingSubscriptionIfDue`
-  - `changeTeamSubscription` は `upgrade|downgrade|cancel|resume|free`
-- Stripe連携: `stripeGetSubscription`, `stripeUpdateSubscriptionPlan`, `stripeSetCancelAtPeriodEnd`, `stripeCancelSubscriptionNow`
-- メンバー管理: `listTeamMembers`, `updateTeamMember`, `teamLeave`, `teamDelete`
-- 補助: `isUploadBlocked`
+## 7. ルーム解決・メンバーシップ・認可
+- `510: isRoomMatch`
+- `514: resolveActiveRoomForUser`
+- `551: listUserRoomMemberships`
+- `568: setActiveRoomForUser`
+- `617: resolveRoomForRequest`
+- `653: isAdminRole`
+- `657: normalizeFolderScope`
+- `663: normalizeMemberStatus`
+- `672: upsertUserRoomMemberIndex`
+- `708: maybeUpsertUserRoomMemberIndex`
+- `743: ensureRoomMember`
+- `829: requireActiveMember`
+- `938: folderScopeForMember`
+- `943: canAccessFolder`
 
-### フォルダ/写真/コメント
-- フォルダ: `listFolders`, `createFolder`, `deleteFolder`, `updateFolderPassword`
-- 写真: `listPhotos`, `createUploadUrl`, `finalizePhoto`, `deletePhoto`, `updatePhoto`
-- コメント: `listComments`, `createComment`, `deleteComment`, `updateComment`
-- エクスポート: `exportFolder`
+## 8. ルーム作成・参加・切替
+- `959: nextFolderCode`
+- `973: nextPhotoCode`
+- `987: createRoom`
+- `1145: teamMe`
+- `1159: teamMeAuto`
+- `1170: listMyRooms`
+- `1185: switchActiveRoom`
+- `1214: createInvite`
+- `1262: revokeInvite`
+- `1310: acceptInvite`
 
-### 削除・クリーンアップ
-- `deleteAllByPk`, `deleteAllCommentsForPhoto`, `purgePhotoByItem`, `deleteS3Prefix`
+## 9. Stripe・サブスク・チーム運用
+- `1406: teamBilling`
+- `1435: stripeGetSubscription`
+- `1443: stripeUpdateSubscriptionPlan`
+- `1459: stripeSetCancelAtPeriodEnd`
+- `1470: stripeCancelSubscriptionNow`
+- `1478: cancelStripeSubscriptionForTeamDelete`
+- `1523: teamSubscription`
+- `1533: teamSubscriptionCheckout`
+- `1584: changeTeamSubscription`
+- `1807: listTeamMembers`
+- `1834: updateTeamMember`
+- `1918: teamLeave`
+- `2028: deleteAllByPk`
+- `2051: teamDelete`
 
-### 共通ユーティリティ
-- パスワード: `hashRoomPassword`, `verifyRoomPassword`, `verifyFolderPassword`
-- 名前/文言: `normalizeDisplayName`, `decodeText`
-- 監査: `auditLog`
+## 10. フォルダ・写真・コメント本体
+- `2222: loadDisplayNameMap`
+- `2250: applyResolvedDisplayName`
+- `2257: listFolders`
+- `2285: sumFolderUsageBytes`
+- `2314: createFolder`
+- `2371: listPhotos`
+- `2429: createUploadUrl`
+- `2486: finalizePhoto`
+- `2666: deletePhoto`
+- `2722: updatePhoto`
+- `2776: listComments`
+- `2806: createComment`
+- `2868: deleteComment`
+- `2918: updateComment`
+- `2978: exportFolder`
+- `3231: deleteFolder`
+- `3294: updateFolderPassword`
 
-## 3. 依存関係の要点（読む順）
+## 11. 最初に読む場所
 1. `exports.handler`
-2. `getUser` / `resolveRoomForRequest` / `requireActiveMember`
-3. 変更対象の handler 本体
-4. 削除系変更時は `purgePhotoByItem` と課金更新ロジックも確認
+2. `475: getUser`
+3. `617: resolveRoomForRequest`
+4. `829: requireActiveMember`
+5. 対象機能の handler
 
-## 4. 入口分岐の実務ポイント
-- ルーム不要:
-  - `/me`
-  - `/me/display-name`
-  - `/team/me`
-  - `/account/delete`
-  - `/rooms/mine`
-  - `/rooms/switch`
-  - `/invites/accept`
-  - `/rooms/create`
-- それ以外はルーム必須（active membership が前提）
-
-## 5. 変更時の注意
-- `teamDelete` と `deleteFolder` はデータ削除影響が広いので、関連S3削除・課金メタ削除・監査ログまでセットで確認する。
-- `uploadBlocked` の条件は `isUploadBlocked` を唯一の判断源に寄せる（フロント側で独自判定を増やさない）。
-- 課金挙動を変えるときは `teamSubscriptionCheckout` / `changeTeamSubscription` / webhook 側実装（`backend/src/stripe-webhook.js`）を同時に確認する。
-- アカウント削除は「作成者は先に部屋削除」が前提。`accountDelete` の `room owner must delete team first` ガードを変える時は、フロント文言と同時更新する。
+## 12. 次にコード側へ入れる目次案
+- 共通ユーティリティ
+- ユーザー/認証
+- ルーム/メンバーシップ
+- 招待
+- 課金/Stripe
+- フォルダ/写真/コメント
+- エクスポート/削除クリーンアップ
