@@ -765,7 +765,7 @@ async function ensureRoomMember(room, user, nowIso, ctx) {
     const currentScope = existing.Item.folderScope || existing.Item.folder_scope;
     const wantsScope = isAdminRole(existing.Item.role)
       ? 'all'
-      : normalizeFolderScope(currentScope || 'own');
+      : normalizeFolderScope(currentScope || 'all');
     if (!currentScope || String(currentScope) !== String(wantsScope)) {
       try {
         await ddb.send(
@@ -794,7 +794,7 @@ async function ensureRoomMember(room, user, nowIso, ctx) {
     userKey: user.userKey,
     role,
     status: 'active',
-    folderScope: isAdminRole(role) ? 'all' : 'own',
+    folderScope: isAdminRole(role) ? 'all' : 'all',
     joinedAt: nowIso,
     updatedAt: nowIso,
   };
@@ -1175,7 +1175,7 @@ async function listMyRooms(user) {
     role: m.role || 'member',
     status: String(m.status || 'inactive').toLowerCase(),
     memberStatus: String(m.memberStatus || 'active').toLowerCase(),
-    folderScope: normalizeFolderScope(m.folderScope || m.folder_scope || (isAdminRole(m.role) ? 'all' : 'own')),
+    folderScope: normalizeFolderScope(m.folderScope || m.folder_scope || (isAdminRole(m.role) ? 'all' : 'all')),
     updatedAt: m.updatedAt || null,
   }));
   const active = mapped.find((m) => m.status === 'active') || null;
@@ -1824,7 +1824,7 @@ async function listTeamMembers(room, authz) {
     displayName: nameMap[m.userKey] || '',
     role: m.role || 'member',
     status: normalizeMemberStatus(m.status),
-    folderScope: normalizeFolderScope(m.folderScope || m.folder_scope || (isAdminRole(m.role) ? 'all' : 'own')),
+    folderScope: normalizeFolderScope(m.folderScope || m.folder_scope || (isAdminRole(m.role) ? 'all' : 'all')),
     joinedAt: m.joinedAt || null,
     updatedAt: m.updatedAt || null,
   }));

@@ -33,6 +33,7 @@ const state = {
   billing: null,
   ownerUserKey: null,
   lastInviteToken: null,
+  availableRooms: [],
   folderPasswordById: {},
   folders: [],
   folderUnreadMap: {},
@@ -146,6 +147,7 @@ function resetRoomContext() {
   state.billing = null;
   state.ownerUserKey = null;
   state.lastInviteToken = null;
+  state.availableRooms = [];
   state.folderPasswordById = {};
   state.folders = [];
   state.folderUnreadMap = {};
@@ -159,6 +161,8 @@ function resetRoomContext() {
   closeLowStorageModal();
   renderBillingBar();
   setAdminUiVisibility();
+  renderRoomSelect();
+  renderFolders();
 }
 
 function supportsPkce() {
@@ -310,21 +314,26 @@ const els = {
   refreshMyRoomsBtn: document.querySelector('#refresh-my-rooms-btn'),
   myRoomsList: document.querySelector('#my-rooms-list'),
   leaveRoomBtn: document.querySelector('#leave-room-btn'),
-  switchRoomBtn: document.querySelector('#switch-room-btn'),
-  roomSwitchModal: document.querySelector('#room-switch-modal'),
-  roomSwitchList: document.querySelector('#room-switch-list'),
-  roomSwitchCloseBtn: document.querySelector('#room-switch-close-btn'),
   roomCreateModal: document.querySelector('#room-create-modal'),
   roomCreateName: document.querySelector('#room-create-name'),
   roomCreateSubmitBtn: document.querySelector('#room-create-submit-btn'),
   roomCreateCloseBtn: document.querySelector('#room-create-close-btn'),
+  folderCreateModal: document.querySelector('#folder-create-modal'),
+  folderCreateCloseBtn: document.querySelector('#folder-create-close-btn'),
+  openFolderCreateBtn: document.querySelector('#open-folder-create-btn'),
+  folderPasswordModal: document.querySelector('#folder-password-modal'),
+  folderPasswordCloseBtn: document.querySelector('#folder-password-close-btn'),
+  openFolderPasswordBtn: document.querySelector('#open-folder-password-btn'),
+  themeModal: document.querySelector('#theme-modal'),
+  themeCloseBtn: document.querySelector('#theme-close-btn'),
+  openThemeBtn: document.querySelector('#open-theme-btn'),
   helpModal: document.querySelector('#help-modal'),
   helpCloseBtn: document.querySelector('#help-close-btn'),
   menuBtn: document.querySelector('#menu-btn'),
   menuPanel: document.querySelector('#menu-panel'),
-  toggleThemeBtn: document.querySelector('#toggle-theme-btn'),
   helpMenuBtn: document.querySelector('#help-menu-btn'),
   seasonSelect: document.querySelector('#season-select'),
+  themeModeSelect: document.querySelector('#theme-mode-select'),
   resetUserBtn: document.querySelector('#reset-user-btn'),
   teamAdminBtn: document.querySelector('#team-admin-btn'),
   teamAdminCard: document.querySelector('#team-admin'),
@@ -363,16 +372,14 @@ const els = {
   inviteUrl: document.querySelector('#invite-url'),
   memberList: document.querySelector('#member-list'),
   folderAdminList: document.querySelector('#folder-admin-list'),
-  folderCreateCard: document.querySelector('#folder-create-card'),
-  folderListCard: document.querySelector('#folder-list-card'),
   folderDeleteBtn: document.querySelector('#delete-folder-btn'),
   appHeaderSummary: document.querySelector('#app-header-summary'),
   currentName: document.querySelector('#current-name'),
-  currentRoom: document.querySelector('#current-room'),
+  currentRoomSelect: document.querySelector('#current-room-select'),
+  currentFolderSelect: document.querySelector('#current-folder-select'),
   folderTitle: document.querySelector('#folder-title'),
   folderPassword: document.querySelector('#folder-password'),
   createFolderBtn: document.querySelector('#create-folder-btn'),
-  folderSelect: document.querySelector('#folder-select'),
   folderDetail: document.querySelector('#folder-detail'),
   folderDetailTitle: document.querySelector('#folder-detail-title'),
   photoArchiveNote: document.querySelector('#photo-archive-note'),
@@ -404,15 +411,27 @@ function closeTeamAdminPanel() {
   setTeamAdminMode(false);
 }
 
-function closeRoomSwitchModal() {
-  if (els.roomSwitchModal) {
-    els.roomSwitchModal.classList.add('hidden');
-  }
-}
-
 function closeRoomCreateModal() {
   if (els.roomCreateModal) {
     els.roomCreateModal.classList.add('hidden');
+  }
+}
+
+function closeFolderCreateModal() {
+  if (els.folderCreateModal) {
+    els.folderCreateModal.classList.add('hidden');
+  }
+}
+
+function closeFolderPasswordModal() {
+  if (els.folderPasswordModal) {
+    els.folderPasswordModal.classList.add('hidden');
+  }
+}
+
+function closeThemeModal() {
+  if (els.themeModal) {
+    els.themeModal.classList.add('hidden');
   }
 }
 
@@ -460,6 +479,9 @@ function showAuthSetup() {
   if (els.logoutBtn) els.logoutBtn.classList.add('hidden');
   setMenuActionVisibility(false);
   closeMenu();
+  closeFolderCreateModal();
+  closeFolderPasswordModal();
+  closeThemeModal();
 }
 
 function openHelpModal() {
@@ -476,75 +498,71 @@ function openRoomCreateModal() {
   }
 }
 
-async function openRoomSwitchModal() {
-  if (!state.idToken) return;
-  if (!els.roomSwitchModal || !els.roomSwitchList) return;
-
-  els.roomSwitchList.textContent = '読み込み中...';
-  els.roomSwitchModal.classList.remove('hidden');
-
-  try {
-    const res = await api('/rooms/mine', { method: 'GET' });
-    const items = res?.items || [];
-    const activeRoomId = res?.activeRoomId || null;
-
-    const rooms = (items || []).filter((r) => r && r.roomId && r.roomName && r.memberStatus !== 'left');
-    if (!rooms.length) {
-      els.roomSwitchList.textContent = '入室可能なお部屋がありません';
-      return;
-    }
-
-    els.roomSwitchList.innerHTML = '';
-    rooms.forEach((r) => {
-      const row = el('div', { class: 'room-row' });
-      const ms = String(r.memberStatus || 'active').toLowerCase();
-      const suffix = r.roomId === activeRoomId ? '（参加中）' : ms === 'disabled' ? '（停止中）' : '';
-      const ownerLabel = String(r.role || 'member').toLowerCase() === 'admin' ? '作成者: 自分' : '作成者: 別ユーザ';
-      const label = el('div', { style: 'flex:1;' }, `${r.roomName}${suffix} / ${ownerLabel}`);
-      const btnLabel = r.roomId === activeRoomId ? '入室中' : ms === 'disabled' ? '停止中' : 'この部屋へ';
-      const btn = el('button', { type: 'button' }, btnLabel);
-      btn.disabled = r.roomId === activeRoomId || ms === 'disabled';
-      btn.onclick = safeAction(async () => {
-        const sw = await api('/rooms/switch', { method: 'POST', body: JSON.stringify({ roomId: r.roomId }) });
-        // Switching rooms should reset any room-specific UI state (selected folder, admin panel, etc).
-        const nextRoomName = sw.roomName || r.roomName;
-        closeTeamAdminPanel();
-        resetRoomContext();
-        state.roomName = nextRoomName;
-        closeRoomSwitchModal();
-        showApp();
-      }, 'お部屋切替');
-      row.appendChild(label);
-      row.appendChild(btn);
-      els.roomSwitchList.appendChild(row);
-    });
-  } catch (error) {
-    els.roomSwitchList.textContent = `読み込みに失敗しました: ${asMessage(error)}`;
+function openFolderCreateModal() {
+  if (!els.folderCreateModal) return;
+  els.folderCreateModal.classList.remove('hidden');
+  if (els.folderTitle) {
+    els.folderTitle.value = '';
   }
+  if (els.folderPassword) {
+    els.folderPassword.value = '';
+  }
+  if (els.folderTitle) {
+    els.folderTitle.focus();
+  }
+}
+
+function openThemeModal() {
+  if (!els.themeModal) return;
+  if (els.themeModeSelect) {
+    els.themeModeSelect.value = document.body.classList.contains('dark') ? 'dark' : 'light';
+  }
+  if (els.seasonSelect) {
+    els.seasonSelect.value = normalizeSeason(state.season);
+  }
+  els.themeModal.classList.remove('hidden');
+}
+
+function openFolderPasswordModal() {
+  if (!els.folderPasswordModal) return;
+  if (!state.selectedFolder) {
+    window.alert('先にフォルダを選択してください。');
+    return;
+  }
+  if (els.folderPasswordSet) {
+    els.folderPasswordSet.value = '';
+    els.folderPasswordSet.focus();
+  }
+  els.folderPasswordModal.classList.remove('hidden');
 }
 
 function setTeamAdminMode(isOpen) {
   // While team admin is open, hide main folder workflow to reduce clutter.
-  if (els.folderCreateCard) els.folderCreateCard.classList.toggle('hidden', isOpen);
-  if (els.folderListCard) els.folderListCard.classList.toggle('hidden', isOpen);
   if (els.folderDetail) els.folderDetail.classList.toggle('hidden', isOpen ? true : !state.selectedFolder);
 }
 
-function setMenuActionVisibility(showActions) {
+function setMenuActionVisibility(showActions, options = {}) {
+  const { showAccountDelete = showActions } = options;
   if (els.resetUserBtn) {
     els.resetUserBtn.classList.toggle('hidden', !showActions);
   }
   if (els.createRoomMenuBtn) {
     els.createRoomMenuBtn.classList.toggle('hidden', !showActions);
   }
-  if (els.switchRoomBtn) {
-    els.switchRoomBtn.classList.toggle('hidden', !showActions);
-  }
   if (els.leaveRoomBtn) {
     els.leaveRoomBtn.classList.toggle('hidden', !showActions);
   }
   if (els.accountDeleteBtn) {
-    els.accountDeleteBtn.classList.toggle('hidden', !showActions);
+    els.accountDeleteBtn.classList.toggle('hidden', !showAccountDelete);
+  }
+  if (els.openFolderCreateBtn) {
+    els.openFolderCreateBtn.classList.toggle('hidden', !showActions);
+  }
+  if (els.openFolderPasswordBtn) {
+    els.openFolderPasswordBtn.classList.toggle('hidden', !showActions || !state.isAdmin);
+  }
+  if (els.openThemeBtn) {
+    els.openThemeBtn.classList.toggle('hidden', !showActions);
   }
 }
 
@@ -706,9 +724,11 @@ function setAdminUiVisibility() {
   if (els.teamAdminBtn) els.teamAdminBtn.classList.toggle('hidden', !state.isAdmin);
   if (els.folderDeleteBtn) els.folderDeleteBtn.classList.toggle('hidden', !state.isAdmin);
   if (els.setFolderPasswordBtn) els.setFolderPasswordBtn.classList.toggle('hidden', !state.isAdmin);
+  if (els.openFolderPasswordBtn) els.openFolderPasswordBtn.classList.toggle('hidden', !state.isAdmin);
   if (!state.isAdmin) {
     if (els.teamAdminCard) els.teamAdminCard.classList.add('hidden');
     closeLowStorageModal();
+    closeFolderPasswordModal();
   }
 }
 
@@ -780,6 +800,9 @@ function applyTheme(theme) {
     document.body.classList.add('dark');
   } else {
     document.body.classList.remove('dark');
+  }
+  if (els.themeModeSelect) {
+    els.themeModeSelect.value = theme === 'dark' ? 'dark' : 'light';
   }
 }
 
@@ -1259,8 +1282,11 @@ function showRoomSetup() {
     if (els.globalMenuWrap) els.globalMenuWrap.classList.add('hidden');
     if (els.logoutBtn) els.logoutBtn.classList.add('hidden');
   }
-  setMenuActionVisibility(false);
+  setMenuActionVisibility(false, { showAccountDelete: Boolean(state.userKey) });
   closeMenu();
+  closeFolderCreateModal();
+  closeFolderPasswordModal();
+  closeThemeModal();
 }
 
 function renderMyRooms(items, activeRoomId) {
@@ -1283,12 +1309,7 @@ function renderMyRooms(items, activeRoomId) {
     const btn = el('button', { type: 'button' }, btnLabel);
     btn.disabled = r.roomId === activeRoomId || ms === 'disabled';
     btn.onclick = safeAction(async () => {
-      const res = await api('/rooms/switch', { method: 'POST', body: JSON.stringify({ roomId: r.roomId }) });
-      const nextRoomName = res.roomName || r.roomName;
-      closeTeamAdminPanel();
-      resetRoomContext();
-      state.roomName = nextRoomName;
-      showApp();
+      await switchRoomById(r.roomId, r.roomName);
     }, 'お部屋切替');
     row.appendChild(label);
     row.appendChild(btn);
@@ -1296,12 +1317,53 @@ function renderMyRooms(items, activeRoomId) {
   });
 }
 
+function renderRoomSelect() {
+  if (!els.currentRoomSelect) return;
+  els.currentRoomSelect.innerHTML = '';
+
+  if (!state.availableRooms.length) {
+    const empty = el('option', { value: '' }, 'お部屋がありません');
+    els.currentRoomSelect.appendChild(empty);
+    els.currentRoomSelect.value = '';
+    els.currentRoomSelect.disabled = true;
+    return;
+  }
+
+  state.availableRooms.forEach((room) => {
+    const option = el('option', { value: room.roomId }, room.roomName);
+    if (String(room.memberStatus || '').toLowerCase() === 'disabled') {
+      option.disabled = true;
+      option.textContent = `${room.roomName}（停止中）`;
+    }
+    els.currentRoomSelect.appendChild(option);
+  });
+
+  const activeRoom =
+    state.availableRooms.find((room) => String(room.roomId || '') === String(state.roomId || '')) ||
+    state.availableRooms.find((room) => String(room.roomName || '') === String(state.roomName || ''));
+  els.currentRoomSelect.disabled = false;
+  els.currentRoomSelect.value = activeRoom?.roomId || '';
+}
+
 async function loadMyRooms() {
   if (!state.idToken) return;
-  if (!els.myRoomsList) return;
-  els.myRoomsList.textContent = '読み込み中...';
+  if (els.myRoomsList) {
+    els.myRoomsList.textContent = '読み込み中...';
+  }
   const res = await api('/rooms/mine', { method: 'GET' });
-  renderMyRooms(res.items || [], res.activeRoomId || null);
+  state.availableRooms = (res.items || []).filter((room) => room && room.roomId && room.roomName && room.memberStatus !== 'left');
+  renderMyRooms(state.availableRooms, res.activeRoomId || null);
+  renderRoomSelect();
+}
+
+async function switchRoomById(roomId, fallbackRoomName = '') {
+  const sw = await api('/rooms/switch', { method: 'POST', body: JSON.stringify({ roomId }) });
+  const nextRoomName = sw.roomName || fallbackRoomName || null;
+  closeTeamAdminPanel();
+  resetRoomContext();
+  state.roomId = roomId;
+  state.roomName = nextRoomName;
+  showApp();
 }
 
 async function getOwnedRoomForGuard() {
@@ -1348,11 +1410,12 @@ function showApp() {
   if (els.logoutBtn) els.logoutBtn.classList.remove('hidden');
   closeMenu();
   els.currentName.textContent = state.userName;
-  if (els.currentRoom) els.currentRoom.textContent = state.roomName || '-';
+  renderRoomSelect();
   loadTeamMe().then(async () => {
     if (els.uploadBtn) els.uploadBtn.disabled = Boolean(state.uploadBlocked);
     await handleStripePurchaseReturn();
   });
+  loadMyRooms().catch(() => {});
   loadFolders();
 }
 
@@ -1423,6 +1486,7 @@ async function loadTeamMe() {
   try {
     const data = await api('/team/me', { method: 'GET' });
     state.roomId = data.roomId || state.roomId;
+    state.roomName = data.roomName || state.roomName;
     state.teamRole = data.role || 'member';
     state.isAdmin = Boolean(data.isAdmin);
     state.uploadBlocked = Boolean(data.uploadBlocked);
@@ -1441,6 +1505,7 @@ async function loadTeamMe() {
   setAdminUiVisibility();
   renderBillingBar();
   syncSubscriptionPlanButtons();
+  renderRoomSelect();
 }
 
 async function loadAdminPanel() {
@@ -1470,7 +1535,7 @@ async function loadAdminPanel() {
           const scopeSelect = el('select', { style: 'min-width:120px;' });
           scopeSelect.appendChild(el('option', { value: 'own' }, '自分のフォルダのみ'));
           scopeSelect.appendChild(el('option', { value: 'all' }, '全フォルダ表示'));
-          scopeSelect.value = m.role === 'admin' ? 'all' : m.folderScope || 'own';
+          scopeSelect.value = m.role === 'admin' ? 'all' : m.folderScope || 'all';
           scopeSelect.disabled = m.role === 'admin' || m.userKey === state.ownerUserKey;
           scopeSelect.onchange = safeAction(async () => {
             const next = scopeSelect.value;
@@ -1675,14 +1740,15 @@ async function refreshFolderUnread(folderIds = null) {
 }
 
 function renderFolders() {
-  if (!els.folderSelect) return;
-  els.folderSelect.innerHTML = '';
+  if (!els.currentFolderSelect) return;
+  els.currentFolderSelect.innerHTML = '';
   if (!state.folders.length) {
     const empty = document.createElement('option');
     empty.value = '';
     empty.textContent = 'まだフォルダがなかです';
-    els.folderSelect.appendChild(empty);
-    els.folderSelect.value = '';
+    els.currentFolderSelect.appendChild(empty);
+    els.currentFolderSelect.value = '';
+    els.currentFolderSelect.disabled = true;
     els.folderDetail.classList.add('hidden');
     state.selectedFolder = null;
     return;
@@ -1691,7 +1757,7 @@ function renderFolders() {
   const head = document.createElement('option');
   head.value = '';
   head.textContent = 'フォルダを選択してください';
-  els.folderSelect.appendChild(head);
+  els.currentFolderSelect.appendChild(head);
 
   state.folders.forEach((folder) => {
     const option = document.createElement('option');
@@ -1699,11 +1765,14 @@ function renderFolders() {
     const unread = state.folderUnreadMap[folder.folderId];
     const locked = Boolean(folder.hasPassword);
     option.textContent = `${folder.folderCode || 'F---'} ${folder.title}${locked ? ' [鍵]' : ''}${unread ? ' ●新着' : ''}`;
-    els.folderSelect.appendChild(option);
+    els.currentFolderSelect.appendChild(option);
   });
 
+  els.currentFolderSelect.disabled = false;
   if (state.selectedFolder) {
-    els.folderSelect.value = state.selectedFolder.folderId;
+    els.currentFolderSelect.value = state.selectedFolder.folderId;
+  } else {
+    els.currentFolderSelect.value = '';
   }
 }
 
@@ -1711,15 +1780,20 @@ async function selectFolder(folder) {
   clearUploadDrafts();
   if (folder.hasPassword && !state.folderPasswordById[folder.folderId]) {
     const entered = window.prompt('このフォルダは鍵付きです。パスワードを入力してください。', '');
-    if (entered === null) return;
+    if (entered === null) {
+      renderFolders();
+      return;
+    }
     const pw = String(entered || '').trim();
     if (!pw) {
       showError('フォルダパスワードが必要です。');
+      renderFolders();
       return;
     }
     state.folderPasswordById[folder.folderId] = pw;
   }
   state.selectedFolder = folder;
+  renderFolders();
   els.folderDetail.classList.remove('hidden');
   els.folderDetailTitle.textContent = `フォルダ: ${folder.folderCode || 'F---'} ${folder.title}`;
   await loadPhotos();
@@ -1732,6 +1806,7 @@ async function selectFolderById(folderId) {
     clearUploadDrafts();
     els.folderDetail.classList.add('hidden');
     renderPhotoArchiveNote();
+    renderFolders();
     return;
   }
   const folder = state.folders.find((f) => f.folderId === folderId);
@@ -2229,8 +2304,10 @@ if (els.logoutBtn) {
     resetRoomContext();
     clearAuth();
     closeMenu();
-    closeRoomSwitchModal();
     closeRoomCreateModal();
+    closeFolderCreateModal();
+    closeFolderPasswordModal();
+    closeThemeModal();
     closeHelpModal();
     closePhotoPreviewModal();
 
@@ -2246,21 +2323,6 @@ if (els.logoutBtn) {
   };
 }
 
-if (els.roomSwitchCloseBtn) {
-  els.roomSwitchCloseBtn.onclick = () => {
-    closeRoomSwitchModal();
-  };
-}
-
-if (els.roomSwitchModal) {
-  els.roomSwitchModal.onclick = (e) => {
-    // Click on backdrop closes; clicks inside modal-card don't.
-    if (e && e.target === els.roomSwitchModal) {
-      closeRoomSwitchModal();
-    }
-  };
-}
-
 if (els.roomCreateCloseBtn) {
   els.roomCreateCloseBtn.onclick = () => {
     closeRoomCreateModal();
@@ -2271,6 +2333,48 @@ if (els.roomCreateModal) {
   els.roomCreateModal.onclick = (e) => {
     if (e && e.target === els.roomCreateModal) {
       closeRoomCreateModal();
+    }
+  };
+}
+
+if (els.folderCreateCloseBtn) {
+  els.folderCreateCloseBtn.onclick = () => {
+    closeFolderCreateModal();
+  };
+}
+
+if (els.folderCreateModal) {
+  els.folderCreateModal.onclick = (e) => {
+    if (e && e.target === els.folderCreateModal) {
+      closeFolderCreateModal();
+    }
+  };
+}
+
+if (els.folderPasswordCloseBtn) {
+  els.folderPasswordCloseBtn.onclick = () => {
+    closeFolderPasswordModal();
+  };
+}
+
+if (els.folderPasswordModal) {
+  els.folderPasswordModal.onclick = (e) => {
+    if (e && e.target === els.folderPasswordModal) {
+      closeFolderPasswordModal();
+    }
+  };
+}
+
+if (els.themeCloseBtn) {
+  els.themeCloseBtn.onclick = () => {
+    closeThemeModal();
+  };
+}
+
+if (els.themeModal) {
+  els.themeModal.onclick = (e) => {
+    if (e && e.target === els.themeModal) {
+      closeThemeModal();
     }
   };
 }
@@ -2354,18 +2458,32 @@ if (els.refreshMyRoomsBtn) {
   }, '一覧更新');
 }
 
-if (els.switchRoomBtn) {
-  els.switchRoomBtn.onclick = safeAction(async () => {
-    closeMenu();
-    await openRoomSwitchModal();
-  }, 'お部屋切替');
-}
-
 if (els.createRoomMenuBtn) {
   els.createRoomMenuBtn.onclick = safeAction(async () => {
     closeMenu();
     openRoomCreateModal();
   }, 'お部屋作成');
+}
+
+if (els.openFolderCreateBtn) {
+  els.openFolderCreateBtn.onclick = safeAction(async () => {
+    closeMenu();
+    openFolderCreateModal();
+  }, 'フォルダ作成');
+}
+
+if (els.openFolderPasswordBtn) {
+  els.openFolderPasswordBtn.onclick = safeAction(async () => {
+    closeMenu();
+    openFolderPasswordModal();
+  }, 'フォルダパスワード');
+}
+
+if (els.openThemeBtn) {
+  els.openThemeBtn.onclick = safeAction(async () => {
+    closeMenu();
+    openThemeModal();
+  }, 'テーマ変更');
 }
 
 if (els.helpMenuBtn) {
@@ -2465,6 +2583,7 @@ els.createFolderBtn.onclick = safeAction(async () => {
   }
   els.folderTitle.value = '';
   if (els.folderPassword) els.folderPassword.value = '';
+  closeFolderCreateModal();
   showToast(`フォルダ：${created.title} を作成しました。`);
   await loadFolders();
   await selectFolderById(created.folderId);
@@ -2501,8 +2620,11 @@ if (els.cancelUploadDraftsBtn) {
 }
 
 els.exportBtn.onclick = safeAction(async () => {
-  if (!state.selectedFolder) return;
-  const confirmed = window.confirm('このフォルダの写真をPowerPoint出力します。よかですか？');
+  if (!state.selectedFolder) {
+    window.alert('先にフォルダを選択してください。');
+    return;
+  }
+  const confirmed = window.confirm('現在のフォルダをPPTに出力します。よろしいですか？');
   if (!confirmed) return;
   const preOpened = window.open('', '_blank');
   try {
@@ -2663,6 +2785,7 @@ if (els.setFolderPasswordBtn) {
     if (next) state.folderPasswordById[folderId] = next;
     else delete state.folderPasswordById[folderId];
     if (els.folderPasswordSet) els.folderPasswordSet.value = '';
+    closeFolderPasswordModal();
     showToast('フォルダの鍵を更新しました。');
     await loadFolders();
   }, '鍵設定');
@@ -2680,21 +2803,21 @@ window.addEventListener('resize', () => {
   syncTopStorageGraphWidth();
 });
 
-if (els.toggleThemeBtn) {
-  els.toggleThemeBtn.onclick = () => {
-    const next = document.body.classList.contains('dark') ? 'light' : 'dark';
-    localStorage.setItem('kansa_theme', next);
-    applyTheme(next);
-    closeMenu();
-  };
-}
-
 if (els.seasonSelect) {
   els.seasonSelect.onchange = () => {
     const next = normalizeSeason(els.seasonSelect.value);
     localStorage.setItem('kansa_season', next);
     applySeason(next);
-    closeMenu();
+    renderTopStorageGraph();
+  };
+}
+
+if (els.themeModeSelect) {
+  els.themeModeSelect.onchange = () => {
+    const next = els.themeModeSelect.value === 'dark' ? 'dark' : 'light';
+    localStorage.setItem('kansa_theme', next);
+    applyTheme(next);
+    renderTopStorageGraph();
   };
 }
 
@@ -2710,12 +2833,50 @@ if (els.menuBtn && els.menuPanel) {
   });
 }
 
-if (els.folderSelect) {
-  els.folderSelect.addEventListener('change', async (event) => {
+document.querySelectorAll('[data-menu-group]').forEach((group) => {
+  group.addEventListener('toggle', () => {
+    if (!group.open) return;
+    document.querySelectorAll('[data-menu-group]').forEach((other) => {
+      if (other !== group) other.open = false;
+    });
+  });
+});
+
+if (els.currentFolderSelect) {
+  els.currentFolderSelect.addEventListener('change', async (event) => {
     await safeAction(async () => {
       const folderId = event.target.value;
       await selectFolderById(folderId);
     }, 'フォルダ選択')();
+  });
+}
+
+if (els.currentRoomSelect) {
+  els.currentRoomSelect.addEventListener('change', async (event) => {
+    const nextRoomId = String(event.target.value || '');
+    const previousRoomId = String(state.roomId || '');
+    if (!nextRoomId || nextRoomId === previousRoomId) {
+      renderRoomSelect();
+      return;
+    }
+    const room = state.availableRooms.find((item) => String(item.roomId || '') === nextRoomId);
+    if (!room || String(room.memberStatus || '').toLowerCase() === 'disabled') {
+      renderRoomSelect();
+      return;
+    }
+    const ok = window.confirm('現在のお部屋を切り替えます。よろしいですか？');
+    if (!ok) {
+      renderRoomSelect();
+      return;
+    }
+    await safeAction(async () => {
+      try {
+        await switchRoomById(room.roomId, room.roomName);
+      } catch (error) {
+        renderRoomSelect();
+        throw error;
+      }
+    }, 'お部屋切替')();
   });
 }
 

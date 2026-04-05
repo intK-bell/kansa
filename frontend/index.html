@@ -25,22 +25,32 @@
         <div class="menu-wrap hidden" id="global-menu-wrap">
           <button id="menu-btn" class="menu-btn" type="button" aria-label="menu">☰</button>
           <div id="menu-panel" class="menu-panel hidden">
-            <label class="menu-label" for="season-select">季節テーマ</label>
-            <select id="season-select">
-              <option value="spring">春</option>
-              <option value="summer">夏</option>
-              <option value="autumn">秋</option>
-              <option value="winter">冬</option>
-            </select>
-            <button id="toggle-theme-btn" type="button">ダークモード切替</button>
-            <button id="reset-user-btn" type="button">ユーザー名変更</button>
-            <button id="team-admin-btn" type="button" class="hidden">お部屋管理</button>
-            <button id="create-room-menu-btn" type="button">お部屋作成</button>
-            <button id="switch-room-btn" type="button">お部屋切替</button>
-            <button id="help-menu-btn" type="button">使い方・料金</button>
-            <button id="leave-room-btn" type="button" class="danger">メンバーやめる</button>
-            <button id="account-delete-btn" type="button" class="danger">アカウント削除</button>
+            <details class="menu-group" data-menu-group>
+              <summary class="menu-group-summary">お部屋</summary>
+              <div class="menu-group-items">
+                <button id="team-admin-btn" type="button" class="hidden">管理</button>
+                <button id="create-room-menu-btn" type="button">作成</button>
+                <button id="leave-room-btn" type="button" class="danger">メンバーをやめる</button>
+              </div>
+            </details>
+            <details class="menu-group" data-menu-group>
+              <summary class="menu-group-summary">フォルダ</summary>
+              <div class="menu-group-items">
+                <button id="open-folder-create-btn" type="button">作成</button>
+                <button id="open-folder-password-btn" type="button" class="hidden">パスワード</button>
+                <button id="export-btn" type="button">PPT出力</button>
+              </div>
+            </details>
+            <details class="menu-group" data-menu-group>
+              <summary class="menu-group-summary">アカウント</summary>
+              <div class="menu-group-items">
+                <button id="open-theme-btn" type="button">テーマ</button>
+                <button id="reset-user-btn" type="button">ユーザー名変更</button>
+                <button id="account-delete-btn" type="button" class="danger">アカウント削除</button>
+              </div>
+            </details>
             <button id="logout-btn" type="button" class="danger">ログアウト</button>
+            <button id="help-menu-btn" type="button">使い方・料金</button>
           </div>
         </div>
       </div>
@@ -51,9 +61,6 @@
           <button id="signup-btn" type="button">新規登録</button>
         </div>
         <p class="auth-footnote">
-          ※ 本アプリの多要素認証は汎用の認証アプリを使用します。<br />
-          新規登録前に、 Microsoft Authenticator / Google Authenticatorなどをインストールください。
-          <br />
           <span id="help-user-link" class="help-link">使い方を見る</span>
           <br />
           <a class="help-link auth-legal-link" href="./legal.html">特定商取引法に基づく表記・利用規約・プライバシーポリシー</a>
@@ -84,10 +91,23 @@
 
       <section id="app" class="hidden">
         <div class="app-header">
-          <p id="app-header-summary">
-            利用者: <strong id="current-name"></strong>
-            / お部屋: <strong id="current-room"></strong>
-          </p>
+          <div id="app-header-summary" class="app-header-summary">
+            <p>利用者: <strong id="current-name"></strong></p>
+            <div class="app-header-controls">
+              <label class="app-header-field">
+                <span>現在のお部屋</span>
+                <select id="current-room-select">
+                  <option value="">お部屋を選択してください</option>
+                </select>
+              </label>
+              <label class="app-header-field">
+                <span>現在のフォルダ</span>
+                <select id="current-folder-select">
+                  <option value="">フォルダを選択してください</option>
+                </select>
+              </label>
+            </div>
+          </div>
         </div>
 
         <div class="toolbar">
@@ -158,29 +178,6 @@
           </div>
         </section>
 
-        <section id="folder-create-card" class="card">
-          <h2>フォルダ作成</h2>
-          <div class="row">
-            <input id="folder-title" placeholder="〇〇工場_yyyymmdd" />
-            <input id="folder-password" placeholder="フォルダパスワード（任意）" type="password" />
-            <button id="create-folder-btn">作成</button>
-          </div>
-        </section>
-
-        <section id="folder-list-card" class="card">
-          <h2>フォルダ一覧</h2>
-          <select id="folder-select">
-            <option value="">フォルダを選択してください</option>
-          </select>
-          <div class="row" style="margin-top:10px;">
-            <input id="folder-password-set" placeholder="フォルダパスワード（空で解除）" type="password" />
-            <button id="set-folder-password-btn" type="button" class="hidden">鍵を設定/解除</button>
-          </div>
-          <div class="row" style="margin-top:10px;">
-            <button id="export-btn">PowerPoint出力</button>
-          </div>
-        </section>
-
         <section id="folder-detail" class="card hidden">
           <h2 id="folder-detail-title"></h2>
           <p id="photo-archive-note" class="muted" style="margin:6px 0 10px;"></p>
@@ -207,17 +204,6 @@
 
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
-    <div id="room-switch-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="お部屋切替">
-      <div class="modal-card">
-        <div class="modal-header">
-          <h3 style="margin:0;">お部屋切替</h3>
-          <button id="room-switch-close-btn" type="button" class="danger">閉じる</button>
-        </div>
-        <p class="muted" style="margin:8px 0 10px;">入室可能なお部屋から切り替えられます。</p>
-        <div id="room-switch-list" class="muted">読み込み中...</div>
-      </div>
-    </div>
-
     <div id="room-create-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="お部屋作成">
       <div class="modal-card">
         <div class="modal-header">
@@ -232,6 +218,61 @@
       </div>
     </div>
 
+    <div id="folder-create-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="フォルダ作成">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 style="margin:0;">フォルダ作成</h3>
+          <button id="folder-create-close-btn" type="button" class="danger">閉じる</button>
+        </div>
+        <div class="row" style="align-items:stretch;">
+          <input id="folder-title" placeholder="〇〇工場_yyyymmdd" />
+          <input id="folder-password" placeholder="フォルダパスワード（任意）" type="password" />
+          <button id="create-folder-btn">作成</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="theme-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="テーマ">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 style="margin:0;">テーマ</h3>
+          <button id="theme-close-btn" type="button" class="danger">閉じる</button>
+        </div>
+        <div class="modal-form-grid">
+          <label>
+            <span class="menu-label">季節</span>
+            <select id="season-select">
+              <option value="spring">春</option>
+              <option value="summer">夏</option>
+              <option value="autumn">秋</option>
+              <option value="winter">冬</option>
+            </select>
+          </label>
+          <label>
+            <span class="menu-label">ダークモード</span>
+            <select id="theme-mode-select">
+              <option value="light">OFF</option>
+              <option value="dark">ON</option>
+            </select>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div id="folder-password-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="フォルダパスワード">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 style="margin:0;">フォルダパスワード</h3>
+          <button id="folder-password-close-btn" type="button" class="danger">閉じる</button>
+        </div>
+        <p class="muted" style="margin:8px 0 10px;">現在のフォルダに設定します。空で保存すると解除されます。</p>
+        <div class="row" style="align-items:stretch;">
+          <input id="folder-password-set" placeholder="フォルダパスワード（空で解除）" type="password" />
+          <button id="set-folder-password-btn" type="button" class="hidden">鍵を設定/解除</button>
+        </div>
+      </div>
+    </div>
+
     <div id="help-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="使い方・料金">
       <div class="modal-card">
         <div class="modal-header">
@@ -240,11 +281,11 @@
         </div>
         <div class="help-content">
           <p>1. 新規登録後、ログイン（初回は表示名を設定）</p>
-          <p>2. お部屋を作成するか、招待URLから参加</p>
+          <p>2. ログイン後、お部屋を作成</p>
           <p>3. フォルダ作成 → 写真アップロード → コメント追加</p>
 
           <h4>お部屋操作</h4>
-          <p>メニューの <strong>お部屋切替</strong> で、所属中のお部屋をいつでも切替できます。</p>
+          <p>画面上部の <strong>現在のお部屋</strong> で、所属中のお部屋をいつでも切替できます。</p>
           <p><strong>メンバーやめる</strong> を実行すると、その部屋には招待URLなしでは再参加できません。</p>
 
           <h4>料金</h4>
@@ -285,6 +326,6 @@
       </div>
     </div>
     <script src="./config.js?v=20260215-2"></script>
-    <script src="./main.js?v=20260404-1" type="module"></script>
+    <script src="./main.js?v=20260405-1" type="module"></script>
   </body>
 </html>
