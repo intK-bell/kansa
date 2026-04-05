@@ -1796,6 +1796,7 @@ function renderFolders() {
 
 async function selectFolder(folder) {
   clearUploadDrafts();
+  const folderId = folder.folderId;
   if (folder.hasPassword && !state.folderPasswordById[folder.folderId]) {
     const entered = window.prompt('このフォルダは鍵付きです。パスワードを入力してください。', '');
     if (entered === null) {
@@ -1814,7 +1815,22 @@ async function selectFolder(folder) {
   renderFolders();
   els.folderDetail.classList.remove('hidden');
   els.folderDetailTitle.textContent = `フォルダ: ${folder.folderCode || 'F---'} ${folder.title}`;
-  await loadPhotos();
+  try {
+    await loadPhotos();
+  } catch (error) {
+    const body = parseApiErrorBody(error);
+    if (error?.status === 403 && body?.message === 'invalid folder password') {
+      delete state.folderPasswordById[folderId];
+      state.selectedFolder = null;
+      state.selectedFolderArchive = null;
+      els.folderDetail.classList.add('hidden');
+      renderPhotoArchiveNote();
+      renderFolders();
+      showError('フォルダパスワードが違います。');
+      return;
+    }
+    throw error;
+  }
 }
 
 async function selectFolderById(folderId) {
