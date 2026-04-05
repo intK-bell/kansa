@@ -2330,7 +2330,7 @@ if (els.resetUserBtn) {
     renderTopStorageGraph();
     showToast('表示名を更新しました。');
     closeMenu();
-  }, 'ユーザー名変更');
+  }, '名前変更');
 }
 
 if (els.logoutBtn) {
@@ -2460,7 +2460,7 @@ if (els.leaveRoomBtn) {
     try {
       const me = await api('/team/me', { method: 'GET' });
       if (me && me.isAdmin) {
-        window.alert('管理者はメンバーやめることはできません。お部屋管理から「お部屋を削除（全データ）」を実行してください。');
+        window.alert('管理者は脱退できません。お部屋管理から「お部屋を削除（全データ）」を実行してください。');
         closeMenu();
         return;
       }
@@ -2473,7 +2473,7 @@ if (els.leaveRoomBtn) {
       closeMenu();
       return;
     }
-    // "メンバーやめる" means: mark membership as left, and clear active room selection.
+    // "脱退" means: mark membership as left, and clear active room selection.
     try {
       await api('/team/leave', { method: 'POST' });
     } catch (_) {
@@ -2483,7 +2483,7 @@ if (els.leaveRoomBtn) {
     closeMenu();
     showRoomSetup();
     await loadMyRooms();
-  }, 'メンバーやめる');
+  }, '脱退');
 }
 
 if (els.refreshMyRoomsBtn) {
@@ -2788,7 +2788,7 @@ if (els.accountDeleteBtn) {
     resetRoomContext();
     clearAuth();
     showAuthSetup();
-  }, 'アカウント削除');
+  }, '削除');
 }
 
 if (els.folderDeleteBtn) {
