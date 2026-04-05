@@ -374,6 +374,7 @@ const els = {
   folderAdminList: document.querySelector('#folder-admin-list'),
   folderDeleteBtn: document.querySelector('#delete-folder-btn'),
   appHeaderSummary: document.querySelector('#app-header-summary'),
+  appHeaderControls: document.querySelector('.app-header-controls'),
   currentName: document.querySelector('#current-name'),
   currentRoomSelect: document.querySelector('#current-room-select'),
   currentFolderSelect: document.querySelector('#current-folder-select'),
@@ -538,6 +539,7 @@ function openFolderPasswordModal() {
 
 function setTeamAdminMode(isOpen) {
   // While team admin is open, hide main folder workflow to reduce clutter.
+  if (els.appHeaderControls) els.appHeaderControls.classList.toggle('hidden', isOpen);
   if (els.folderDetail) els.folderDetail.classList.toggle('hidden', isOpen ? true : !state.selectedFolder);
 }
 
@@ -1594,21 +1596,22 @@ async function loadAdminPanel() {
           );
           row.appendChild(left);
           const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
-          const resetBtn = el('button', { type: 'button' }, 'パスワード解除');
-          resetBtn.disabled = !f.hasPassword;
-          resetBtn.onclick = safeAction(async () => {
-            const ok = window.confirm(`フォルダ「${f.title || f.folderId}」のパスワードを解除してよろしいですか？`);
-            if (!ok) return;
-            await api(`/folders/${f.folderId}/password`, {
-              method: 'PUT',
-              body: JSON.stringify({ folderPassword: '' }),
-            });
-            delete state.folderPasswordById[f.folderId];
-            showToast('フォルダのパスワードを解除しました。');
-            await loadFolders();
-            await loadAdminPanel();
-          }, 'フォルダパスワード解除');
-          actions.appendChild(resetBtn);
+          if (f.hasPassword) {
+            const resetBtn = el('button', { type: 'button' }, 'パスワード解除');
+            resetBtn.onclick = safeAction(async () => {
+              const ok = window.confirm(`フォルダ「${f.title || f.folderId}」のパスワードを解除してよろしいですか？`);
+              if (!ok) return;
+              await api(`/folders/${f.folderId}/password`, {
+                method: 'PUT',
+                body: JSON.stringify({ folderPassword: '' }),
+              });
+              delete state.folderPasswordById[f.folderId];
+              showToast('フォルダのパスワードを解除しました。');
+              await loadFolders();
+              await loadAdminPanel();
+            }, 'フォルダパスワード解除');
+            actions.appendChild(resetBtn);
+          }
           const delBtn = el('button', { type: 'button', class: 'danger' }, '削除');
           delBtn.onclick = safeAction(async () => {
             const ok = window.confirm(`フォルダ「${f.title || f.folderId}」を削除してよかですか？（写真とコメントも消えます）`);

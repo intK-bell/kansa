@@ -2382,7 +2382,7 @@ async function listPhotos(event, folderId, user, room, authz) {
   if (!canAccessFolder(folder, user, authz)) {
     return json(403, { message: 'forbidden' });
   }
-  const pw = authz?.isAdmin ? { ok: true } : verifyFolderPassword(folder, event);
+  const pw = verifyFolderPassword(folder, event);
   if (!pw.ok) return json(403, { message: 'invalid folder password' });
 
   const res = await ddb.send(
@@ -2440,7 +2440,7 @@ async function createUploadUrl(event, folderId, body, user, room, authz) {
   if (!canAccessFolder(folder, user, authz)) {
     return json(403, { message: 'forbidden' });
   }
-  const pw = authz?.isAdmin ? { ok: true } : verifyFolderPassword(folder, event);
+  const pw = verifyFolderPassword(folder, event);
   if (!pw.ok) return json(403, { message: 'invalid folder password' });
 
   if (isUploadBlocked(authz.billing)) {
@@ -2504,7 +2504,7 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
   if (!canAccessFolder(folder, user, authz)) {
     return json(403, { message: 'forbidden' });
   }
-  const pw = authz?.isAdmin ? { ok: true } : verifyFolderPassword(folder, event);
+  const pw = verifyFolderPassword(folder, event);
   if (!pw.ok) return json(403, { message: 'invalid folder password' });
 
   if (isUploadBlocked(authz.billing)) {
@@ -2992,7 +2992,7 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
   if (!folder) return json(404, { message: 'folder not found' });
   if (!isRoomMatch(folder.roomName, room.roomName)) return json(404, { message: 'folder not found' });
   if (!canAccessFolder(folder, user, authz)) return json(403, { message: 'forbidden' });
-  const pw = authz?.isAdmin ? { ok: true } : verifyFolderPassword(folder, event);
+  const pw = verifyFolderPassword(folder, event);
   if (!pw.ok) return json(403, { message: 'invalid folder password' });
   const billing = await getBillingMeta(ddb, { tableName: TABLE_NAME, roomId: room.roomId });
   const isFreePlanExport = isFreePlanBilling(billing);
@@ -3241,7 +3241,7 @@ async function deleteFolder(event, folderId, user, room, authz, ctx) {
   if (!folder || !isRoomMatch(folder.roomName, room.roomName)) {
     return json(404, { message: 'folder not found' });
   }
-  const pw = authz?.isAdmin ? { ok: true } : verifyFolderPassword(folder, event);
+  const pw = verifyFolderPassword(folder, event);
   if (!pw.ok) return json(403, { message: 'invalid folder password' });
 
   let lastKey = null;
