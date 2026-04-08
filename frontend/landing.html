@@ -31,24 +31,66 @@
         --danger: #7d2f52;
         --line: #c3cfe2;
         --shadow: 0 16px 38px rgba(22, 31, 48, 0.12);
+        --shadow-soft: 0 10px 24px rgba(22, 31, 48, 0.08);
       }
+
       * {
         box-sizing: border-box;
       }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
       body {
         margin: 0;
         font-family: var(--font-ui);
         color: var(--ink);
-        background: radial-gradient(circle at top left, var(--bg-glow), var(--bg));
+        background:
+          radial-gradient(circle at top left, rgba(255, 255, 255, 0.7), transparent 28%),
+          radial-gradient(circle at top right, rgba(95, 121, 169, 0.12), transparent 24%),
+          radial-gradient(circle at bottom left, rgba(125, 47, 82, 0.08), transparent 20%),
+          radial-gradient(circle at top left, var(--bg-glow), var(--bg));
         line-height: 1.7;
       }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
       .wrap {
-        width: min(1080px, 92%);
+        width: min(1120px, calc(100% - 32px));
         margin: 0 auto;
       }
+
       .hero {
-        padding: 72px 0 40px;
+        padding: 28px 0 32px;
       }
+
+      .hero-panel {
+        position: relative;
+        overflow: hidden;
+        padding: clamp(28px, 5vw, 56px);
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        background:
+          linear-gradient(145deg, rgba(255, 255, 255, 0.82), rgba(247, 249, 252, 0.98)),
+          var(--card);
+        box-shadow: var(--shadow);
+      }
+
+      .hero-panel::after {
+        content: "";
+        position: absolute;
+        inset: auto -80px -80px auto;
+        width: 240px;
+        height: 240px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(95, 121, 169, 0.18), transparent 68%);
+        pointer-events: none;
+      }
+
       .badge {
         display: inline-block;
         padding: 6px 12px;
@@ -57,145 +99,394 @@
         background: #ffffffcc;
         font-size: 13px;
       }
+
       h1 {
+        margin: 18px 0 16px;
         font-family: var(--font-heading);
         font-weight: 700;
         letter-spacing: 0.02em;
-        font-size: clamp(32px, 5vw, 58px);
-        line-height: 1.15;
-        margin: 16px 0 12px;
+        font-size: clamp(34px, 7vw, 64px);
+        line-height: 1.14;
       }
+
       h2,
       h3 {
         font-family: var(--font-heading);
         font-weight: 700;
         letter-spacing: 0.015em;
       }
-      .lead {
-        font-size: clamp(16px, 2vw, 20px);
-        max-width: 760px;
-        margin-bottom: 0;
+
+      h2 {
+        margin: 0 0 14px;
+        font-size: clamp(26px, 4vw, 38px);
+        line-height: 1.25;
       }
-      .grid {
-        display: grid;
-        gap: 16px;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        margin: 28px 0 52px;
+
+      h3 {
+        margin: 0 0 8px;
+        font-size: 22px;
       }
-      .card {
-        background: var(--card);
-        border: 1px solid var(--line);
-        border-radius: 16px;
-        padding: 20px;
-        box-shadow: var(--shadow);
+
+      .hero-copy {
+        max-width: 720px;
       }
-      .card h3 {
-        margin: 0 0 6px;
-        font-size: 24px;
+
+      .hero-copy p {
+        margin: 0;
       }
-      .price {
-        font-size: 30px;
-        font-weight: 700;
-        margin: 4px 0 2px;
-        color: var(--brand);
-      }
-      .muted {
-        font-size: 13px;
+
+      .hero-sub {
+        font-size: clamp(17px, 2vw, 22px);
         color: var(--muted);
       }
-      section {
-        padding: 0 0 26px;
-      }
-      h2 {
-        font-size: clamp(24px, 3vw, 34px);
-        margin: 0 0 12px;
-      }
-      .flow {
-        counter-reset: step;
-        list-style: none;
-        margin: 0;
-        padding: 0;
+
+      .hero-highlight {
         display: grid;
-        gap: 12px;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 28px;
       }
-      .flow li {
-        background: var(--card);
+
+      .hero-stat {
+        padding: 18px;
         border: 1px solid var(--line);
-        border-radius: 14px;
-        padding: 14px 16px 14px 54px;
-        position: relative;
-        box-shadow: 0 8px 20px rgba(22, 31, 48, 0.08);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.72);
+        box-shadow: var(--shadow-soft);
       }
-      .flow li::before {
-        counter-increment: step;
-        content: counter(step);
-        position: absolute;
-        top: 50%;
-        left: 14px;
-        transform: translateY(-50%);
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
-        background: var(--brand);
-        color: #fff;
-        font-weight: 700;
-        display: grid;
-        place-items: center;
+
+      .hero-stat strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 14px;
+        color: var(--brand);
       }
+
+      .hero-stat span {
+        display: block;
+        font-size: 15px;
+      }
+
       .cta {
-        margin: 20px 0 48px;
         display: flex;
         flex-wrap: wrap;
-        gap: 10px;
+        gap: 12px;
       }
+
+      .hero-cta {
+        margin-top: 28px;
+      }
+
       .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 52px;
         border: 1px solid transparent;
-        cursor: pointer;
-        padding: 12px 16px;
-        border-radius: 12px;
+        border-radius: 14px;
+        padding: 12px 18px;
         font-weight: 700;
         transition: background-color 0.14s ease, transform 0.08s ease, border-color 0.14s ease;
       }
+
+      .btn:hover {
+        transform: translateY(-1px);
+      }
+
+      .btn:active {
+        transform: translateY(1px);
+      }
+
       .btn-primary {
         background: var(--brand);
         color: #fff;
       }
-      .btn-sub {
-        background: var(--card);
-        color: var(--ink);
-        border: 1px solid var(--line);
-      }
+
       .btn-primary:hover {
         background: var(--brand-hover);
       }
+
       .btn-primary:active {
         background: var(--brand-active);
-        transform: translateY(1px);
       }
+
+      .btn-sub {
+        background: var(--card);
+        color: var(--ink);
+        border-color: var(--line);
+      }
+
       .btn-sub:hover {
         background: var(--card-soft);
       }
-      .btn-sub:active {
-        transform: translateY(1px);
-      }
-      .legal {
+
+      .hero-note {
+        margin-top: 10px;
         font-size: 13px;
         color: var(--muted);
-        border-top: 1px solid var(--line);
-        padding: 20px 0 36px;
       }
-      @media (max-width: 1080px) {
-        .grid {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
+
+      main section {
+        padding: 40px 0;
       }
-      @media (max-width: 820px) {
-        .grid {
-          grid-template-columns: 1fr;
-        }
-        .plan-table {
-          overflow-x: auto;
-        }
+
+      .section-head {
+        max-width: 720px;
+        margin-bottom: 22px;
+      }
+
+      .section-label {
+        display: inline-block;
+        margin-bottom: 8px;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--brand);
+      }
+
+      .section-copy {
+        margin: 0;
+        font-size: 17px;
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .grid-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .grid-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        padding: 22px;
+        box-shadow: var(--shadow-soft);
+      }
+
+      .list-card ul,
+      .mini-list,
+      .problem-list {
+        margin: 0;
+        padding-left: 1.2em;
+      }
+
+      .list-card li,
+      .mini-list li,
+      .problem-list li {
+        margin: 0 0 8px;
+      }
+
+      .list-card li:last-child,
+      .mini-list li:last-child,
+      .problem-list li:last-child {
+        margin-bottom: 0;
+      }
+
+      .accent {
+        color: var(--danger);
+        font-weight: 700;
+      }
+
+      .problem-structure {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        align-items: stretch;
+      }
+
+      .problem-step {
+        position: relative;
+        min-height: 180px;
+        padding: 24px 20px;
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(241, 245, 251, 0.98));
+        box-shadow: var(--shadow-soft);
+      }
+
+      .problem-step strong {
+        display: inline-block;
+        margin-bottom: 10px;
+        font-size: 13px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--brand);
+      }
+
+      .problem-step p {
+        margin: 0;
+        font-size: 28px;
+        line-height: 1.25;
+        font-family: var(--font-heading);
+      }
+
+      .problem-step::after {
+        content: "→";
+        position: absolute;
+        top: 50%;
+        right: -16px;
+        transform: translateY(-50%);
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: var(--brand);
+        color: #fff;
+        font-weight: 700;
+        box-shadow: var(--shadow-soft);
+      }
+
+      .problem-step:last-child::after {
+        display: none;
+      }
+
+      .problem-foot {
+        margin-top: 18px;
+        padding: 20px 22px;
+        border-left: 4px solid var(--danger);
+        border-radius: 0 18px 18px 0;
+        background: rgba(255, 255, 255, 0.65);
+      }
+
+      .problem-foot p {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .constraint-grid,
+      .reason-grid,
+      .solution-grid,
+      .plans-grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .constraint-grid,
+      .reason-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .solution-grid {
+        grid-template-columns: 1.2fr 0.8fr;
+        align-items: stretch;
+      }
+
+      .solution-panel {
+        padding: 26px;
+        border-radius: 24px;
+        background: linear-gradient(135deg, rgba(95, 121, 169, 0.12), rgba(255, 255, 255, 0.9));
+      }
+
+      .solution-panel p {
+        margin: 0 0 16px;
+      }
+
+      .solution-flow {
+        display: grid;
+        gap: 12px;
+      }
+
+      .solution-flow .card {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .solution-flow strong {
+        display: inline-block;
+        min-width: 74px;
+        color: var(--brand);
+      }
+
+      .reason-card strong,
+      .constraint-card strong {
+        display: block;
+        margin-bottom: 10px;
+        font-size: 14px;
+        color: var(--brand);
+      }
+
+      .before-after {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .compare-card {
+        padding: 24px;
+        border-radius: 24px;
+      }
+
+      .compare-card.before {
+        background: linear-gradient(180deg, rgba(125, 47, 82, 0.08), rgba(247, 249, 252, 0.98));
+      }
+
+      .compare-card.after {
+        background: linear-gradient(180deg, rgba(95, 121, 169, 0.16), rgba(247, 249, 252, 0.98));
+      }
+
+      .compare-label {
+        display: inline-block;
+        margin-bottom: 12px;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .compare-card.before .compare-label {
+        color: var(--danger);
+      }
+
+      .compare-card.after .compare-label {
+        color: var(--brand);
+      }
+
+      .compare-line {
+        margin: 0;
+        font-family: var(--font-heading);
+        font-size: clamp(26px, 4vw, 40px);
+        line-height: 1.35;
+      }
+
+      .compare-copy {
+        margin: 14px 0 0;
+        color: var(--muted);
+      }
+
+      .pricing-wrap {
+        padding: clamp(26px, 4vw, 36px);
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        background: rgba(255, 255, 255, 0.5);
+      }
+
+      .plans-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        margin-top: 24px;
+      }
+
+      .price {
+        margin: 4px 0 10px;
+        font-size: 30px;
+        font-weight: 700;
+        color: var(--brand);
+      }
+
+      .muted {
+        font-size: 13px;
+        color: var(--muted);
       }
 
       .plan-table {
@@ -209,7 +500,7 @@
         border: 1px solid var(--line);
         border-radius: 16px;
         overflow: hidden;
-        box-shadow: var(--shadow);
+        box-shadow: var(--shadow-soft);
       }
 
       .plan-table th,
@@ -229,93 +520,455 @@
       .plan-table tbody tr:last-child td {
         border-bottom: none;
       }
+
+      .flow {
+        counter-reset: step;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 12px;
+      }
+
+      .flow li {
+        position: relative;
+        padding: 16px 18px 16px 56px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--card);
+        box-shadow: var(--shadow-soft);
+      }
+
+      .flow li::before {
+        counter-increment: step;
+        content: counter(step);
+        position: absolute;
+        top: 16px;
+        left: 16px;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: var(--brand);
+        color: #fff;
+        font-weight: 700;
+      }
+
+      .bottom-cta {
+        padding-top: 20px;
+      }
+
+      .bottom-cta-panel {
+        padding: clamp(28px, 5vw, 44px);
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        background:
+          linear-gradient(135deg, rgba(95, 121, 169, 0.14), rgba(255, 255, 255, 0.82)),
+          var(--card);
+        box-shadow: var(--shadow);
+      }
+
+      .bottom-cta-panel p {
+        margin: 0 0 18px;
+        max-width: 680px;
+        color: var(--muted);
+      }
+
+      .lower-actions {
+        margin-top: 20px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .legal {
+        padding: 28px 0 44px;
+        font-size: 13px;
+        color: var(--muted);
+        border-top: 1px solid var(--line);
+      }
+
+      .legal p {
+        margin: 0 0 8px;
+      }
+
+      @media (max-width: 1080px) {
+        .hero-highlight,
+        .constraint-grid,
+        .reason-grid,
+        .plans-grid,
+        .problem-structure {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .problem-step:last-child {
+          grid-column: 1 / -1;
+        }
+
+        .problem-step:nth-child(2)::after {
+          display: none;
+        }
+
+        .solution-grid,
+        .before-after {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 820px) {
+        .wrap {
+          width: min(100% - 24px, 1120px);
+        }
+
+        .hero {
+          padding-top: 20px;
+        }
+
+        main section {
+          padding: 32px 0;
+        }
+
+        .hero-panel {
+          padding: 24px 20px;
+          border-radius: 24px;
+        }
+
+        .hero-highlight,
+        .grid-2,
+        .grid-3,
+        .constraint-grid,
+        .reason-grid,
+        .plans-grid,
+        .before-after,
+        .problem-structure {
+          grid-template-columns: 1fr;
+        }
+
+        .problem-step {
+          min-height: auto;
+        }
+
+        .problem-step::after {
+          top: auto;
+          right: 50%;
+          bottom: -16px;
+          transform: translateX(50%) rotate(90deg);
+        }
+
+        .problem-step:last-child::after {
+          display: none;
+        }
+
+        .plan-table {
+          overflow-x: auto;
+        }
+
+        .plan-table table {
+          min-width: 620px;
+        }
+
+        .cta,
+        .lower-actions {
+          flex-direction: column;
+        }
+
+        .btn {
+          width: 100%;
+        }
+      }
     </style>
   </head>
   <body>
     <main class="wrap">
       <header class="hero">
-        <span class="badge">監査写真コメントアプリ</span>
-        <h1>Photo Hub for 監査</h1>
-        <p class="lead">
-          現場写真の共有・確認・コメントを、監査運用に合わせてシンプルに。<br />
-          PowerPointでレポートできる、監査向けフォト管理サービスです。
-        </p>
+        <div class="hero-panel">
+          <span class="badge">監査写真コメントアプリ</span>
+          <div class="hero-copy">
+            <h1>
+              監査のあと、<br />
+              会社に戻って報告書を作っていませんか？
+            </h1>
+            <p class="hero-sub">
+              現場で終わるはずの仕事を、<br />
+              その場で完結させる。
+            </p>
+          </div>
+
+          <div class="cta hero-cta" aria-label="hero-cta">
+            <a class="btn btn-primary" href="./index.html">無料で試す</a>
+            <a class="btn btn-sub" href="#bottom-cta">少し話を聞いてみる</a>
+          </div>
+          <p class="hero-note">説明より先に、「今のやり方がしんどい」と感じた方のためのページです。</p>
+
+          <div class="hero-highlight" aria-label="key-points">
+            <div class="hero-stat">
+              <strong>現場起点</strong>
+              <span>写真もコメントも、その場で記録</span>
+            </div>
+            <div class="hero-stat">
+              <strong>報告まで一気通貫</strong>
+              <span>あとでPCに戻って整理し直さない</span>
+            </div>
+            <div class="hero-stat">
+              <strong>導入が軽い</strong>
+              <span>高機能すぎず、現場で使われる作り</span>
+            </div>
+          </div>
+        </div>
       </header>
 
+      <section aria-labelledby="empathy-title">
+        <div class="section-head">
+          <span class="section-label">Empathy</span>
+          <h2 id="empathy-title">こんな運用、続いていませんか？</h2>
+        </div>
+        <div class="grid grid-2">
+          <article class="card list-card">
+            <h3>現場ではこう動いている</h3>
+            <ul class="mini-list">
+              <li>写真はスマホで撮る</li>
+              <li>共有はLINEやGoogle Drive</li>
+              <li>報告はExcelやPowerPoint</li>
+            </ul>
+          </article>
+          <article class="card list-card">
+            <h3>その結果</h3>
+            <ul class="mini-list">
+              <li>帰社後に1時間〜2時間の作業</li>
+              <li>同じ人が二度手間</li>
+              <li>毎回なんとなく非効率</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section aria-labelledby="problem-title">
+        <div class="section-head">
+          <span class="section-label">Problem</span>
+          <h2 id="problem-title">原因は「ツールの分断」です。</h2>
+          <p class="section-copy">
+            記録と共有と報告が別々やけん、移動・再整理・二重作業が当たり前になっとる状態です。
+          </p>
+        </div>
+        <div class="problem-structure" aria-label="problem-structure">
+          <article class="problem-step">
+            <strong>記録</strong>
+            <p>スマホ</p>
+          </article>
+          <article class="problem-step">
+            <strong>共有</strong>
+            <p>クラウド</p>
+          </article>
+          <article class="problem-step">
+            <strong>報告</strong>
+            <p>PC</p>
+          </article>
+        </div>
+        <div class="problem-foot">
+          <p>
+            この分断によって、<span class="accent">移動・再整理・二重作業</span>が発生しています。
+          </p>
+        </div>
+      </section>
+
+      <section aria-labelledby="constraint-title">
+        <div class="section-head">
+          <span class="section-label">Constraint</span>
+          <h2 id="constraint-title">すべて一体化したツールを使えばいい？</h2>
+          <p class="section-copy">でも現実は、そこがいちばん難しかところです。</p>
+        </div>
+        <div class="constraint-grid">
+          <article class="card constraint-card">
+            <strong>高い</strong>
+            <p>1人数千円かかると、現場全員に広げにくい。</p>
+          </article>
+          <article class="card constraint-card">
+            <strong>設定が難しい</strong>
+            <p>最初の設計や運用ルールづくりで止まりやすい。</p>
+          </article>
+          <article class="card constraint-card">
+            <strong>使われない</strong>
+            <p>覚えることが多いと、結局いつものExcelに戻る。</p>
+          </article>
+        </div>
+      </section>
+
+      <section aria-labelledby="solution-title">
+        <div class="section-head">
+          <span class="section-label">Solution</span>
+          <h2 id="solution-title">本サービスは、この「分断」と「導入負荷」の間を埋めます。</h2>
+        </div>
+        <div class="solution-grid">
+          <article class="card solution-panel">
+            <p>
+              写真・コメント・報告書を<br />
+              <strong>一つの流れで完結。</strong>
+            </p>
+            <p>
+              現場で撮って、<br />
+              そのまま報告まで。
+            </p>
+          </article>
+          <div class="solution-flow" aria-label="solution-flow">
+            <article class="card">
+              <strong>撮る</strong>
+              <span>現場で写真を残す</span>
+            </article>
+            <article class="card">
+              <strong>書く</strong>
+              <span>その場でコメントを添える</span>
+            </article>
+            <article class="card">
+              <strong>出す</strong>
+              <span>報告の形までつなげる</span>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="reason-title">
+        <div class="section-head">
+          <span class="section-label">Why It Works</span>
+          <h2 id="reason-title">だから現場で使われる。</h2>
+          <p class="section-copy">監査業務に特化しとるけん、必要以上に重たくなっていません。</p>
+        </div>
+        <div class="reason-grid">
+          <article class="card reason-card">
+            <strong>機能を絞っている</strong>
+            <p>やることが見えやすく、迷わず使える。</p>
+          </article>
+          <article class="card reason-card">
+            <strong>スマホで直感操作</strong>
+            <p>現場の流れを止めずに記録できる。</p>
+          </article>
+          <article class="card reason-card">
+            <strong>設定不要</strong>
+            <p>導入時の説明や初期調整に時間を取られにくい。</p>
+          </article>
+        </div>
+      </section>
+
+      <section aria-labelledby="compare-title">
+        <div class="section-head">
+          <span class="section-label">Before / After</span>
+          <h2 id="compare-title">「帰ってからやる」が、「現場で終わる」に変わります。</h2>
+        </div>
+        <div class="before-after">
+          <article class="card compare-card before">
+            <span class="compare-label">Before</span>
+            <p class="compare-line">現場 → 帰社 → PC作業 → 報告</p>
+            <p class="compare-copy">仕事が終わったあとに、もう一度まとめ直す流れ。</p>
+          </article>
+          <article class="card compare-card after">
+            <span class="compare-label">After</span>
+            <p class="compare-line">現場で完結</p>
+            <p class="compare-copy">撮る・書く・報告するが、一つの作業としてつながる流れ。</p>
+          </article>
+        </div>
+      </section>
+
       <section aria-labelledby="plans-title">
-        <h2 id="plans-title">料金プラン（税込・月額）</h2>
-        <div class="grid">
-          <article class="card">
-            <h3>無料プラン</h3>
-            <p class="price">¥0<span class="muted"> / 月</span></p>
-            <p>まず試したい方向け。無料枠（512MB）でお試し利用できます。</p>
-          </article>
-          <article class="card">
-            <h3>1GBプラン</h3>
-            <p class="price">¥980<span class="muted"> / 月</span></p>
-            <p>小規模チーム向け。まず運用を始めるための基本プラン。</p>
-          </article>
-          <article class="card">
-            <h3>5GBプラン</h3>
-            <p class="price">¥1,980<span class="muted"> / 月</span></p>
-            <p>運用が安定して写真点数が増えてきたチーム向け。</p>
-          </article>
-          <article class="card">
-            <h3>10GBプラン</h3>
-            <p class="price">¥2,980<span class="muted"> / 月</span></p>
-            <p>複数案件・複数拠点で継続運用するチーム向け。</p>
-          </article>
+        <div class="pricing-wrap">
+          <div class="section-head">
+            <span class="section-label">Pricing</span>
+            <h2 id="plans-title">料金プラン（税込・月額）</h2>
+            <p class="section-copy">まずは無料で試して、運用に合えばそのまま広げられます。</p>
+          </div>
+
+          <div class="plans-grid">
+            <article class="card">
+              <h3>無料プラン</h3>
+              <p class="price">¥0<span class="muted"> / 月</span></p>
+              <p>まず試したい方向け。無料枠（512MB）でお試し利用できます。</p>
+            </article>
+            <article class="card">
+              <h3>1GBプラン</h3>
+              <p class="price">¥980<span class="muted"> / 月</span></p>
+              <p>小規模チーム向け。まず運用を始めるための基本プラン。</p>
+            </article>
+            <article class="card">
+              <h3>5GBプラン</h3>
+              <p class="price">¥1,980<span class="muted"> / 月</span></p>
+              <p>運用が安定して写真点数が増えてきたチーム向け。</p>
+            </article>
+            <article class="card">
+              <h3>10GBプラン</h3>
+              <p class="price">¥2,980<span class="muted"> / 月</span></p>
+              <p>複数案件・複数拠点で継続運用するチーム向け。</p>
+            </article>
+          </div>
+
+          <div class="plan-table" aria-label="料金プラン比較表">
+            <table>
+              <thead>
+                <tr>
+                  <th>項目</th>
+                  <th>フリープラン</th>
+                  <th>1GB〜10GBプラン</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th>容量</th>
+                  <td>512MB<sup>※1</sup></td>
+                  <td>1GB / 5GB / 10GB</td>
+                </tr>
+                <tr>
+                  <th>フォルダ数</th>
+                  <td>2個まで</td>
+                  <td>無制限</td>
+                </tr>
+                <tr>
+                  <th>保存期間</th>
+                  <td>30日保存<sup>※2</sup></td>
+                  <td>3年保存</td>
+                </tr>
+                <tr>
+                  <th>PPT出力</th>
+                  <td>透かしあり</td>
+                  <td>透かしなし</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="muted">
+            ※1 容量にアーカイブが含まれます。<br />
+            ※2 保存期間後はアーカイブ(非表示)となります。
+          </p>
         </div>
-        <div class="plan-table" aria-label="料金プラン比較表">
-          <table>
-            <thead>
-              <tr>
-                <th>項目</th>
-                <th>フリープラン</th>
-                <th>1GB〜10GBプラン</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <th>容量</th>
-                <td>512MB*1</td>
-                <td>1GB / 5GB / 10GB</td>
-              </tr>
-              <tr>
-                <th>フォルダ数</th>
-                <td>2個まで</td>
-                <td>無制限</td>
-              </tr>
-              <tr>
-                <th>保存期間</th>
-                <td>30日保存*2</td>
-                <td>3年保存</td>
-              </tr>
-              <tr>
-                <th>PPT出力</th>
-                <td>透かしあり</td>
-                <td>透かしなし</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="muted">
-          ※1 容量にアーカイブが含まれます。<br>
-          ※2 保存期間後はアーカイブ(非表示)となります。
-        </p>
       </section>
 
       <section aria-labelledby="apply-title">
-        <h2 id="apply-title">申込方法</h2>
+        <div class="section-head">
+          <span class="section-label">Apply</span>
+          <h2 id="apply-title">申込方法</h2>
+        </div>
         <ol class="flow">
           <li>本ウェブサイトを通じてお申し込みいただきます。</li>
           <li>無料枠を超えて利用を続ける場合、管理者がサブスクプラン（1GB/5GB/10GB）を選択します。</li>
           <li>クレジットカード（Stripeによる決済代行）で決済します。</li>
           <li>初回は有料プラン申込時に決済、以後は有効期間中に毎月自動決済されます。</li>
         </ol>
-        <div class="cta">
+        <div class="lower-actions">
           <button id="to-app" class="btn btn-primary" type="button">申込ページへ進む</button>
-          <button id="to-legal" class="btn btn-sub" type="button">特定商取引法に基づく表記・利用規約・プライバシーポリシーを見る</button>
+          <button id="to-legal" class="btn btn-sub" type="button">
+            特定商取引法に基づく表記・利用規約・プライバシーポリシーを見る
+          </button>
+        </div>
+      </section>
+
+      <section class="bottom-cta" id="bottom-cta" aria-labelledby="cta-title">
+        <div class="bottom-cta-panel">
+          <span class="section-label">Call To Action</span>
+          <h2 id="cta-title">帰ってから整理する監査を、ここで終わらせる。</h2>
+          <p>
+            まず触ってみるか、先に運用イメージだけ確認するか。どちらからでも始められます。
+          </p>
+          <div class="cta" aria-label="bottom-cta-actions">
+            <a class="btn btn-primary" href="./index.html">無料で試す</a>
+            <a class="btn btn-sub" href="#apply-title">少し話を聞いてみる</a>
+          </div>
         </div>
       </section>
 
