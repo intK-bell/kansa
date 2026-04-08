@@ -17,161 +17,93 @@
       href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Zen+Old+Mincho:wght@500;700&display=swap"
     />
     <link rel="stylesheet" href="./styles.css" />
-    <style>
-      .demo-shell {
-        display: grid;
-        gap: 16px;
-      }
-
-      .demo-banner {
-        display: grid;
-        gap: 14px;
-        margin-bottom: 8px;
-      }
-
-      .demo-badge {
-        display: inline-block;
-        width: fit-content;
-        padding: 6px 12px;
-        border: 1px solid var(--border);
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.7);
-        font-size: 12px;
-        font-weight: 700;
-        color: var(--primary);
-      }
-
-      .demo-banner p {
-        margin: 0;
-        max-width: 760px;
-      }
-
-      .demo-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-      }
-
-      .demo-link {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 40px;
-        padding: 8px 14px;
-        border-radius: 10px;
-        font-weight: 700;
-        text-decoration: none;
-        border: 1px solid transparent;
-      }
-
-      .demo-link.primary {
-        background: var(--primary);
-        color: #fff;
-      }
-
-      .demo-link.secondary {
-        background: var(--card);
-        color: var(--text);
-        border-color: var(--border);
-      }
-
-      .demo-link.primary:hover {
-        background: var(--primary-hover);
-      }
-
-      .demo-link.secondary:hover {
-        background: var(--hover-bg);
-      }
-
-      .demo-toolbar-note {
-        margin: 0;
-        font-size: 12px;
-        color: var(--muted);
-      }
-
-      .demo-static-select {
-        width: 100%;
-      }
-
-      .demo-static-file {
-        padding: 10px 12px;
-        border: 1px dashed var(--border);
-        border-radius: 8px;
-        background: var(--card-soft);
-        color: var(--muted);
-        font-size: 13px;
-      }
-
-      .demo-export-card {
-        padding: 12px;
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        background: var(--card-soft);
-      }
-
-      .demo-export-card h3 {
-        margin: 0 0 8px;
-      }
-
-      .demo-export-lines {
-        display: grid;
-        gap: 8px;
-      }
-
-      .demo-export-line {
-        height: 10px;
-        border-radius: 999px;
-        background: linear-gradient(90deg, rgba(123, 175, 106, 0.24), rgba(216, 224, 210, 0.7));
-      }
-
-      .demo-export-line.short {
-        width: 58%;
-      }
-
-      @media (max-width: 640px) {
-        .demo-actions {
-          flex-direction: column;
-        }
-
-        .demo-link {
-          width: 100%;
-        }
-      }
-    </style>
   </head>
   <body>
     <main class="container">
       <div class="page-header">
         <h1>Photo Hub for 監査</h1>
+        <div class="menu-wrap hidden" id="global-menu-wrap">
+          <button id="menu-btn" class="menu-btn" type="button" aria-label="menu">☰</button>
+          <div id="menu-panel" class="menu-panel hidden">
+            <details class="menu-group" data-menu-group>
+              <summary class="menu-group-summary">お部屋</summary>
+              <div class="menu-group-items">
+                <button id="team-admin-btn" type="button" class="hidden">管理</button>
+                <button id="create-room-menu-btn" type="button">作成</button>
+                <button id="leave-room-btn" type="button" class="danger">脱退</button>
+              </div>
+            </details>
+            <details class="menu-group" data-menu-group>
+              <summary class="menu-group-summary">フォルダ</summary>
+              <div class="menu-group-items">
+                <button id="open-folder-create-btn" type="button">作成</button>
+                <button id="open-folder-password-btn" type="button" class="hidden">パスワード</button>
+                <button id="export-btn" type="button">PPT出力</button>
+              </div>
+            </details>
+            <details class="menu-group" data-menu-group>
+              <summary class="menu-group-summary">アカウント</summary>
+              <div class="menu-group-items">
+                <button id="open-theme-btn" type="button">テーマ</button>
+                <button id="reset-user-btn" type="button">名前変更</button>
+                <button id="account-delete-btn" type="button" class="danger">削除</button>
+              </div>
+            </details>
+            <button id="logout-btn" type="button" class="danger">ログアウト</button>
+            <button id="help-menu-btn" type="button">使い方・料金</button>
+          </div>
+        </div>
       </div>
 
-      <section class="card demo-banner">
-        <span class="demo-badge">ログイン不要デモ</span>
-        <p>
-          実際の画面イメージをそのまま見られる簡易デモたい。現場で写真を記録して、コメントを残して、報告につなぐ流れを
-          そのまま追えるようにしとる。
+      <section id="user-setup" class="card hidden">
+        <div class="row">
+          <button id="login-btn">ログイン</button>
+          <button id="signup-btn" type="button">新規登録</button>
+        </div>
+        <p class="auth-footnote">
+          <span id="help-user-link" class="help-link">使い方を見る</span>
+          <br />
+          <a class="help-link auth-legal-link" href="./legal.html">特定商取引法に基づく表記・利用規約・プライバシーポリシー</a>
         </p>
-        <div class="demo-actions">
-          <a class="demo-link primary" href="./index.html">無料で試す</a>
-          <a class="demo-link secondary" href="./landing.html">LPに戻る</a>
+      </section>
+
+      <section id="room-setup" class="card hidden">
+        <h2>お部屋</h2>
+        <p class="muted">管理者はお部屋を作成、メンバーは招待URLから参加します。</p>
+        <div class="room-grid">
+          <div class="room-card">
+            <h3>新規作成</h3>
+            <input id="create-room-name" placeholder="お部屋名" />
+            <button id="create-room-btn">お部屋を作る</button>
+          </div>
+        </div>
+        <div class="room-grid" style="margin-top:14px;">
+          <div class="room-card">
+            <h3>入室可能なお部屋</h3>
+            <div class="row" style="margin-bottom:8px;">
+              <button id="refresh-my-rooms-btn" type="button">一覧更新</button>
+            </div>
+            <div id="my-rooms-list" class="muted">読み込み中...</div>
+            <p class="muted" style="margin-top:10px;">※ 「この部屋へ」で入室中のお部屋を切り替えられます。</p>
+          </div>
         </div>
       </section>
 
-      <section id="app">
+      <section id="app" class="hidden">
         <div class="app-header">
           <div id="app-header-summary" class="app-header-summary">
-            <p>利用者: <strong id="current-name">デモ利用者</strong></p>
+            <p>利用者: <strong id="current-name"></strong></p>
             <div class="app-header-controls">
               <label class="app-header-field">
                 <span>現在のお部屋</span>
-                <select class="demo-static-select" aria-label="現在のお部屋">
-                  <option>〇〇工場 監査チーム</option>
+                <select id="current-room-select">
+                  <option value="">お部屋を選択してください</option>
                 </select>
               </label>
               <label class="app-header-field">
                 <span>現在のフォルダ</span>
-                <select class="demo-static-select" aria-label="現在のフォルダ">
-                  <option>2026年4月 定期巡回</option>
+                <select id="current-folder-select">
+                  <option value="">フォルダを選択してください</option>
                 </select>
               </label>
             </div>
@@ -179,113 +111,220 @@
         </div>
 
         <div class="toolbar">
-          <div class="storage-graph" aria-label="ストレージ使用量">
+          <p id="error-box" class="muted hidden" style="color:#b91c1c;"></p>
+          <div id="billing-graph-top" class="storage-graph hidden" aria-label="ストレージ使用量">
             <div class="storage-graph-bar">
-              <div class="storage-graph-used" style="width:24%;"></div>
-              <div class="storage-graph-remaining" style="width:76%;"></div>
+              <div id="billing-graph-top-used" class="storage-graph-used" style="width:0%;"></div>
+              <div id="billing-graph-top-remaining" class="storage-graph-remaining" style="width:100%;"></div>
             </div>
             <div class="storage-graph-meta">
-              <span>使用量 245MB</span>
-              <span>残り 779MB</span>
+              <span id="billing-graph-top-used-label">使用量 0MB</span>
+              <span id="billing-graph-top-remain-label">残り 0MB</span>
+            </div>
+            <div id="billing-graph-top-submeta" class="storage-graph-submeta hidden">
+              <span id="billing-graph-top-extra-label">追加残り 0.00 GB・月 相当</span>
             </div>
           </div>
-          <p class="demo-toolbar-note">写真一覧、コメント、報告イメージを下でまとめて見られます。</p>
+          <p id="billing-bar" class="billing-bar muted hidden"></p>
         </div>
 
-        <section id="folder-detail" class="card">
-          <h2 id="folder-detail-title">2026年4月 定期巡回</h2>
-          <p id="photo-archive-note" class="muted" style="margin:6px 0 10px;">
-            現場で撮った写真にコメントを付けて、そのまま報告対象にまとめる流れのデモです。
+        <section id="team-admin" class="card hidden">
+          <h2>お部屋管理（管理者）</h2>
+          <h3 style="margin-top:8px;">メンバー</h3>
+          <div class="row" style="margin-top:10px;">
+            <button id="create-invite-btn" type="button">招待URLを発行（7日）</button>
+            <button id="revoke-invite-btn" type="button" class="danger hidden">招待URLを失効</button>
+            <input id="invite-url" placeholder="招待URL" readonly style="flex:1; min-width:180px;" />
+          </div>
+          <div id="member-list" style="margin-top:10px;"></div>
+
+          <h3 style="margin-top:16px;">フォルダ</h3>
+          <div id="folder-admin-list" style="margin-top:10px;"></div>
+
+          <h3 style="margin-top:16px;">容量</h3>
+          <p id="billing-status" class="muted"></p>
+          <div id="billing-graph" class="storage-graph hidden" aria-label="ストレージ使用量">
+            <div class="storage-graph-bar">
+              <div id="billing-graph-used" class="storage-graph-used" style="width:0%;"></div>
+              <div id="billing-graph-remaining" class="storage-graph-remaining" style="width:100%;"></div>
+            </div>
+            <div class="storage-graph-meta">
+              <span id="billing-graph-used-label">使用量 0MB</span>
+              <span id="billing-graph-remain-label">残り 0MB</span>
+            </div>
+          </div>
+          <div class="row">
+            <button id="subscribe-free" type="button">フリープランに戻る</button>
+            <button id="subscribe-basic" type="button">1GBプラン (¥980/月)</button>
+            <button id="subscribe-plus" type="button">5GBプラン (¥1,980/月)</button>
+            <button id="subscribe-pro" type="button">10GBプラン (¥2,980/月)</button>
+          </div>
+          <p id="billing-plan-guide" class="muted" style="margin-top:8px;"></p>
+          <p class="muted" style="margin-top:8px;">
+            ※ 本サービスの容量表示は2進単位です（1GB=1,024MB、5GB=5,120MB、10GB=10,240MB）。
+          </p>
+          <p id="billing-archive-note" class="muted" style="margin-top:4px;"></p>
+
+          <h3 style="margin-top:16px;">お部屋</h3>
+          <div class="row" style="margin-top:10px;">
+            <button id="delete-team-btn" type="button" class="danger">お部屋を削除（全データ）</button>
+          </div>
+          <p class="muted" style="margin-top:10px;">
+            ※ 削除は、アップロード画像に加え、サムネイル等の自動生成データも含みます。
           </p>
 
-          <div class="row">
-            <div class="demo-static-file">写真アップロード欄: 現場ではここから複数写真を登録</div>
-          </div>
-
-          <div id="photo-list" class="photo-grid">
-            <article class="photo-card">
-              <div
-                style="width:100%; height:170px; border-radius:8px; margin-bottom:8px; background:linear-gradient(135deg, rgba(123,175,106,0.22), rgba(255,255,255,0.92)); border:1px solid var(--border);"
-              ></div>
-              <div><strong>P-001</strong></div>
-              <div style="font-weight:700; margin-top:6px;">配管まわり</div>
-              <div class="muted">投稿: デモ利用者</div>
-              <details class="comments-accordion" open>
-                <summary>
-                  <span class="accordion-marker" aria-hidden="true">▶</span>
-                  <span>コメント 1件</span>
-                </summary>
-                <div class="comment" style="margin-top:8px;">
-                  <div class="comment-meta">
-                    <span class="comment-meta-text">デモ利用者</span>
-                  </div>
-                  <div class="comment-text">配管接続部に軽微なにじみあり。次回点検で再確認。</div>
-                </div>
-              </details>
-              <div class="muted" style="margin-top: 6px;">未読コメントなし</div>
-            </article>
-
-            <article class="photo-card">
-              <div
-                style="width:100%; height:170px; border-radius:8px; margin-bottom:8px; background:linear-gradient(135deg, rgba(95,121,169,0.2), rgba(255,255,255,0.94)); border:1px solid var(--border);"
-              ></div>
-              <div><strong>P-002</strong></div>
-              <div style="font-weight:700; margin-top:6px;">計器表示</div>
-              <div class="muted">投稿: デモ利用者</div>
-              <details class="comments-accordion" open>
-                <summary>
-                  <span class="accordion-marker" aria-hidden="true">▶</span>
-                  <span>コメント 1件</span>
-                </summary>
-                <div class="comment" style="margin-top:8px;">
-                  <div class="comment-meta">
-                    <span class="comment-meta-text">デモ利用者</span>
-                  </div>
-                  <div class="comment-text">計器表示は正常範囲。今回は記録のみ。</div>
-                </div>
-              </details>
-              <div class="muted" style="margin-top: 6px;">未読コメントなし</div>
-            </article>
-
-            <article class="photo-card">
-              <div
-                style="width:100%; height:170px; border-radius:8px; margin-bottom:8px; background:linear-gradient(135deg, rgba(216,90,106,0.18), rgba(255,255,255,0.94)); border:1px solid var(--border);"
-              ></div>
-              <div><strong>P-003</strong></div>
-              <div style="font-weight:700; margin-top:6px;">床面状況</div>
-              <div class="muted">投稿: デモ利用者</div>
-              <details class="comments-accordion">
-                <summary>
-                  <span class="accordion-marker" aria-hidden="true">▶</span>
-                  <span>コメント 0件</span>
-                </summary>
-                <div class="muted" style="margin-top:8px;">問題なしのためコメント追加前の状態です。</div>
-              </details>
-              <div class="muted" style="margin-top: 6px;">未読コメントなし</div>
-            </article>
+          <div class="row" style="margin-top:10px;">
+            <button id="team-admin-back-btn" type="button">戻る</button>
           </div>
         </section>
 
-        <section class="card">
-          <div class="row" style="justify-content:space-between; align-items:flex-start;">
-            <div>
-              <h2 style="margin-bottom:8px;">報告につながる見え方</h2>
-              <p class="muted" style="margin:0;">写真とコメントがつながったまま、報告書にまとめるイメージです。</p>
-            </div>
-            <button type="button" disabled>PPT出力イメージ</button>
+        <section id="folder-detail" class="card hidden">
+          <h2 id="folder-detail-title"></h2>
+          <p id="photo-archive-note" class="muted" style="margin:6px 0 10px;"></p>
+          <div class="row">
+            <input id="photo-files" type="file" accept="image/*" multiple />
           </div>
-          <div class="demo-export-card" style="margin-top:14px;">
-            <h3>出力プレビュー</h3>
-            <div class="demo-export-lines">
-              <div class="demo-export-line"></div>
-              <div class="demo-export-line short"></div>
-              <div class="demo-export-line"></div>
-              <div class="demo-export-line"></div>
-              <div class="demo-export-line short"></div>
+          <div id="upload-meta-card" class="upload-meta-card hidden">
+            <div class="upload-meta-actions">
+              <button id="apply-name-sequence-btn" type="button">1つ目の写真名を連番で反映</button>
+              <button id="apply-comment-bulk-btn" type="button">1つ目のコメントを全件に反映</button>
+              <button id="cancel-upload-drafts-btn" type="button" class="danger">キャンセル</button>
+              <button id="upload-btn">アップロード</button>
+            </div>
+            <p id="upload-meta-status" class="muted" style="margin:8px 0 0;"></p>
+            <div id="upload-meta-list" class="upload-meta-list"></div>
+            <div class="upload-submit-area">
+              <span id="upload-loading" class="upload-loading hidden">アップロード中...</span>
             </div>
           </div>
+          <div id="photo-list" class="photo-grid"></div>
         </section>
       </section>
     </main>
+
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+    <div id="room-create-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="お部屋作成">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 style="margin:0;">お部屋作成</h3>
+          <button id="room-create-close-btn" type="button" class="danger">閉じる</button>
+        </div>
+        <p class="muted" style="margin:8px 0 10px;">※ 1人1部屋です。作成済みの場合は作成できません。</p>
+        <div class="row" style="align-items:stretch;">
+          <input id="room-create-name" placeholder="お部屋名" />
+          <button id="room-create-submit-btn" type="button">作成して入室</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="folder-create-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="フォルダ作成">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 style="margin:0;">フォルダ作成</h3>
+          <button id="folder-create-close-btn" type="button" class="danger">閉じる</button>
+        </div>
+        <div class="row" style="align-items:stretch;">
+          <input id="folder-title" placeholder="〇〇工場_yyyymmdd" />
+          <input id="folder-password" placeholder="フォルダパスワード（任意）" type="password" />
+          <button id="create-folder-btn">作成</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="theme-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="テーマ">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 style="margin:0;">テーマ</h3>
+          <button id="theme-close-btn" type="button" class="danger">閉じる</button>
+        </div>
+        <div class="modal-form-grid">
+          <label>
+            <span class="menu-label">季節</span>
+            <select id="season-select">
+              <option value="spring">春</option>
+              <option value="summer">夏</option>
+              <option value="autumn">秋</option>
+              <option value="winter">冬</option>
+            </select>
+          </label>
+          <label>
+            <span class="menu-label">ダークモード</span>
+            <select id="theme-mode-select">
+              <option value="light">OFF</option>
+              <option value="dark">ON</option>
+            </select>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div id="folder-password-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="フォルダパスワード">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 style="margin:0;">フォルダパスワード</h3>
+          <button id="folder-password-close-btn" type="button" class="danger">閉じる</button>
+        </div>
+        <p class="muted" style="margin:8px 0 10px;">現在のフォルダに設定します。空で保存すると解除されます。</p>
+        <div class="row" style="align-items:stretch;">
+          <input id="folder-password-set" placeholder="フォルダパスワード（空で解除）" type="password" />
+          <button id="set-folder-password-btn" type="button" class="hidden">鍵を設定/解除</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="help-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="使い方・料金">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 style="margin:0;">使い方・料金</h3>
+          <button id="help-close-btn" type="button" class="danger">閉じる</button>
+        </div>
+        <div class="help-content">
+          <p>1. 新規登録後、ログイン（初回は表示名を設定）</p>
+          <p>2. ログイン後、お部屋を作成</p>
+          <p>3. フォルダ作成 → 写真アップロード → コメント追加</p>
+
+          <h4>お部屋操作</h4>
+          <p>画面上部の <strong>現在のお部屋</strong> で、所属中のお部屋をいつでも切替できます。</p>
+          <p><strong>脱退</strong> を実行すると、その部屋には招待URLなしでは再参加できません。</p>
+
+          <h4>料金</h4>
+          <p>ご利用料金は、当サービスにお預けいただくデータ量に応じて異なります。</p>
+          <p>無料枠を超えて利用を続ける場合、管理者がサブスクプランを選択します。</p>
+          <p>サブスクプラン（1か月）:</p>
+          <p>- 1GB: ¥980</p>
+          <p>- 5GB: ¥1,980</p>
+          <p>- 10GB: ¥2,980</p>
+          <p class="muted">※ 料金操作は管理者メニュー（お部屋管理）から実行します。</p>
+        </div>
+      </div>
+    </div>
+
+    <div id="low-storage-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="容量不足のご案内">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 style="margin:0;">容量不足のご案内</h3>
+          <button id="low-storage-close-btn" type="button" class="danger">閉じる</button>
+        </div>
+        <p id="low-storage-message" class="muted" style="margin:8px 0 12px;">
+          容量を追加しますか？
+        </p>
+        <div class="row" style="justify-content:flex-end;">
+          <button id="low-storage-charge-btn" type="button">サブスクプランへ変更</button>
+        </div>
+      </div>
+    </div>
+    <div id="photo-preview-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="写真全体表示">
+      <div class="modal-card photo-preview-card">
+        <div class="modal-header">
+          <h3 id="photo-preview-title" style="margin:0;">写真全体表示</h3>
+          <button id="photo-preview-close-btn" type="button" class="danger">閉じる</button>
+        </div>
+        <div class="photo-preview-body">
+          <img id="photo-preview-image" class="photo-preview-image" alt="写真プレビュー" />
+        </div>
+      </div>
+    </div>
+    <script src="./demo.js?v=20260409-1" type="module"></script>
   </body>
 </html>
