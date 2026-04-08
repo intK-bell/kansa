@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https: http://localhost:5173 http://127.0.0.1:5173; form-action 'self' https:;"
+    />
+    <title>Photo Hub for 監査 | デモ</title>
+    <link rel="icon" type="image/webp" href="./favicon.webp" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Zen+Old+Mincho:wght@500;700&display=swap"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <style>
+      .demo-shell {
+        display: grid;
+        gap: 16px;
+      }
+
+      .demo-banner {
+        display: grid;
+        gap: 14px;
+        margin-bottom: 8px;
+      }
+
+      .demo-badge {
+        display: inline-block;
+        width: fit-content;
+        padding: 6px 12px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.7);
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--primary);
+      }
+
+      .demo-banner p {
+        margin: 0;
+        max-width: 760px;
+      }
+
+      .demo-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .demo-link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        padding: 8px 14px;
+        border-radius: 10px;
+        font-weight: 700;
+        text-decoration: none;
+        border: 1px solid transparent;
+      }
+
+      .demo-link.primary {
+        background: var(--primary);
+        color: #fff;
+      }
+
+      .demo-link.secondary {
+        background: var(--card);
+        color: var(--text);
+        border-color: var(--border);
+      }
+
+      .demo-link.primary:hover {
+        background: var(--primary-hover);
+      }
+
+      .demo-link.secondary:hover {
+        background: var(--hover-bg);
+      }
+
+      .demo-toolbar-note {
+        margin: 0;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .demo-static-select {
+        width: 100%;
+      }
+
+      .demo-static-file {
+        padding: 10px 12px;
+        border: 1px dashed var(--border);
+        border-radius: 8px;
+        background: var(--card-soft);
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .demo-export-card {
+        padding: 12px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--card-soft);
+      }
+
+      .demo-export-card h3 {
+        margin: 0 0 8px;
+      }
+
+      .demo-export-lines {
+        display: grid;
+        gap: 8px;
+      }
+
+      .demo-export-line {
+        height: 10px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(123, 175, 106, 0.24), rgba(216, 224, 210, 0.7));
+      }
+
+      .demo-export-line.short {
+        width: 58%;
+      }
+
+      @media (max-width: 640px) {
+        .demo-actions {
+          flex-direction: column;
+        }
+
+        .demo-link {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container">
+      <div class="page-header">
+        <h1>Photo Hub for 監査</h1>
+      </div>
+
+      <section class="card demo-banner">
+        <span class="demo-badge">ログイン不要デモ</span>
+        <p>
+          実際の画面イメージをそのまま見られる簡易デモたい。現場で写真を記録して、コメントを残して、報告につなぐ流れを
+          そのまま追えるようにしとる。
+        </p>
+        <div class="demo-actions">
+          <a class="demo-link primary" href="./index.html">無料で試す</a>
+          <a class="demo-link secondary" href="./landing.html">LPに戻る</a>
+        </div>
+      </section>
+
+      <section id="app">
+        <div class="app-header">
+          <div id="app-header-summary" class="app-header-summary">
+            <p>利用者: <strong id="current-name">デモ利用者</strong></p>
+            <div class="app-header-controls">
+              <label class="app-header-field">
+                <span>現在のお部屋</span>
+                <select class="demo-static-select" aria-label="現在のお部屋">
+                  <option>〇〇工場 監査チーム</option>
+                </select>
+              </label>
+              <label class="app-header-field">
+                <span>現在のフォルダ</span>
+                <select class="demo-static-select" aria-label="現在のフォルダ">
+                  <option>2026年4月 定期巡回</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <div class="storage-graph" aria-label="ストレージ使用量">
+            <div class="storage-graph-bar">
+              <div class="storage-graph-used" style="width:24%;"></div>
+              <div class="storage-graph-remaining" style="width:76%;"></div>
+            </div>
+            <div class="storage-graph-meta">
+              <span>使用量 245MB</span>
+              <span>残り 779MB</span>
+            </div>
+          </div>
+          <p class="demo-toolbar-note">写真一覧、コメント、報告イメージを下でまとめて見られます。</p>
+        </div>
+
+        <section id="folder-detail" class="card">
+          <h2 id="folder-detail-title">2026年4月 定期巡回</h2>
+          <p id="photo-archive-note" class="muted" style="margin:6px 0 10px;">
+            現場で撮った写真にコメントを付けて、そのまま報告対象にまとめる流れのデモです。
+          </p>
+
+          <div class="row">
+            <div class="demo-static-file">写真アップロード欄: 現場ではここから複数写真を登録</div>
+          </div>
+
+          <div id="photo-list" class="photo-grid">
+            <article class="photo-card">
+              <div
+                style="width:100%; height:170px; border-radius:8px; margin-bottom:8px; background:linear-gradient(135deg, rgba(123,175,106,0.22), rgba(255,255,255,0.92)); border:1px solid var(--border);"
+              ></div>
+              <div><strong>P-001</strong></div>
+              <div style="font-weight:700; margin-top:6px;">配管まわり</div>
+              <div class="muted">投稿: デモ利用者</div>
+              <details class="comments-accordion" open>
+                <summary>
+                  <span class="accordion-marker" aria-hidden="true">▶</span>
+                  <span>コメント 1件</span>
+                </summary>
+                <div class="comment" style="margin-top:8px;">
+                  <div class="comment-meta">
+                    <span class="comment-meta-text">デモ利用者</span>
+                  </div>
+                  <div class="comment-text">配管接続部に軽微なにじみあり。次回点検で再確認。</div>
+                </div>
+              </details>
+              <div class="muted" style="margin-top: 6px;">未読コメントなし</div>
+            </article>
+
+            <article class="photo-card">
+              <div
+                style="width:100%; height:170px; border-radius:8px; margin-bottom:8px; background:linear-gradient(135deg, rgba(95,121,169,0.2), rgba(255,255,255,0.94)); border:1px solid var(--border);"
+              ></div>
+              <div><strong>P-002</strong></div>
+              <div style="font-weight:700; margin-top:6px;">計器表示</div>
+              <div class="muted">投稿: デモ利用者</div>
+              <details class="comments-accordion" open>
+                <summary>
+                  <span class="accordion-marker" aria-hidden="true">▶</span>
+                  <span>コメント 1件</span>
+                </summary>
+                <div class="comment" style="margin-top:8px;">
+                  <div class="comment-meta">
+                    <span class="comment-meta-text">デモ利用者</span>
+                  </div>
+                  <div class="comment-text">計器表示は正常範囲。今回は記録のみ。</div>
+                </div>
+              </details>
+              <div class="muted" style="margin-top: 6px;">未読コメントなし</div>
+            </article>
+
+            <article class="photo-card">
+              <div
+                style="width:100%; height:170px; border-radius:8px; margin-bottom:8px; background:linear-gradient(135deg, rgba(216,90,106,0.18), rgba(255,255,255,0.94)); border:1px solid var(--border);"
+              ></div>
+              <div><strong>P-003</strong></div>
+              <div style="font-weight:700; margin-top:6px;">床面状況</div>
+              <div class="muted">投稿: デモ利用者</div>
+              <details class="comments-accordion">
+                <summary>
+                  <span class="accordion-marker" aria-hidden="true">▶</span>
+                  <span>コメント 0件</span>
+                </summary>
+                <div class="muted" style="margin-top:8px;">問題なしのためコメント追加前の状態です。</div>
+              </details>
+              <div class="muted" style="margin-top: 6px;">未読コメントなし</div>
+            </article>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="row" style="justify-content:space-between; align-items:flex-start;">
+            <div>
+              <h2 style="margin-bottom:8px;">報告につながる見え方</h2>
+              <p class="muted" style="margin:0;">写真とコメントがつながったまま、報告書にまとめるイメージです。</p>
+            </div>
+            <button type="button" disabled>PPT出力イメージ</button>
+          </div>
+          <div class="demo-export-card" style="margin-top:14px;">
+            <h3>出力プレビュー</h3>
+            <div class="demo-export-lines">
+              <div class="demo-export-line"></div>
+              <div class="demo-export-line short"></div>
+              <div class="demo-export-line"></div>
+              <div class="demo-export-line"></div>
+              <div class="demo-export-line short"></div>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+  </body>
+</html>
