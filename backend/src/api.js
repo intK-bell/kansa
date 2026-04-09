@@ -1,5 +1,4 @@
 const { randomUUID, createHash, pbkdf2Sync, randomBytes, timingSafeEqual } = require('node:crypto');
-const path = require('node:path');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { CognitoIdentityProviderClient, AdminDeleteUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
 const {
@@ -21,10 +20,10 @@ const {
   ListObjectsV2Command,
 } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
-const PptxGenJS = require('pptxgenjs');
 const imageSize = require('image-size');
 
 const { stripeRequest } = require('./stripe-rest');
+const { buildExportPresentation } = require('./ppt-layout');
 
 const {
   BILLING_MODE_PREPAID,
@@ -123,6 +122,15 @@ function formatJstDisplayDateTime(value) {
   return `${get('year')}/${get('month')}/${get('day')} ${get('hour')}:${get('minute')} JST`;
 }
 
+function formatBytes(bytes) {
+  const value = Number(bytes || 0);
+  if (!Number.isFinite(value) || value <= 0) return '0MB';
+  const gib = 1024 * 1024 * 1024;
+  const mib = 1024 * 1024;
+  if (value >= gib) return `${(value / gib).toFixed(2)}GB`;
+  return `${Math.round(value / mib)}MB`;
+}
+
 function sanitizeDownloadFileName(value, fallback = 'folder') {
   const normalized = String(value || '')
     .normalize('NFKC')
@@ -185,31 +193,6 @@ function isFreePlanBilling(meta) {
   const billingMode = String(meta?.billingMode || BILLING_MODE_PREPAID).toLowerCase();
   const currentPlan = normalizeSubscriptionPlanCode(meta?.currentPlan || 'FREE');
   return billingMode !== BILLING_MODE_SUBSCRIPTION || currentPlan === 'FREE';
-}
-
-const PPT_WATERMARK_PATH = path.resolve(__dirname, 'favicon.webp');
-
-function addFreePlanWatermarks(slide, imageBox) {
-  const cols = 3;
-  const rows = 2;
-  const cellW = imageBox.w / cols;
-  const cellH = imageBox.h / rows;
-  const markW = Math.min(1.35, cellW * 0.68);
-  const markH = Math.min(1.35, cellH * 0.68);
-  for (let row = 0; row < rows; row += 1) {
-    for (let col = 0; col < cols; col += 1) {
-      const centerX = imageBox.x + cellW * col + cellW / 2;
-      const centerY = imageBox.y + cellH * row + cellH / 2;
-      slide.addImage({
-        path: PPT_WATERMARK_PATH,
-        x: centerX - markW / 2,
-        y: centerY - markH / 2,
-        w: markW,
-        h: markH,
-        transparency: 70,
-      });
-    }
-  }
 }
 
 const FREE_PLAN_ARCHIVE_DAYS = 30;
@@ -347,22 +330,6 @@ async function readS3ObjectBuffer(key) {
     return Buffer.concat(chunks);
   }
   throw new Error('OBJECT_BODY_STREAM_UNAVAILABLE');
-}
-
-function resolveExportSlideLayout(dimensions) {
-  const width = Number(dimensions?.width || 0);
-  const height = Number(dimensions?.height || 0);
-  const isPortrait = width > 0 && height > width;
-  if (isPortrait) {
-    return {
-      image: { x: 0.6, y: 1.15, w: 5.1, h: 5.75 },
-      comments: { x: 5.95, y: 1.15, w: 6.75, h: 5.75 },
-    };
-  }
-  return {
-    image: { x: 0.5, y: 1.15, w: 8.3, h: 5.2 },
-    comments: { x: 9.0, y: 1.15, w: 3.8, h: 5.2 },
-  };
 }
 
 async function tryDeleteUploadedObjects(originalS3Key, previewS3Key) {
@@ -3019,93 +2986,55 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
       archivedCount: split.archivedCount,
     });
   }
-  const pptx = new PptxGenJS();
-  pptx.layout = 'LAYOUT_WIDE';
   const exportAt = new Date();
   const exportStamp = formatJstCompactTimestamp(exportAt);
   const downloadFileName = `${sanitizeDownloadFileName(folder.title, 'folder')}_${exportStamp}.pptx`;
+  const usageBytes = Number(billing?.usageBytes || 0);
+  const capacityBytes = Number(billing?.freeBytes || 0);
+  const currentPlan = normalizeSubscriptionPlanCode(billing?.currentPlan || billing?.subscription?.currentPlan || 'FREE');
+  const footerSummary = `プラン: ${currentPlan} / 使用量: ${formatBytes(usageBytes)} / 上限: ${formatBytes(capacityBytes)} / 出力: ${formatJstDisplayDateTime(exportAt.toISOString())}`;
 
-  for (const photo of exportPhotos) {
-    const slide = pptx.addSlide();
-    slide.addText(`${folder.folderCode || 'F000'} ${folder.title}`, {
-      x: 0.5,
-      y: 0.2,
-      w: 12,
-      h: 0.4,
-      fontSize: 16,
-      bold: true,
-    });
-    slide.addText(`${photo.photoCode || '-'} ${photo.fileName || photo.photoId}`, {
-      x: 0.5,
-      y: 0.7,
-      w: 12,
-      h: 0.3,
-      fontSize: 11,
-    });
-
-    const exportImageKey = photo.previewKey || photo.s3Key;
-    let imageBuffer = null;
-    let imageDimensions = null;
-    try {
-      imageBuffer = await readS3ObjectBuffer(exportImageKey);
-      imageDimensions = imageSize(imageBuffer);
-    } catch (_) {
-      imageBuffer = null;
-      imageDimensions = null;
-    }
-    const signed = await getSignedUrl(
-      s3,
-      new GetObjectCommand({ Bucket: PHOTO_BUCKET, Key: exportImageKey }),
-      { expiresIn: 300 }
-    );
-
-    const layout = resolveExportSlideLayout(imageDimensions);
-    const imageX = layout.image.x;
-    const imageY = layout.image.y;
-    const imageW = layout.image.w;
-    const imageH = layout.image.h;
-    slide.addImage({
-      path: signed,
-      x: imageX,
-      y: imageY,
-      w: imageW,
-      h: imageH,
-      // Export the normalized preview first to avoid EXIF-based distortion in PowerPoint.
-      sizing: { type: 'contain', x: imageX, y: imageY, w: imageW, h: imageH },
-    });
-    if (isFreePlanExport) {
-      addFreePlanWatermarks(slide, { x: imageX, y: imageY, w: imageW, h: imageH });
-    }
-
-    const commentsRes = await ddb.send(
-      new QueryCommand({
-        TableName: TABLE_NAME,
-        KeyConditionExpression: 'PK = :pk and begins_with(SK, :sk)',
-        ExpressionAttributeValues: {
-          ':pk': `PHOTO#${photo.photoId}`,
-          ':sk': 'COMMENT#',
-        },
-      })
-    );
-
-    const comments = commentsRes.Items || [];
-    const commentNameMap = await loadDisplayNameMap(comments.map((c) => c.createdBy));
-    const commentLines = comments.map((c, idx) => {
-      const createdByName = commentNameMap[c.createdBy] || c.createdByName || 'unknown';
-      const stampedBy = `${formatJstDisplayDateTime(c.createdAt)} ${createdByName}`;
-      return `${idx + 1}. ${c.text}\n${stampedBy}`;
-    });
-
-    slide.addText(commentLines.length ? commentLines.join('\n') : 'コメントなし', {
-      x: layout.comments.x,
-      y: layout.comments.y,
-      w: layout.comments.w,
-      h: layout.comments.h,
-      fontSize: 10,
-      valign: 'top',
-      color: '333333',
-    });
-  }
+  const pptx = await buildExportPresentation({
+    folder,
+    photos: exportPhotos,
+    isFreePlanExport,
+    resolveImage: async (photo) => {
+      const exportImageKey = photo.previewKey || photo.s3Key;
+      let imageDimensions = null;
+      try {
+        const imageBuffer = await readS3ObjectBuffer(exportImageKey);
+        imageDimensions = imageSize(imageBuffer);
+      } catch (_) {
+        imageDimensions = null;
+      }
+      const signed = await getSignedUrl(
+        s3,
+        new GetObjectCommand({ Bucket: PHOTO_BUCKET, Key: exportImageKey }),
+        { expiresIn: 300 }
+      );
+      return { path: signed, dimensions: imageDimensions };
+    },
+    resolveCommentLines: async (photo) => {
+      const commentsRes = await ddb.send(
+        new QueryCommand({
+          TableName: TABLE_NAME,
+          KeyConditionExpression: 'PK = :pk and begins_with(SK, :sk)',
+          ExpressionAttributeValues: {
+            ':pk': `PHOTO#${photo.photoId}`,
+            ':sk': 'COMMENT#',
+          },
+        })
+      );
+      const comments = commentsRes.Items || [];
+      const commentNameMap = await loadDisplayNameMap(comments.map((c) => c.createdBy));
+      return comments.map((c, idx) => {
+        const createdByName = commentNameMap[c.createdBy] || c.createdByName || 'unknown';
+        const stampedBy = `${formatJstDisplayDateTime(c.createdAt)} ${createdByName}`;
+        return `${idx + 1}. ${c.text}\n${stampedBy}`;
+      });
+    },
+    buildFooterText: (_photo, index, total) => `${footerSummary} / ${index + 1}/${total}`,
+  });
 
   const pptxBuffer = await pptx.write({ outputType: 'nodebuffer' });
   // Include roomId/folderId in the key so we can delete exports on folder/team deletion.

@@ -1,5 +1,5 @@
 const path = require('path');
-const PptxGenJS = require('../backend/src/node_modules/pptxgenjs');
+const { buildExportPresentation } = require('../backend/src/ppt-layout');
 
 function formatJstCompactTimestamp(date = new Date()) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -42,22 +42,6 @@ function sanitizeDownloadFileName(value, fallback = 'folder') {
   return normalized || fallback;
 }
 
-function resolveExportSlideLayout(dimensions) {
-  const width = Number(dimensions?.width || 0);
-  const height = Number(dimensions?.height || 0);
-  const isPortrait = width > 0 && height > width;
-  if (isPortrait) {
-    return {
-      image: { x: 0.6, y: 1.15, w: 5.1, h: 5.75 },
-      comments: { x: 5.95, y: 1.15, w: 6.75, h: 5.75 },
-    };
-  }
-  return {
-    image: { x: 0.5, y: 1.15, w: 8.3, h: 5.2 },
-    comments: { x: 9.0, y: 1.15, w: 3.8, h: 5.2 },
-  };
-}
-
 function normalizeImageData(uri) {
   const value = String(uri || '');
   if (!value.startsWith('data:image/svg+xml')) return value;
@@ -66,26 +50,6 @@ function normalizeImageData(uri) {
   const payload = value.slice(commaIndex + 1);
   const svgText = decodeURIComponent(payload);
   return `data:image/svg+xml;base64,${Buffer.from(svgText, 'utf8').toString('base64')}`;
-}
-
-function addFreePlanWatermarks(slide, imageBox) {
-  for (let row = 0; row < 2; row += 1) {
-    for (let col = 0; col < 3; col += 1) {
-      slide.addText('FREE', {
-        x: imageBox.x + col * (imageBox.w / 3) + 0.35,
-        y: imageBox.y + row * (imageBox.h / 2) + 0.9,
-        w: 1.1,
-        h: 0.25,
-        fontFace: 'Yu Gothic',
-        fontSize: 18,
-        bold: true,
-        color: 'FFFFFF',
-        transparency: 55,
-        rotate: 330,
-        align: 'center',
-      });
-    }
-  }
 }
 
 function parseArgs(argv) {
@@ -117,96 +81,24 @@ async function main() {
   const defaultOut = path.resolve(__dirname, './demo-assets/demo-export-sample.pptx');
   const outPath = args.out ? path.resolve(process.cwd(), args.out) : defaultOut;
 
-  const pptx = new PptxGenJS();
-  pptx.layout = 'LAYOUT_WIDE';
-  pptx.author = 'generate_demo.js';
-  pptx.company = 'Photo Hub for 監査';
-  pptx.subject = 'Demo export';
-  pptx.title = `${folder.title} demo export`;
-  pptx.lang = 'ja-JP';
-
-  for (const photo of folder.photos) {
-    const slide = pptx.addSlide();
-    slide.background = { color: 'F8FBF6' };
-    slide.addText(`${folder.folderCode || 'F000'} ${folder.title}`, {
-      x: 0.5,
-      y: 0.2,
-      w: 12,
-      h: 0.4,
-      fontFace: 'Yu Gothic',
-      fontSize: 16,
-      bold: true,
-      color: '1F2937',
-    });
-    slide.addText(`${photo.photoCode || '-'} ${photo.fileName || photo.photoId}`, {
-      x: 0.5,
-      y: 0.7,
-      w: 12,
-      h: 0.3,
-      fontFace: 'Yu Gothic',
-      fontSize: 11,
-      color: '4B5563',
-    });
-
-    const layout = resolveExportSlideLayout({ width: 640, height: 480 });
-    slide.addShape(pptx.ShapeType.roundRect, {
-      x: layout.image.x,
-      y: layout.image.y,
-      w: layout.image.w,
-      h: layout.image.h,
-      rectRadius: 0.04,
-      line: { color: 'D8E0D2', pt: 1 },
-      fill: { color: 'FFFFFF' },
-    });
-    slide.addImage({
+  const pptx = await buildExportPresentation({
+    folder,
+    photos: folder.photos,
+    isFreePlanExport: isFreePlan,
+    resolveImage: async (photo) => ({
       data: normalizeImageData(photo.previewUrl || photo.viewUrl),
-      x: layout.image.x,
-      y: layout.image.y,
-      w: layout.image.w,
-      h: layout.image.h,
-      sizing: { type: 'contain', x: layout.image.x, y: layout.image.y, w: layout.image.w, h: layout.image.h },
-    });
-    if (isFreePlan) {
-      addFreePlanWatermarks(slide, layout.image);
-    }
-
-    const comments = Array.isArray(photo.comments) ? photo.comments : [];
-    const commentLines = comments.map((comment, index) => {
-      const stampedBy = `${formatJstDisplayDateTime(comment.createdAt)} ${comment.createdByName || comment.createdBy || 'unknown'}`;
-      return `${index + 1}. ${comment.text}\n${stampedBy}`;
-    });
-
-    slide.addShape(pptx.ShapeType.roundRect, {
-      x: layout.comments.x,
-      y: layout.comments.y,
-      w: layout.comments.w,
-      h: layout.comments.h,
-      rectRadius: 0.04,
-      line: { color: 'D8E0D2', pt: 1 },
-      fill: { color: 'FFFFFF' },
-    });
-    slide.addText(commentLines.length ? commentLines.join('\n\n') : 'コメントなし', {
-      x: layout.comments.x + 0.16,
-      y: layout.comments.y + 0.16,
-      w: layout.comments.w - 0.32,
-      h: layout.comments.h - 0.32,
-      fontFace: 'Yu Gothic',
-      fontSize: 10,
-      valign: 'top',
-      color: '333333',
-      breakLine: false,
-      margin: 0,
-    });
-    slide.addText(`プラン: ${currentPlan} / 使用量: ${Math.round((room.billing?.usageBytes || 0) / (1024 * 1024))}MB / 上限: ${Math.round((DEMO_PLAN_BYTES[currentPlan] || DEMO_PLAN_BYTES.FREE) / (1024 * 1024))}MB`, {
-      x: 0.5,
-      y: 6.65,
-      w: 6.8,
-      h: 0.2,
-      fontFace: 'Yu Gothic',
-      fontSize: 8,
-      color: '6B7280',
-    });
-  }
+      dimensions: { width: 640, height: 480 },
+    }),
+    resolveCommentLines: async (photo) => {
+      const comments = Array.isArray(photo.comments) ? photo.comments : [];
+      return comments.map((comment, index) => {
+        const stampedBy = `${formatJstDisplayDateTime(comment.createdAt)} ${comment.createdByName || comment.createdBy || 'unknown'}`;
+        return `${index + 1}. ${comment.text}\n${stampedBy}`;
+      });
+    },
+    buildFooterText: (_photo, index, total) =>
+      `プラン: ${currentPlan} / 使用量: ${Math.round((room.billing?.usageBytes || 0) / (1024 * 1024))}MB / 上限: ${Math.round((DEMO_PLAN_BYTES[currentPlan] || DEMO_PLAN_BYTES.FREE) / (1024 * 1024))}MB / ${index + 1}/${total}`,
+  });
 
   await pptx.writeFile({ fileName: outPath });
   const safeTitle = sanitizeDownloadFileName(folder.title, 'folder');
