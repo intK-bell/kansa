@@ -218,6 +218,8 @@ async function buildExportPresentation(options) {
 }
 
 module.exports = {
+  PALETTE,
+  PPT_WATERMARK_PATH,
   buildExportPresentation,
   resolveExportSlideLayout,
   addFreePlanWatermarks,

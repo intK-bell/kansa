@@ -21,9 +21,13 @@ const {
 } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const imageSize = require('image-size');
+const fs = require('node:fs');
+const path = require('node:path');
+const { PDFDocument, rgb } = require('pdf-lib');
+const fontkit = require('@pdf-lib/fontkit');
 
 const { stripeRequest } = require('./stripe-rest');
-const { buildExportPresentation } = require('./ppt-layout');
+const { buildExportPresentation, resolveExportSlideLayout, PALETTE, PPT_WATERMARK_PATH } = require('./ppt-layout');
 
 const {
   BILLING_MODE_PREPAID,
@@ -53,6 +57,12 @@ const CORS_ALLOWED_ORIGINS = new Set(
     .map((value) => value.trim())
     .filter(Boolean)
 );
+const PDF_FONT_PATH = path.resolve(__dirname, 'fonts', 'NotoSansCJKjp-Regular.otf');
+const PDF_PAGE_WIDTH = 960;
+const PDF_PAGE_HEIGHT = 540;
+const PPT_TO_PDF_SCALE = 72;
+let cachedPdfFontBytes = null;
+let cachedWatermarkBytes = null;
 
 function getHeaderValue(headers, name) {
   const target = String(name || '').toLowerCase();
@@ -139,6 +149,65 @@ function sanitizeDownloadFileName(value, fallback = 'folder') {
     .trim()
     .replace(/[. ]+$/g, '');
   return normalized || fallback;
+}
+
+function normalizeExportFormat(value) {
+  const format = String(value || '').trim().toLowerCase();
+  if (format === 'pptx_high') return 'pptx_high';
+  if (format === 'pptx_light') return 'pptx_light';
+  if (format === 'pdf') return 'pdf';
+  return 'pptx_high';
+}
+
+function exportContentType(format) {
+  if (format === 'pdf') return 'application/pdf';
+  return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+}
+
+function exportExtension(format) {
+  if (format === 'pdf') return 'pdf';
+  return 'pptx';
+}
+
+function exportLabel(format) {
+  if (format === 'pptx_light') return 'light-ppt';
+  if (format === 'pdf') return 'pdf';
+  return 'high-ppt';
+}
+
+function exportFormatDescription(format) {
+  if (format === 'pptx_light') return '軽量PPT';
+  if (format === 'pdf') return 'PDF';
+  return '高画質PPT';
+}
+
+function pptUnit(value) {
+  return Number(value || 0) * PPT_TO_PDF_SCALE;
+}
+
+function hexToRgbColor(value) {
+  const normalized = String(value || '').replace('#', '').trim();
+  if (!/^[0-9a-fA-F]{6}$/.test(normalized)) {
+    return rgb(0, 0, 0);
+  }
+  const r = parseInt(normalized.slice(0, 2), 16) / 255;
+  const g = parseInt(normalized.slice(2, 4), 16) / 255;
+  const b = parseInt(normalized.slice(4, 6), 16) / 255;
+  return rgb(r, g, b);
+}
+
+async function loadPdfFontBytes() {
+  if (!cachedPdfFontBytes) {
+    cachedPdfFontBytes = fs.readFileSync(PDF_FONT_PATH);
+  }
+  return cachedPdfFontBytes;
+}
+
+async function loadWatermarkBytes() {
+  if (!cachedWatermarkBytes) {
+    cachedWatermarkBytes = fs.readFileSync(PPT_WATERMARK_PATH);
+  }
+  return cachedWatermarkBytes;
 }
 
 function planRank(planCode) {
@@ -330,6 +399,209 @@ async function readS3ObjectBuffer(key) {
     return Buffer.concat(chunks);
   }
   throw new Error('OBJECT_BODY_STREAM_UNAVAILABLE');
+}
+
+function detectImageFormat(buffer, contentType = '') {
+  const type = String(contentType || '').toLowerCase();
+  if (type.includes('png')) return 'png';
+  if (type.includes('jpeg') || type.includes('jpg')) return 'jpg';
+  if (Buffer.isBuffer(buffer)) {
+    if (buffer.length >= 8 && buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
+      return 'png';
+    }
+    if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+      return 'jpg';
+    }
+  }
+  return null;
+}
+
+async function loadExportImageAsset(photo, format) {
+  const preferOriginal = format === 'pptx_high';
+  const candidates = preferOriginal ? [photo.s3Key, photo.previewKey] : [photo.previewKey, photo.s3Key];
+  for (const key of candidates) {
+    if (!key) continue;
+    try {
+      const [buffer, head] = await Promise.all([
+        readS3ObjectBuffer(key),
+        s3.send(new HeadObjectCommand({ Bucket: PHOTO_BUCKET, Key: key })),
+      ]);
+      const detectedFormat = detectImageFormat(buffer, head?.ContentType || '');
+      if (format === 'pdf' && !detectedFormat) {
+        continue;
+      }
+      const dimensions = imageSize(buffer);
+      return {
+        key,
+        buffer,
+        contentType: head?.ContentType || '',
+        dimensions,
+      };
+    } catch (_) {
+      // Try the next candidate.
+    }
+  }
+  throw new Error('EXPORT_IMAGE_UNAVAILABLE');
+}
+
+function wrapPdfText(text, maxCharsPerLine = 28) {
+  const raw = String(text || '').trim();
+  if (!raw) return [];
+  const lines = [];
+  for (const block of raw.split('\n')) {
+    const source = block.trimEnd();
+    if (!source) {
+      lines.push('');
+      continue;
+    }
+    let current = '';
+    for (const ch of Array.from(source)) {
+      if (current.length >= maxCharsPerLine) {
+        lines.push(current);
+        current = '';
+      }
+      current += ch;
+    }
+    if (current) lines.push(current);
+  }
+  return lines;
+}
+
+async function buildExportPdf(options) {
+  const { folder, photos, isFreePlanExport, resolveImageAsset, resolveCommentLines, buildFooterText } = options;
+  const pdfDoc = await PDFDocument.create();
+  pdfDoc.registerFontkit(fontkit);
+  const font = await pdfDoc.embedFont(await loadPdfFontBytes(), { subset: true });
+  const watermarkImage = isFreePlanExport ? await pdfDoc.embedPng(await loadWatermarkBytes()) : null;
+
+  for (let index = 0; index < photos.length; index += 1) {
+    const photo = photos[index];
+    const page = pdfDoc.addPage([PDF_PAGE_WIDTH, PDF_PAGE_HEIGHT]);
+    const imageAsset = await resolveImageAsset(photo);
+    const layout = resolveExportSlideLayout(imageAsset?.dimensions || null);
+    const commentLines = await resolveCommentLines(photo);
+    const footerText = typeof buildFooterText === 'function' ? buildFooterText(photo, index, photos.length) : '';
+
+    page.drawRectangle({ x: 0, y: 0, width: PDF_PAGE_WIDTH, height: PDF_PAGE_HEIGHT, color: hexToRgbColor(PALETTE.bg) });
+    page.drawRectangle({
+      x: pptUnit(0.55),
+      y: PDF_PAGE_HEIGHT - pptUnit(0.72),
+      width: pptUnit(1.9),
+      height: pptUnit(0.34),
+      color: hexToRgbColor(PALETTE.brandSoft),
+      borderColor: hexToRgbColor('BFD2B7'),
+      borderWidth: 1,
+    });
+    page.drawText('監査レポート', {
+      x: pptUnit(0.82),
+      y: PDF_PAGE_HEIGHT - pptUnit(0.58),
+      size: 10,
+      font,
+      color: hexToRgbColor(PALETTE.brandText),
+    });
+    page.drawText(`${folder.folderCode || 'F000'} ${folder.title}`, {
+      x: pptUnit(0.55),
+      y: PDF_PAGE_HEIGHT - pptUnit(1.18),
+      size: 21,
+      font,
+      color: hexToRgbColor(PALETTE.ink),
+    });
+    page.drawText(`${photo.photoCode || '-'} ${photo.fileName || photo.photoId}`, {
+      x: pptUnit(0.55),
+      y: PDF_PAGE_HEIGHT - pptUnit(1.44),
+      size: 11,
+      font,
+      color: hexToRgbColor(PALETTE.muted),
+    });
+
+    page.drawRectangle({
+      x: pptUnit(layout.image.x),
+      y: PDF_PAGE_HEIGHT - pptUnit(layout.image.y + layout.image.h),
+      width: pptUnit(layout.image.w),
+      height: pptUnit(layout.image.h),
+      color: hexToRgbColor(PALETTE.card),
+      borderColor: hexToRgbColor(PALETTE.line),
+      borderWidth: 1,
+    });
+
+    const imageFormat = detectImageFormat(imageAsset.buffer, imageAsset.contentType);
+    const embeddedImage =
+      imageFormat === 'png'
+        ? await pdfDoc.embedPng(imageAsset.buffer)
+        : await pdfDoc.embedJpg(imageAsset.buffer);
+    const imgDims = embeddedImage.scale(1);
+    const boxW = pptUnit(layout.image.w);
+    const boxH = pptUnit(layout.image.h);
+    const containScale = Math.min(boxW / imgDims.width, boxH / imgDims.height);
+    const drawW = imgDims.width * containScale;
+    const drawH = imgDims.height * containScale;
+    const drawX = pptUnit(layout.image.x) + (boxW - drawW) / 2;
+    const drawY = PDF_PAGE_HEIGHT - pptUnit(layout.image.y) - boxH + (boxH - drawH) / 2;
+    page.drawImage(embeddedImage, { x: drawX, y: drawY, width: drawW, height: drawH });
+
+    if (watermarkImage) {
+      const cols = 3;
+      const rows = 2;
+      const cellW = boxW / cols;
+      const cellH = boxH / rows;
+      const markW = Math.min(pptUnit(1.35), cellW * 0.68);
+      const markH = Math.min(pptUnit(1.35), cellH * 0.68);
+      for (let row = 0; row < rows; row += 1) {
+        for (let col = 0; col < cols; col += 1) {
+          const markX = pptUnit(layout.image.x) + cellW * col + (cellW - markW) / 2;
+          const markY = PDF_PAGE_HEIGHT - pptUnit(layout.image.y) - boxH + cellH * row + (cellH - markH) / 2;
+          page.drawImage(watermarkImage, { x: markX, y: markY, width: markW, height: markH, opacity: 0.28 });
+        }
+      }
+    }
+
+    page.drawRectangle({
+      x: pptUnit(layout.comments.x),
+      y: PDF_PAGE_HEIGHT - pptUnit(layout.comments.y + layout.comments.h),
+      width: pptUnit(layout.comments.w),
+      height: pptUnit(layout.comments.h),
+      color: hexToRgbColor(PALETTE.card),
+      borderColor: hexToRgbColor(PALETTE.line),
+      borderWidth: 1,
+    });
+    page.drawText('コメント', {
+      x: pptUnit(layout.comments.x + 0.2),
+      y: PDF_PAGE_HEIGHT - pptUnit(layout.comments.y + 0.28),
+      size: 11,
+      font,
+      color: hexToRgbColor(PALETTE.brandText),
+    });
+
+    const wrappedCommentLines = wrapPdfText(commentLines.length ? commentLines.join('\n\n') : 'コメントなし', 22);
+    let cursorY = PDF_PAGE_HEIGHT - pptUnit(layout.comments.y + 0.52);
+    for (const line of wrappedCommentLines) {
+      if (cursorY < PDF_PAGE_HEIGHT - pptUnit(layout.comments.y + layout.comments.h - 0.2)) break;
+      page.drawText(line || ' ', {
+        x: pptUnit(layout.comments.x + 0.2),
+        y: cursorY,
+        size: 10,
+        font,
+        color: hexToRgbColor('333333'),
+      });
+      cursorY -= 13;
+    }
+
+    page.drawLine({
+      start: { x: pptUnit(0.55), y: PDF_PAGE_HEIGHT - pptUnit(6.82) },
+      end: { x: pptUnit(11.75), y: PDF_PAGE_HEIGHT - pptUnit(6.82) },
+      thickness: 1,
+      color: hexToRgbColor(PALETTE.line),
+    });
+    page.drawText(footerText, {
+      x: pptUnit(0.58),
+      y: PDF_PAGE_HEIGHT - pptUnit(7.02),
+      size: 8,
+      font,
+      color: hexToRgbColor(PALETTE.muted),
+    });
+  }
+
+  return Buffer.from(await pdfDoc.save());
 }
 
 async function tryDeleteUploadedObjects(originalS3Key, previewS3Key) {
@@ -2943,6 +3215,8 @@ async function updateComment(photoId, commentId, body, user, room, authz, ctx) {
 }
 
 async function exportFolder(event, folderId, user, room, authz, ctx) {
+  const body = event.body ? JSON.parse(event.body) : {};
+  const format = normalizeExportFormat(body.format);
   const folderRes = await ddb.send(
     new QueryCommand({
       TableName: TABLE_NAME,
@@ -2988,65 +3262,75 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
   }
   const exportAt = new Date();
   const exportStamp = formatJstCompactTimestamp(exportAt);
-  const downloadFileName = `${sanitizeDownloadFileName(folder.title, 'folder')}_${exportStamp}.pptx`;
+  const downloadFileName = `${sanitizeDownloadFileName(folder.title, 'folder')}_${exportStamp}.${exportExtension(format)}`;
   const usageBytes = Number(billing?.usageBytes || 0);
   const capacityBytes = Number(billing?.freeBytes || 0);
   const currentPlan = normalizeSubscriptionPlanCode(billing?.currentPlan || billing?.subscription?.currentPlan || 'FREE');
-  const footerSummary = `プラン: ${currentPlan} / 使用量: ${formatBytes(usageBytes)} / 上限: ${formatBytes(capacityBytes)} / 出力: ${formatJstDisplayDateTime(exportAt.toISOString())}`;
+  const footerSummary = `形式: ${exportFormatDescription(format)} / プラン: ${currentPlan} / 使用量: ${formatBytes(usageBytes)} / 上限: ${formatBytes(capacityBytes)} / 出力: ${formatJstDisplayDateTime(exportAt.toISOString())}`;
 
-  const pptx = await buildExportPresentation({
-    folder,
-    photos: exportPhotos,
-    isFreePlanExport,
-    resolveImage: async (photo) => {
-      const exportImageKey = photo.previewKey || photo.s3Key;
-      let imageDimensions = null;
-      try {
-        const imageBuffer = await readS3ObjectBuffer(exportImageKey);
-        imageDimensions = imageSize(imageBuffer);
-      } catch (_) {
-        imageDimensions = null;
-      }
-      const signed = await getSignedUrl(
-        s3,
-        new GetObjectCommand({ Bucket: PHOTO_BUCKET, Key: exportImageKey }),
-        { expiresIn: 300 }
-      );
-      return { path: signed, dimensions: imageDimensions };
-    },
-    resolveCommentLines: async (photo) => {
-      const commentsRes = await ddb.send(
-        new QueryCommand({
-          TableName: TABLE_NAME,
-          KeyConditionExpression: 'PK = :pk and begins_with(SK, :sk)',
-          ExpressionAttributeValues: {
-            ':pk': `PHOTO#${photo.photoId}`,
-            ':sk': 'COMMENT#',
-          },
-        })
-      );
-      const comments = commentsRes.Items || [];
-      const commentNameMap = await loadDisplayNameMap(comments.map((c) => c.createdBy));
-      return comments.map((c, idx) => {
-        const createdByName = commentNameMap[c.createdBy] || c.createdByName || 'unknown';
-        const stampedBy = `${formatJstDisplayDateTime(c.createdAt)} ${createdByName}`;
-        return `${idx + 1}. ${c.text}\n${stampedBy}`;
-      });
-    },
-    buildFooterText: (_photo, index, total) => `${footerSummary} / ${index + 1}/${total}`,
-  });
+  const resolveCommentLines = async (photo) => {
+    const commentsRes = await ddb.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        KeyConditionExpression: 'PK = :pk and begins_with(SK, :sk)',
+        ExpressionAttributeValues: {
+          ':pk': `PHOTO#${photo.photoId}`,
+          ':sk': 'COMMENT#',
+        },
+      })
+    );
+    const comments = commentsRes.Items || [];
+    const commentNameMap = await loadDisplayNameMap(comments.map((c) => c.createdBy));
+    return comments.map((c, idx) => {
+      const createdByName = commentNameMap[c.createdBy] || c.createdByName || 'unknown';
+      const stampedBy = `${formatJstDisplayDateTime(c.createdAt)} ${createdByName}`;
+      return `${idx + 1}. ${c.text}\n${stampedBy}`;
+    });
+  };
 
-  const pptxBuffer = await pptx.write({ outputType: 'nodebuffer' });
+  const resolvePptImage = async (photo) => {
+    const imageAsset = await loadExportImageAsset(photo, format);
+    const signed = await getSignedUrl(
+      s3,
+      new GetObjectCommand({ Bucket: PHOTO_BUCKET, Key: imageAsset.key }),
+      { expiresIn: 300 }
+    );
+    return { path: signed, dimensions: imageAsset.dimensions };
+  };
+
+  const buildFooterText = (_photo, index, total) => `${footerSummary} / ${index + 1}/${total}`;
+
+  let exportBuffer;
+  if (format === 'pdf') {
+    exportBuffer = await buildExportPdf({
+      folder,
+      photos: exportPhotos,
+      isFreePlanExport,
+      resolveImageAsset: async (photo) => await loadExportImageAsset(photo, 'pptx_light'),
+      resolveCommentLines,
+      buildFooterText,
+    });
+  } else {
+    const pptx = await buildExportPresentation({
+      folder,
+      photos: exportPhotos,
+      isFreePlanExport,
+      resolveImage: resolvePptImage,
+      resolveCommentLines,
+      buildFooterText,
+    });
+    exportBuffer = await pptx.write({ outputType: 'nodebuffer' });
+  }
+
   // Include roomId/folderId in the key so we can delete exports on folder/team deletion.
   const safeTitle = String(folder.title || 'folder').replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 40) || 'folder';
-  const key = `exports/${room.roomId}/${folderId}/${safeTitle}_${exportStamp}.pptx`;
+  const key = `exports/${room.roomId}/${folderId}/${safeTitle}_${exportStamp}_${exportLabel(format)}.${exportExtension(format)}`;
   await s3.send(
     new PutObjectCommand({
       Bucket: EXPORT_BUCKET,
       Key: key,
-      Body: pptxBuffer,
-      ContentType:
-        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      Body: exportBuffer,
+      ContentType: exportContentType(format),
     })
   );
 
@@ -3061,15 +3345,16 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
   );
   auditLog({
     requestId: ctx.requestId,
-    action: 'folder.export_pptx',
+    action: 'folder.export',
     actor: user.userKey,
     actorName: user.userName,
     folderId,
     result: 'success',
     exportKey: key,
+    format,
   });
 
-  return json(200, { key, downloadUrl });
+  return json(200, { key, downloadUrl, format });
 }
 
 async function deleteAllCommentsForPhoto(photoId) {

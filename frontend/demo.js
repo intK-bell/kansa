@@ -364,6 +364,11 @@ const els = {
   lowStorageCloseBtn: document.querySelector('#low-storage-close-btn'),
   lowStorageMessage: document.querySelector('#low-storage-message'),
   lowStorageChargeBtn: document.querySelector('#low-storage-charge-btn'),
+  exportOptionsModal: document.querySelector('#export-options-modal'),
+  exportOptionsCloseBtn: document.querySelector('#export-options-close-btn'),
+  exportHighBtn: document.querySelector('#export-high-btn'),
+  exportLightBtn: document.querySelector('#export-light-btn'),
+  exportPdfBtn: document.querySelector('#export-pdf-btn'),
   photoPreviewModal: document.querySelector('#photo-preview-modal'),
   photoPreviewTitle: document.querySelector('#photo-preview-title'),
   photoPreviewImage: document.querySelector('#photo-preview-image'),
@@ -447,6 +452,12 @@ function closeHelpModal() {
 function closeLowStorageModal() {
   if (els.lowStorageModal) {
     els.lowStorageModal.classList.add('hidden');
+  }
+}
+
+function closeExportOptionsModal() {
+  if (els.exportOptionsModal) {
+    els.exportOptionsModal.classList.add('hidden');
   }
 }
 
@@ -537,6 +548,41 @@ function openFolderPasswordModal() {
     els.folderPasswordSet.focus();
   }
   els.folderPasswordModal.classList.remove('hidden');
+}
+
+function isMobileExportMode() {
+  const ua = String(window.navigator.userAgent || '').toLowerCase();
+  const coarsePointer = window.matchMedia ? window.matchMedia('(pointer: coarse)').matches : false;
+  return /iphone|ipad|ipod|android|mobile/.test(ua) || coarsePointer;
+}
+
+function openExportOptionsModal() {
+  if (!els.exportOptionsModal) return;
+  els.exportOptionsModal.classList.remove('hidden');
+}
+
+async function requestFolderExport(format) {
+  if (!state.selectedFolder) {
+    window.alert('先にフォルダを選択してください。');
+    return;
+  }
+  const preOpened = window.open('', '_blank');
+  try {
+    const folderId = state.selectedFolder.folderId;
+    const res = await api(`/folders/${folderId}/export`, {
+      method: 'POST',
+      headers: { ...folderPasswordHeader(folderId) },
+      body: JSON.stringify({ format }),
+    });
+    if (preOpened) {
+      preOpened.location.href = res.downloadUrl;
+    } else {
+      window.location.href = res.downloadUrl;
+    }
+  } catch (error) {
+    if (preOpened) preOpened.close();
+    throw error;
+  }
 }
 
 function setTeamAdminMode(isOpen) {
@@ -2345,6 +2391,7 @@ if (els.logoutBtn) {
     closeFolderPasswordModal();
     closeThemeModal();
     closeHelpModal();
+    closeExportOptionsModal();
     closePhotoPreviewModal();
 
     if (hasCognitoConfig()) {
@@ -2455,6 +2502,41 @@ if (els.lowStorageModal) {
       closeLowStorageModal();
     }
   };
+}
+
+if (els.exportOptionsCloseBtn) {
+  els.exportOptionsCloseBtn.onclick = () => {
+    closeExportOptionsModal();
+  };
+}
+
+if (els.exportOptionsModal) {
+  els.exportOptionsModal.onclick = (e) => {
+    if (e && e.target === els.exportOptionsModal) {
+      closeExportOptionsModal();
+    }
+  };
+}
+
+if (els.exportHighBtn) {
+  els.exportHighBtn.onclick = safeAction(async () => {
+    closeExportOptionsModal();
+    await requestFolderExport('pptx_high');
+  }, '高画質PPT出力');
+}
+
+if (els.exportLightBtn) {
+  els.exportLightBtn.onclick = safeAction(async () => {
+    closeExportOptionsModal();
+    await requestFolderExport('pptx_light');
+  }, '軽量PPT出力');
+}
+
+if (els.exportPdfBtn) {
+  els.exportPdfBtn.onclick = safeAction(async () => {
+    closeExportOptionsModal();
+    await requestFolderExport('pdf');
+  }, 'PDF出力');
 }
 
 if (els.leaveRoomBtn) {
@@ -2660,21 +2742,14 @@ els.exportBtn.onclick = safeAction(async () => {
     window.alert('先にフォルダを選択してください。');
     return;
   }
-  const confirmed = window.confirm('現在のフォルダをPPTに出力します。よろしいですか？');
+  const confirmed = window.confirm('現在のフォルダを出力します。よろしいですか？');
   if (!confirmed) return;
-  const preOpened = window.open('', '_blank');
-  try {
-    const folderId = state.selectedFolder.folderId;
-    const res = await api(`/folders/${folderId}/export`, { method: 'POST', headers: { ...folderPasswordHeader(folderId) } });
-    if (preOpened) {
-      preOpened.location.href = res.downloadUrl;
-    } else {
-      window.location.href = res.downloadUrl;
-    }
-  } catch (error) {
-    if (preOpened) preOpened.close();
-    throw error;
+  if (isMobileExportMode()) {
+    closeMenu();
+    openExportOptionsModal();
+    return;
   }
+  await requestFolderExport('pptx_high');
 }, 'PPT出力');
 
 if (els.teamAdminBtn && els.teamAdminCard) {
