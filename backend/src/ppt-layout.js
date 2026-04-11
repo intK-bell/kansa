@@ -1,7 +1,7 @@
 const path = require('node:path');
 const PptxGenJS = require('pptxgenjs');
 
-const PPT_WATERMARK_PATH = path.resolve(__dirname, 'favicon.webp');
+const PPT_WATERMARK_PATH = path.resolve(__dirname, 'favicon.png');
 
 const PALETTE = {
   bg: 'F8FBF6',

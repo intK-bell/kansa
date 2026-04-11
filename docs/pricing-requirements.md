@@ -62,7 +62,7 @@
 
 - フリープランの PowerPoint 出力では、各写真に透かしを入れる
 - 有料プランの PowerPoint 出力では、透かしを入れない
-- 透かし画像は [frontend/favicon.webp](/Users/aokikensaku/Documents/Devapps/kansa/frontend/favicon.webp) を利用する
+- 透かし画像は [frontend/favicon.png](/Users/aokikensaku/Documents/Devapps/kansa/frontend/favicon.png) を利用する
 - 透かしは PowerPoint の各ページ内で、写真の上に並べて表示する
 - 透かしは最前面に配置する
 - 透かしの透明度は `70%` とする

@@ -85,7 +85,7 @@
 ## フェーズ4: PPT 出力差別化（Backend）
 
 - [ ] PowerPoint 出力処理の実装箇所を特定し、プランごとの分岐を追加する
-- [ ] フリープラン時だけ、[frontend/favicon.webp](/Users/aokikensaku/Documents/Devapps/kansa/frontend/favicon.webp) を透かしとして各ページに重ねる
+- [ ] フリープラン時だけ、[frontend/favicon.png](/Users/aokikensaku/Documents/Devapps/kansa/frontend/favicon.png) を透かしとして各ページに重ねる
   - 最前面
   - 写真の上に並べて表示する
   - 透明度 `70%`
