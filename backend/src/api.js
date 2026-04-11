@@ -23,7 +23,7 @@ const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const imageSize = require('image-size');
 const fs = require('node:fs');
 const path = require('node:path');
-const { PDFDocument, rgb } = require('pdf-lib');
+const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 const fontkit = require('@pdf-lib/fontkit');
 
 const { stripeRequest } = require('./stripe-rest');
@@ -444,7 +444,46 @@ async function loadExportImageAsset(photo, format) {
   throw new Error('EXPORT_IMAGE_UNAVAILABLE');
 }
 
-function wrapPdfText(text, maxCharsPerLine = 28) {
+function isPdfLatinChar(ch) {
+  const code = String(ch || '').codePointAt(0);
+  return Number.isFinite(code) && code >= 0x20 && code <= 0x7e;
+}
+
+function splitPdfTextRuns(text) {
+  const runs = [];
+  let currentType = null;
+  let currentText = '';
+  for (const ch of Array.from(String(text || ''))) {
+    const nextType = isPdfLatinChar(ch) ? 'latin' : 'jp';
+    if (currentType && nextType !== currentType) {
+      runs.push({ type: currentType, text: currentText });
+      currentText = '';
+    }
+    currentType = nextType;
+    currentText += ch;
+  }
+  if (currentText) runs.push({ type: currentType || 'jp', text: currentText });
+  return runs;
+}
+
+function measurePdfTextWidth(text, size, jpFont, latinFont) {
+  return splitPdfTextRuns(text).reduce((sum, run) => {
+    const font = run.type === 'latin' ? latinFont : jpFont;
+    return sum + font.widthOfTextAtSize(run.text, size);
+  }, 0);
+}
+
+function drawMixedPdfText(page, text, options) {
+  const { x, y, size, jpFont, latinFont, color } = options;
+  let cursorX = x;
+  for (const run of splitPdfTextRuns(text)) {
+    const font = run.type === 'latin' ? latinFont : jpFont;
+    page.drawText(run.text, { x: cursorX, y, size, font, color });
+    cursorX += font.widthOfTextAtSize(run.text, size);
+  }
+}
+
+function wrapPdfText(text, maxWidth, size, jpFont, latinFont) {
   const raw = String(text || '').trim();
   if (!raw) return [];
   const lines = [];
@@ -456,11 +495,13 @@ function wrapPdfText(text, maxCharsPerLine = 28) {
     }
     let current = '';
     for (const ch of Array.from(source)) {
-      if (current.length >= maxCharsPerLine) {
+      const candidate = current + ch;
+      if (current && measurePdfTextWidth(candidate, size, jpFont, latinFont) > maxWidth) {
         lines.push(current);
-        current = '';
+        current = ch;
+        continue;
       }
-      current += ch;
+      current = candidate;
     }
     if (current) lines.push(current);
   }
@@ -471,7 +512,8 @@ async function buildExportPdf(options) {
   const { folder, photos, isFreePlanExport, resolveImageAsset, resolveCommentLines, buildFooterText } = options;
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
-  const font = await pdfDoc.embedFont(await loadPdfFontBytes(), { subset: false });
+  const jpFont = await pdfDoc.embedFont(await loadPdfFontBytes(), { subset: false });
+  const latinFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const watermarkImage = isFreePlanExport ? await pdfDoc.embedPng(await loadWatermarkBytes()) : null;
 
   for (let index = 0; index < photos.length; index += 1) {
@@ -496,21 +538,23 @@ async function buildExportPdf(options) {
       x: pptUnit(0.82),
       y: PDF_PAGE_HEIGHT - pptUnit(0.58),
       size: 10,
-      font,
+      font: jpFont,
       color: hexToRgbColor(PALETTE.brandText),
     });
-    page.drawText(`${folder.folderCode || 'F000'} ${folder.title}`, {
+    drawMixedPdfText(page, `${folder.folderCode || 'F000'} ${folder.title}`, {
       x: pptUnit(0.55),
       y: PDF_PAGE_HEIGHT - pptUnit(1.18),
       size: 21,
-      font,
+      jpFont,
+      latinFont,
       color: hexToRgbColor(PALETTE.ink),
     });
-    page.drawText(`${photo.photoCode || '-'} ${photo.fileName || photo.photoId}`, {
+    drawMixedPdfText(page, `${photo.photoCode || '-'} ${photo.fileName || photo.photoId}`, {
       x: pptUnit(0.55),
       y: PDF_PAGE_HEIGHT - pptUnit(1.44),
       size: 11,
-      font,
+      jpFont,
+      latinFont,
       color: hexToRgbColor(PALETTE.muted),
     });
 
@@ -568,19 +612,26 @@ async function buildExportPdf(options) {
       x: pptUnit(layout.comments.x + 0.2),
       y: PDF_PAGE_HEIGHT - pptUnit(layout.comments.y + 0.28),
       size: 11,
-      font,
+      font: jpFont,
       color: hexToRgbColor(PALETTE.brandText),
     });
 
-    const wrappedCommentLines = wrapPdfText(commentLines.length ? commentLines.join('\n\n') : 'コメントなし', 22);
+    const wrappedCommentLines = wrapPdfText(
+      commentLines.length ? commentLines.join('\n\n') : 'コメントなし',
+      pptUnit(layout.comments.w - 0.4),
+      10,
+      jpFont,
+      latinFont
+    );
     let cursorY = PDF_PAGE_HEIGHT - pptUnit(layout.comments.y + 0.52);
     for (const line of wrappedCommentLines) {
       if (cursorY < PDF_PAGE_HEIGHT - pptUnit(layout.comments.y + layout.comments.h - 0.2)) break;
-      page.drawText(line || ' ', {
+      drawMixedPdfText(page, line || ' ', {
         x: pptUnit(layout.comments.x + 0.2),
         y: cursorY,
         size: 10,
-        font,
+        jpFont,
+        latinFont,
         color: hexToRgbColor('333333'),
       });
       cursorY -= 13;
@@ -592,11 +643,12 @@ async function buildExportPdf(options) {
       thickness: 1,
       color: hexToRgbColor(PALETTE.line),
     });
-    page.drawText(footerText, {
+    drawMixedPdfText(page, footerText, {
       x: pptUnit(0.58),
       y: PDF_PAGE_HEIGHT - pptUnit(7.02),
       size: 8,
-      font,
+      jpFont,
+      latinFont,
       color: hexToRgbColor(PALETTE.muted),
     });
   }
