@@ -872,6 +872,12 @@ button.is-loading::before {
   width: min(520px, 100%);
 }
 
+.export-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
 .export-options-list {
   display: grid;
   gap: 12px;
@@ -917,7 +923,7 @@ button.is-loading::before {
 .export-progress-bar {
   height: 100%;
   background: linear-gradient(90deg, var(--primary), #9dc68f);
-  transition: width 0.18s ease-out;
+  transition: width 0.28s ease-out;
 }
 
 .photo-preview-body {

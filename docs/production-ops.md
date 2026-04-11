@@ -109,6 +109,14 @@ window.KANSA_CONFIG = {
 - フォルダ作成/写真アップ/コメント作成が動作
 - CloudWatch Logs Insightsで `kind=audit` が記録される
 
+## 3-1. 出力ファイル保持
+
+- `ExportBucket` に保存される `PDF` `軽量PPT` `高画質PPT` は一時生成物として扱う
+- 保持期間は `7日`
+- `7日` 経過後は自動削除する想定
+- 実装は `S3 Lifecycle` を優先する
+- 生成済み出力ファイルは利用容量には含めない
+
 ## 4. API custom domain 切替手順
 APIを `execute-api` 直URLから独自ドメインへ切り替える手順です。
 

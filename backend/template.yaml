@@ -249,6 +249,23 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - "*"
+            AllowedMethods:
+              - GET
+              - HEAD
+            AllowedOrigins: !Ref FrontendAllowedOrigins
+            ExposedHeaders:
+              - Content-Length
+              - Content-Disposition
+              - ETag
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireGeneratedExportsAfter7Days
+            Status: Enabled
+            ExpirationInDays: 7
 
   ApiFunction:
     Type: AWS::Serverless::Function

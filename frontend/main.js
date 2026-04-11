@@ -47,6 +47,9 @@ const state = {
   uploadDrafts: [],
 };
 
+let exportLoadingTimer = null;
+let exportResult = null;
+
 const SEASONS = new Set(['spring', 'summer', 'autumn', 'winter']);
 
 function el(tag, attrs = {}, text = null) {
@@ -368,8 +371,14 @@ const els = {
   exportLightBtn: document.querySelector('#export-light-btn'),
   exportPdfBtn: document.querySelector('#export-pdf-btn'),
   exportLoadingModal: document.querySelector('#export-loading-modal'),
+  exportLoadingTitle: document.querySelector('#export-loading-title'),
+  exportLoadingCloseBtn: document.querySelector('#export-loading-close-btn'),
   exportLoadingText: document.querySelector('#export-loading-text'),
   exportLoadingBar: document.querySelector('#export-loading-bar'),
+  exportLoadingActions: document.querySelector('#export-loading-actions'),
+  exportDownloadBtn: document.querySelector('#export-download-btn'),
+  exportOpenTabBtn: document.querySelector('#export-open-tab-btn'),
+  exportCopyLinkBtn: document.querySelector('#export-copy-link-btn'),
   photoPreviewModal: document.querySelector('#photo-preview-modal'),
   photoPreviewTitle: document.querySelector('#photo-preview-title'),
   photoPreviewImage: document.querySelector('#photo-preview-image'),
@@ -465,14 +474,38 @@ function closeExportOptionsModal() {
 }
 
 function openExportLoadingModal(message = 'ダウンロードを開始しています...') {
+  if (els.exportLoadingTitle) els.exportLoadingTitle.textContent = '出力中';
   if (els.exportLoadingText) els.exportLoadingText.textContent = message;
-  if (els.exportLoadingBar) els.exportLoadingBar.style.width = '8%';
+  if (els.exportLoadingBar) {
+    els.exportLoadingBar.style.width = '0%';
+    els.exportLoadingBar.classList.remove('is-indeterminate');
+  }
+  if (els.exportLoadingActions) els.exportLoadingActions.classList.add('hidden');
+  if (els.exportLoadingCloseBtn) els.exportLoadingCloseBtn.classList.add('hidden');
   if (els.exportLoadingModal) els.exportLoadingModal.classList.remove('hidden');
+}
+
+function startExportLoadingProgress() {
+  if (!els.exportLoadingBar) return;
+  if (exportLoadingTimer) window.clearInterval(exportLoadingTimer);
+  let progress = 0;
+  els.exportLoadingBar.style.width = '0%';
+  exportLoadingTimer = window.setInterval(() => {
+    progress = progress < 10 ? progress + 0.9 : progress < 22 ? progress + 0.55 : progress < 40 ? progress + 0.3 : progress + 0.12;
+    const next = Math.min(56, progress);
+    els.exportLoadingBar.style.width = `${next}%`;
+    if (next >= 56 && exportLoadingTimer) {
+      window.clearInterval(exportLoadingTimer);
+      exportLoadingTimer = null;
+    }
+  }, 60);
 }
 
 function updateExportLoadingProgress(loaded, total) {
   if (els.exportLoadingBar) {
-    const ratio = total > 0 ? Math.min(100, Math.max(8, (loaded / total) * 100)) : Math.min(92, Math.max(8, 8 + loaded / 65536));
+    els.exportLoadingBar.classList.remove('is-indeterminate');
+    const ratio =
+      total > 0 ? Math.min(100, Math.max(60, 60 + (loaded / total) * 40)) : Math.min(96, Math.max(60, 60 + loaded / 65536));
     els.exportLoadingBar.style.width = `${ratio}%`;
   }
   if (els.exportLoadingText) {
@@ -486,7 +519,87 @@ function updateExportLoadingProgress(loaded, total) {
 
 function closeExportLoadingModal() {
   if (els.exportLoadingModal) els.exportLoadingModal.classList.add('hidden');
-  if (els.exportLoadingBar) els.exportLoadingBar.style.width = '0%';
+  if (exportLoadingTimer) {
+    window.clearInterval(exportLoadingTimer);
+    exportLoadingTimer = null;
+  }
+  if (els.exportLoadingBar) {
+    els.exportLoadingBar.style.width = '0%';
+    els.exportLoadingBar.classList.remove('is-indeterminate');
+  }
+  if (els.exportLoadingActions) els.exportLoadingActions.classList.add('hidden');
+  if (els.exportLoadingCloseBtn) els.exportLoadingCloseBtn.classList.add('hidden');
+  if (exportResult?.objectUrl) {
+    URL.revokeObjectURL(exportResult.objectUrl);
+  }
+  exportResult = null;
+}
+
+function markExportLoadingDownloadReady() {
+  if (exportLoadingTimer) {
+    window.clearInterval(exportLoadingTimer);
+    exportLoadingTimer = null;
+  }
+  if (els.exportLoadingBar) {
+    els.exportLoadingBar.classList.remove('is-indeterminate');
+    els.exportLoadingBar.style.width = '60%';
+  }
+  if (els.exportLoadingText) {
+    els.exportLoadingText.textContent = 'PDFのダウンロードを開始しています...';
+  }
+}
+
+function completeExportLoadingProgress() {
+  if (exportLoadingTimer) {
+    window.clearInterval(exportLoadingTimer);
+    exportLoadingTimer = null;
+  }
+  if (els.exportLoadingBar) {
+    els.exportLoadingBar.classList.remove('is-indeterminate');
+    els.exportLoadingBar.style.width = '100%';
+  }
+}
+
+function showExportReadyActions({ formatLabel, downloadUrl, fileName = '', objectUrl = null }) {
+  exportResult = {
+    formatLabel,
+    downloadUrl,
+    fileName,
+    objectUrl,
+  };
+  if (els.exportLoadingTitle) els.exportLoadingTitle.textContent = '生成完了';
+  if (els.exportLoadingText) els.exportLoadingText.textContent = `${formatLabel} の生成が完了しました。操作を選んでください。`;
+  if (els.exportLoadingBar) els.exportLoadingBar.style.width = '100%';
+  if (els.exportLoadingActions) els.exportLoadingActions.classList.remove('hidden');
+  if (els.exportLoadingCloseBtn) els.exportLoadingCloseBtn.classList.remove('hidden');
+}
+
+function triggerExportDownload() {
+  if (!exportResult) return;
+  if (exportResult.objectUrl) {
+    const link = document.createElement('a');
+    link.href = exportResult.objectUrl;
+    if (exportResult.fileName) link.download = exportResult.fileName;
+    link.rel = 'noopener';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    return;
+  }
+  window.location.href = exportResult.downloadUrl;
+}
+
+function openExportInNewTab() {
+  if (!exportResult) return;
+  window.open(exportResult.objectUrl || exportResult.downloadUrl, '_blank', 'noopener');
+}
+
+async function copyExportLink() {
+  if (!exportResult?.downloadUrl) return;
+  await navigator.clipboard.writeText(exportResult.downloadUrl);
+  if (els.exportLoadingText) els.exportLoadingText.textContent = `${exportResult.formatLabel} のリンクをコピーしました。`;
+  showToast('リンクをコピーしました。');
 }
 
 function triggerBlobDownload(blob, fileName) {
@@ -626,9 +739,9 @@ async function requestFolderExport(format) {
   const confirmed = window.confirm(`${formatLabel}で出力します。よろしいですか？`);
   if (!confirmed) return;
   const isPdf = format === 'pdf';
-  if (isPdf) {
-    openExportLoadingModal('PDFを出力中です...');
-  }
+  const formatLabelText = format === 'pdf' ? 'PDF' : format === 'pptx_light' ? '軽量PPT' : '高画質PPT';
+  openExportLoadingModal(`${formatLabelText} を生成しています...`);
+  startExportLoadingProgress();
   try {
     const folderId = state.selectedFolder.folderId;
     const res = await api(`/folders/${folderId}/export`, {
@@ -637,7 +750,7 @@ async function requestFolderExport(format) {
       body: JSON.stringify({ format }),
     });
     if (isPdf) {
-      openExportLoadingModal('PDFのダウンロードを開始しています...');
+      markExportLoadingDownloadReady();
       try {
         const pdfRes = await fetch(res.downloadUrl);
         if (!pdfRes.ok) throw new Error(`PDFダウンロード失敗(${pdfRes.status})`);
@@ -645,8 +758,8 @@ async function requestFolderExport(format) {
         const total = Number(pdfRes.headers.get('content-length') || 0);
         if (!pdfRes.body || typeof pdfRes.body.getReader !== 'function') {
           const blob = await pdfRes.blob();
-          triggerBlobDownload(blob, fileName);
-          closeExportLoadingModal();
+          const objectUrl = URL.createObjectURL(blob);
+          showExportReadyActions({ formatLabel: formatLabelText, downloadUrl: res.downloadUrl, fileName, objectUrl });
           return;
         }
         const reader = pdfRes.body.getReader();
@@ -662,10 +775,8 @@ async function requestFolderExport(format) {
           }
         }
         const blob = new Blob(chunks, { type: 'application/pdf' });
-        triggerBlobDownload(blob, fileName);
-        if (els.exportLoadingBar) els.exportLoadingBar.style.width = '100%';
-        if (els.exportLoadingText) els.exportLoadingText.textContent = 'PDFダウンロード完了';
-        window.setTimeout(() => closeExportLoadingModal(), 400);
+        const objectUrl = URL.createObjectURL(blob);
+        showExportReadyActions({ formatLabel: formatLabelText, downloadUrl: res.downloadUrl, fileName, objectUrl });
         return;
       } catch (downloadError) {
         closeExportLoadingModal();
@@ -673,9 +784,10 @@ async function requestFolderExport(format) {
         return;
       }
     }
-    window.location.href = res.downloadUrl;
+    completeExportLoadingProgress();
+    showExportReadyActions({ formatLabel: formatLabelText, downloadUrl: res.downloadUrl });
   } catch (error) {
-    if (isPdf) closeExportLoadingModal();
+    closeExportLoadingModal();
     throw error;
   }
 }
@@ -2616,6 +2728,30 @@ if (els.exportOptionsModal) {
       closeExportOptionsModal();
     }
   };
+}
+
+if (els.exportLoadingCloseBtn) {
+  els.exportLoadingCloseBtn.onclick = () => {
+    closeExportLoadingModal();
+  };
+}
+
+if (els.exportDownloadBtn) {
+  els.exportDownloadBtn.onclick = () => {
+    triggerExportDownload();
+  };
+}
+
+if (els.exportOpenTabBtn) {
+  els.exportOpenTabBtn.onclick = () => {
+    openExportInNewTab();
+  };
+}
+
+if (els.exportCopyLinkBtn) {
+  els.exportCopyLinkBtn.onclick = safeAction(async () => {
+    await copyExportLink();
+  }, '出力リンクコピー');
 }
 
 if (els.exportHighBtn) {

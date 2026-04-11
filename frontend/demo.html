@@ -351,11 +351,17 @@
     <div id="export-loading-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="PDFダウンロード中">
       <div class="modal-card export-loading-card">
         <div class="modal-header">
-          <h3 style="margin:0;">PDFをダウンロード中</h3>
+          <h3 id="export-loading-title" style="margin:0;">出力中</h3>
+          <button id="export-loading-close-btn" type="button" class="danger hidden">閉じる</button>
         </div>
         <p id="export-loading-text" class="muted" style="margin:8px 0 12px;">ダウンロードを開始しています...</p>
         <div class="export-progress">
           <div id="export-loading-bar" class="export-progress-bar" style="width:0%;"></div>
+        </div>
+        <div id="export-loading-actions" class="export-actions hidden">
+          <button id="export-download-btn" type="button">ダウンロードする</button>
+          <button id="export-open-tab-btn" type="button">別タブで開く</button>
+          <button id="export-copy-link-btn" type="button">リンクをコピー</button>
         </div>
       </div>
     </div>
