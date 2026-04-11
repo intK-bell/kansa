@@ -868,6 +868,10 @@ button.is-loading::before {
   width: min(640px, 100%);
 }
 
+.export-loading-card {
+  width: min(520px, 100%);
+}
+
 .export-options-list {
   display: grid;
   gap: 12px;
@@ -899,6 +903,21 @@ button.is-loading::before {
 .export-option-recommended {
   border-color: rgba(123, 175, 106, 0.42);
   background: rgba(232, 242, 226, 0.9);
+}
+
+.export-progress {
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--card-soft);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.export-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), #9dc68f);
+  transition: width 0.18s ease-out;
 }
 
 .photo-preview-body {

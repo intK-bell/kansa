@@ -369,6 +369,9 @@ const els = {
   exportHighBtn: document.querySelector('#export-high-btn'),
   exportLightBtn: document.querySelector('#export-light-btn'),
   exportPdfBtn: document.querySelector('#export-pdf-btn'),
+  exportLoadingModal: document.querySelector('#export-loading-modal'),
+  exportLoadingText: document.querySelector('#export-loading-text'),
+  exportLoadingBar: document.querySelector('#export-loading-bar'),
   photoPreviewModal: document.querySelector('#photo-preview-modal'),
   photoPreviewTitle: document.querySelector('#photo-preview-title'),
   photoPreviewImage: document.querySelector('#photo-preview-image'),
@@ -461,6 +464,31 @@ function closeExportOptionsModal() {
   if (els.exportOptionsModal) {
     els.exportOptionsModal.classList.add('hidden');
   }
+}
+
+function openExportLoadingModal(message = 'ダウンロードを開始しています...') {
+  if (els.exportLoadingText) els.exportLoadingText.textContent = message;
+  if (els.exportLoadingBar) els.exportLoadingBar.style.width = '8%';
+  if (els.exportLoadingModal) els.exportLoadingModal.classList.remove('hidden');
+}
+
+function updateExportLoadingProgress(loaded, total) {
+  if (els.exportLoadingBar) {
+    const ratio = total > 0 ? Math.min(100, Math.max(8, (loaded / total) * 100)) : Math.min(92, Math.max(8, 8 + loaded / 65536));
+    els.exportLoadingBar.style.width = `${ratio}%`;
+  }
+  if (els.exportLoadingText) {
+    if (total > 0) {
+      els.exportLoadingText.textContent = `PDFをダウンロード中... ${Math.round((loaded / total) * 100)}%`;
+    } else {
+      els.exportLoadingText.textContent = `PDFをダウンロード中... ${Math.round(loaded / 1024)}KB`;
+    }
+  }
+}
+
+function closeExportLoadingModal() {
+  if (els.exportLoadingModal) els.exportLoadingModal.classList.add('hidden');
+  if (els.exportLoadingBar) els.exportLoadingBar.style.width = '0%';
 }
 
 function closePhotoPreviewModal() {
@@ -568,6 +596,9 @@ async function requestFolderExport(format) {
     window.alert('先にフォルダを選択してください。');
     return;
   }
+  const formatLabel = format === 'pdf' ? 'PDF' : format === 'pptx_light' ? '軽量PPT' : '高画質PPT';
+  const confirmed = window.confirm(`${formatLabel}で出力します。よろしいですか？`);
+  if (!confirmed) return;
   const preOpened = window.open('', '_blank');
   try {
     const folderId = state.selectedFolder.folderId;
@@ -576,6 +607,47 @@ async function requestFolderExport(format) {
       headers: { ...folderPasswordHeader(folderId) },
       body: JSON.stringify({ format }),
     });
+    if (format === 'pdf') {
+      openExportLoadingModal('PDFのダウンロードを開始しています...');
+      try {
+        const pdfRes = await fetch(res.downloadUrl);
+        if (!pdfRes.ok) throw new Error(`PDFダウンロード失敗(${pdfRes.status})`);
+        const total = Number(pdfRes.headers.get('content-length') || 0);
+        if (!pdfRes.body || typeof pdfRes.body.getReader !== 'function') {
+          const blob = await pdfRes.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          if (preOpened) preOpened.location.href = objectUrl;
+          else window.location.href = objectUrl;
+          closeExportLoadingModal();
+          return;
+        }
+        const reader = pdfRes.body.getReader();
+        const chunks = [];
+        let loaded = 0;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) {
+            chunks.push(value);
+            loaded += value.byteLength;
+            updateExportLoadingProgress(loaded, total);
+          }
+        }
+        const blob = new Blob(chunks, { type: 'application/pdf' });
+        const objectUrl = URL.createObjectURL(blob);
+        if (preOpened) preOpened.location.href = objectUrl;
+        else window.location.href = objectUrl;
+        if (els.exportLoadingBar) els.exportLoadingBar.style.width = '100%';
+        if (els.exportLoadingText) els.exportLoadingText.textContent = 'PDFダウンロード完了';
+        window.setTimeout(() => closeExportLoadingModal(), 400);
+        return;
+      } catch (downloadError) {
+        closeExportLoadingModal();
+        if (preOpened) preOpened.location.href = res.downloadUrl;
+        else window.location.href = res.downloadUrl;
+        return;
+      }
+    }
     if (preOpened) {
       preOpened.location.href = res.downloadUrl;
     } else {
@@ -2749,8 +2821,6 @@ els.exportBtn.onclick = safeAction(async () => {
     window.alert('先にフォルダを選択してください。');
     return;
   }
-  const confirmed = window.confirm('現在のフォルダを出力します。よろしいですか？');
-  if (!confirmed) return;
   closeMenu();
   openExportOptionsModal();
 }, 'PPT出力');

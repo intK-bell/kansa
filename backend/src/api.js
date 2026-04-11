@@ -471,7 +471,7 @@ async function buildExportPdf(options) {
   const { folder, photos, isFreePlanExport, resolveImageAsset, resolveCommentLines, buildFooterText } = options;
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
-  const font = await pdfDoc.embedFont(await loadPdfFontBytes(), { subset: true });
+  const font = await pdfDoc.embedFont(await loadPdfFontBytes(), { subset: false });
   const watermarkImage = isFreePlanExport ? await pdfDoc.embedPng(await loadWatermarkBytes()) : null;
 
   for (let index = 0; index < photos.length; index += 1) {

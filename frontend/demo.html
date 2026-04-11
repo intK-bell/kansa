@@ -348,6 +348,17 @@
         </div>
       </div>
     </div>
+    <div id="export-loading-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="PDFダウンロード中">
+      <div class="modal-card export-loading-card">
+        <div class="modal-header">
+          <h3 style="margin:0;">PDFをダウンロード中</h3>
+        </div>
+        <p id="export-loading-text" class="muted" style="margin:8px 0 12px;">ダウンロードを開始しています...</p>
+        <div class="export-progress">
+          <div id="export-loading-bar" class="export-progress-bar" style="width:0%;"></div>
+        </div>
+      </div>
+    </div>
     <div id="photo-preview-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="写真全体表示">
       <div class="modal-card photo-preview-card">
         <div class="modal-header">
@@ -359,6 +370,6 @@
         </div>
       </div>
     </div>
-    <script src="./demo.js?v=20260411-1" type="module"></script>
+    <script src="./demo.js?v=20260411-2" type="module"></script>
   </body>
 </html>
