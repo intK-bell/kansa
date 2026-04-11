@@ -381,6 +381,8 @@ const els = {
   appHeaderSummary: document.querySelector('#app-header-summary'),
   appHeaderControls: document.querySelector('.app-header-controls'),
   currentName: document.querySelector('#current-name'),
+  currentRoomStatic: document.querySelector('#current-room-static'),
+  currentRoomName: document.querySelector('#current-room-name'),
   currentRoomSelect: document.querySelector('#current-room-select'),
   currentFolderSelect: document.querySelector('#current-folder-select'),
   folderTitle: document.querySelector('#folder-title'),
@@ -553,6 +555,12 @@ function openExportOptionsModal() {
   els.exportOptionsModal.classList.remove('hidden');
 }
 
+function renderCurrentRoomHeader() {
+  if (els.currentRoomName) {
+    els.currentRoomName.textContent = state.roomName || '未選択';
+  }
+}
+
 async function requestFolderExport(format) {
   if (!state.selectedFolder) {
     window.alert('先にフォルダを選択してください。');
@@ -580,6 +588,8 @@ async function requestFolderExport(format) {
 function setTeamAdminMode(isOpen) {
   // While team admin is open, hide main folder workflow to reduce clutter.
   if (els.appHeaderControls) els.appHeaderControls.classList.toggle('hidden', isOpen);
+  if (els.currentRoomStatic) els.currentRoomStatic.classList.toggle('hidden', !isOpen);
+  renderCurrentRoomHeader();
   if (els.folderDetail) els.folderDetail.classList.toggle('hidden', isOpen ? true : !state.selectedFolder);
 }
 
@@ -1385,6 +1395,7 @@ function renderRoomSelect() {
     state.availableRooms.find((room) => String(room.roomName || '') === String(state.roomName || ''));
   els.currentRoomSelect.disabled = false;
   els.currentRoomSelect.value = activeRoom?.roomId || '';
+  renderCurrentRoomHeader();
 }
 
 async function loadMyRooms() {
@@ -1452,6 +1463,7 @@ function showApp() {
   if (els.logoutBtn) els.logoutBtn.classList.remove('hidden');
   closeMenu();
   els.currentName.textContent = state.userName;
+  renderCurrentRoomHeader();
   renderRoomSelect();
   loadTeamMe().then(async () => {
     if (els.uploadBtn) els.uploadBtn.disabled = Boolean(state.uploadBlocked);
@@ -1547,6 +1559,7 @@ async function loadTeamMe() {
   setAdminUiVisibility();
   renderBillingBar();
   syncSubscriptionPlanButtons();
+  renderCurrentRoomHeader();
   renderRoomSelect();
 }
 
