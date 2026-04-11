@@ -550,12 +550,6 @@ function openFolderPasswordModal() {
   els.folderPasswordModal.classList.remove('hidden');
 }
 
-function isMobileExportMode() {
-  const ua = String(window.navigator.userAgent || '').toLowerCase();
-  const coarsePointer = window.matchMedia ? window.matchMedia('(pointer: coarse)').matches : false;
-  return /iphone|ipad|ipod|android|mobile/.test(ua) || coarsePointer;
-}
-
 function openExportOptionsModal() {
   if (!els.exportOptionsModal) return;
   els.exportOptionsModal.classList.remove('hidden');
@@ -2744,12 +2738,8 @@ els.exportBtn.onclick = safeAction(async () => {
   }
   const confirmed = window.confirm('現在のフォルダを出力します。よろしいですか？');
   if (!confirmed) return;
-  if (isMobileExportMode()) {
-    closeMenu();
-    openExportOptionsModal();
-    return;
-  }
-  await requestFolderExport('pptx_high');
+  closeMenu();
+  openExportOptionsModal();
 }, 'PPT出力');
 
 if (els.teamAdminBtn && els.teamAdminCard) {
