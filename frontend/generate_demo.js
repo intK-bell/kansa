@@ -312,8 +312,13 @@ async function main() {
   const isFreePlan = currentPlan === 'FREE';
   const exportAt = new Date();
   const exportStamp = formatJstCompactTimestamp(exportAt);
-  const format = String(args.format || 'pptx').toLowerCase();
-  const defaultOut = path.resolve(__dirname, format === 'pdf' ? './demo-assets/demo-export-sample.pdf' : './demo-assets/demo-export-sample.pptx');
+  const format = String(args.format || 'pptx_high').toLowerCase();
+  const defaultOut =
+    format === 'pdf'
+      ? path.resolve(__dirname, './demo-assets/demo-export-sample.pdf')
+      : format === 'pptx_light'
+        ? path.resolve(__dirname, './demo-assets/demo-export-light-sample.pptx')
+        : path.resolve(__dirname, './demo-assets/demo-export-high-sample.pptx');
   const outPath = args.out ? path.resolve(process.cwd(), args.out) : defaultOut;
   if (format === 'pdf') {
     const pdfBuffer = await buildDemoPdf({

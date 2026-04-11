@@ -732,6 +732,16 @@ function renderCurrentRoomHeader() {
   }
 }
 
+function buildDemoExportUrl(format) {
+  const fileName =
+    format === 'pdf'
+      ? 'demo-export-sample.pdf'
+      : format === 'pptx_light'
+        ? 'demo-export-light-sample.pptx'
+        : 'demo-export-high-sample.pptx';
+  return new URL(`./demo-assets/${fileName}`, window.location.href).href;
+}
+
 async function requestFolderExport(format) {
   if (!state.selectedFolder) {
     window.alert('先にフォルダを選択してください。');
@@ -3610,7 +3620,11 @@ api = async function (path, options = {}) {
   }
 
   if (path.startsWith('/folders/') && path.endsWith('/export') && method === 'POST') {
-    return { downloadUrl: `${window.location.origin}/frontend/demo-assets/demo-export-sample.pptx` };
+    const format = String(body.format || 'pptx_high').toLowerCase();
+    return {
+      downloadUrl: buildDemoExportUrl(format),
+      format,
+    };
   }
 
   if (path.startsWith('/folders/') && method === 'DELETE') {
