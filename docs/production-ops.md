@@ -1,5 +1,55 @@
 # 本番運用手順（監査ログ / Amplify公開）
 
+## 0. Backendデプロイ
+
+本番 backend は AWS SAM でデプロイします。  
+実行場所はリポジトリ直下です。
+
+### 最短手順
+
+```bash
+cd /Users/aokikensaku/Documents/Devapps/kansa
+./scripts/deploy_backend.sh
+```
+
+このスクリプトで以下をまとめて実行します。
+
+- `backend/src` の `npm install`
+- `sam build`
+- `sam deploy`
+
+デプロイ完了後は、CloudFormation Outputs から取得した値を使うための
+`localStorage.setItem(...)` がターミナルに表示されます。
+
+### Stripe秘密値も含めてデプロイする場合
+
+```bash
+cd /Users/aokikensaku/Documents/Devapps/kansa
+STRIPE_SECRET_KEY=sk_live_xxx STRIPE_WEBHOOK_SECRET=whsec_xxx ./scripts/deploy_backend.sh
+```
+
+`STRIPE_SECRET_KEY` と `STRIPE_WEBHOOK_SECRET` はリポジトリへ commit しないこと。
+
+### デプロイ結果確認
+
+```bash
+aws cloudformation describe-stacks \
+  --stack-name kansa-backend \
+  --query 'Stacks[0].StackStatus' \
+  --output text
+```
+
+`UPDATE_COMPLETE` が返れば反映完了。
+
+### 手動で実行したい場合
+
+```bash
+cd /Users/aokikensaku/Documents/Devapps/kansa/backend
+npm --prefix src install
+sam build
+sam deploy
+```
+
 ## 1. 監査ログ（CloudWatch Logs）
 APIの作成/修正/削除時、Lambdaは `kind=audit` のJSONログを出力します。
 

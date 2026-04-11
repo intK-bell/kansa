@@ -491,6 +491,34 @@ function closeExportLoadingModal() {
   if (els.exportLoadingBar) els.exportLoadingBar.style.width = '0%';
 }
 
+function triggerBlobDownload(blob, fileName) {
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  if (fileName) link.download = fileName;
+  link.rel = 'noopener';
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
+
+function downloadFileNameFromResponse(response, fallback = 'export.pdf') {
+  const disposition = String(response?.headers?.get('content-disposition') || '');
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match && utf8Match[1]) {
+    try {
+      return decodeURIComponent(utf8Match[1]);
+    } catch (_) {
+      return utf8Match[1];
+    }
+  }
+  const plainMatch = disposition.match(/filename="?([^\";]+)"?/i);
+  if (plainMatch && plainMatch[1]) return plainMatch[1];
+  return fallback;
+}
+
 function closePhotoPreviewModal() {
   if (els.photoPreviewModal) {
     els.photoPreviewModal.classList.add('hidden');
@@ -599,7 +627,10 @@ async function requestFolderExport(format) {
   const formatLabel = format === 'pdf' ? 'PDF' : format === 'pptx_light' ? '軽量PPT' : '高画質PPT';
   const confirmed = window.confirm(`${formatLabel}で出力します。よろしいですか？`);
   if (!confirmed) return;
-  const preOpened = window.open('', '_blank');
+  const isPdf = format === 'pdf';
+  if (isPdf) {
+    openExportLoadingModal('PDFを出力中です...');
+  }
   try {
     const folderId = state.selectedFolder.folderId;
     const res = await api(`/folders/${folderId}/export`, {
@@ -607,17 +638,16 @@ async function requestFolderExport(format) {
       headers: { ...folderPasswordHeader(folderId) },
       body: JSON.stringify({ format }),
     });
-    if (format === 'pdf') {
+    if (isPdf) {
       openExportLoadingModal('PDFのダウンロードを開始しています...');
       try {
         const pdfRes = await fetch(res.downloadUrl);
         if (!pdfRes.ok) throw new Error(`PDFダウンロード失敗(${pdfRes.status})`);
+        const fileName = downloadFileNameFromResponse(pdfRes);
         const total = Number(pdfRes.headers.get('content-length') || 0);
         if (!pdfRes.body || typeof pdfRes.body.getReader !== 'function') {
           const blob = await pdfRes.blob();
-          const objectUrl = URL.createObjectURL(blob);
-          if (preOpened) preOpened.location.href = objectUrl;
-          else window.location.href = objectUrl;
+          triggerBlobDownload(blob, fileName);
           closeExportLoadingModal();
           return;
         }
@@ -634,27 +664,20 @@ async function requestFolderExport(format) {
           }
         }
         const blob = new Blob(chunks, { type: 'application/pdf' });
-        const objectUrl = URL.createObjectURL(blob);
-        if (preOpened) preOpened.location.href = objectUrl;
-        else window.location.href = objectUrl;
+        triggerBlobDownload(blob, fileName);
         if (els.exportLoadingBar) els.exportLoadingBar.style.width = '100%';
         if (els.exportLoadingText) els.exportLoadingText.textContent = 'PDFダウンロード完了';
         window.setTimeout(() => closeExportLoadingModal(), 400);
         return;
       } catch (downloadError) {
         closeExportLoadingModal();
-        if (preOpened) preOpened.location.href = res.downloadUrl;
-        else window.location.href = res.downloadUrl;
+        window.location.href = res.downloadUrl;
         return;
       }
     }
-    if (preOpened) {
-      preOpened.location.href = res.downloadUrl;
-    } else {
-      window.location.href = res.downloadUrl;
-    }
+    window.location.href = res.downloadUrl;
   } catch (error) {
-    if (preOpened) preOpened.close();
+    if (isPdf) closeExportLoadingModal();
     throw error;
   }
 }
