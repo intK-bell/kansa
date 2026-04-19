@@ -963,6 +963,16 @@ button.is-loading::before {
   margin: 4px 0;
 }
 
+.help-list {
+  margin: 6px 0 10px 20px;
+  padding: 0;
+}
+
+.help-list li {
+  margin: 4px 0;
+  line-height: 1.5;
+}
+
 .help-link {
   color: var(--primary);
   cursor: pointer;
