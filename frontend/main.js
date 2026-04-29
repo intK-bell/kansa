@@ -331,6 +331,7 @@ const els = {
   folderPasswordModal: document.querySelector('#folder-password-modal'),
   folderPasswordCloseBtn: document.querySelector('#folder-password-close-btn'),
   openFolderPasswordBtn: document.querySelector('#open-folder-password-btn'),
+  folderPasswordTargetName: document.querySelector('#folder-password-target-name'),
   themeModal: document.querySelector('#theme-modal'),
   themeCloseBtn: document.querySelector('#theme-close-btn'),
   openThemeBtn: document.querySelector('#open-theme-btn'),
@@ -451,6 +452,9 @@ function closeFolderCreateModal() {
 function closeFolderPasswordModal() {
   if (els.folderPasswordModal) {
     els.folderPasswordModal.classList.add('hidden');
+  }
+  if (els.folderPasswordTargetName) {
+    els.folderPasswordTargetName.textContent = '-';
   }
 }
 
@@ -716,6 +720,10 @@ function openFolderPasswordModal() {
   if (!state.selectedFolder) {
     window.alert('先にフォルダを選択してください。');
     return;
+  }
+  if (els.folderPasswordTargetName) {
+    const folder = state.selectedFolder;
+    els.folderPasswordTargetName.textContent = `${folder.folderCode || 'F---'} ${folder.title || folder.folderId}`;
   }
   if (els.folderPasswordSet) {
     els.folderPasswordSet.value = '';
@@ -2165,7 +2173,12 @@ async function loadFolders() {
 }
 
 async function computeFolderUnread(folderId) {
-  const photosData = await api(`/folders/${folderId}/photos`, { method: 'GET' });
+  const folder = state.folders.find((item) => item.folderId === folderId);
+  if (folder?.hasPassword && !state.folderPasswordById[folderId]) return false;
+  const photosData = await api(`/folders/${folderId}/photos`, {
+    method: 'GET',
+    headers: { ...folderPasswordHeader(folderId) },
+  });
   const photos = photosData.items || [];
   for (const photo of photos) {
     const latestAt = photo.latestCommentAt || '';
@@ -2670,15 +2683,27 @@ async function renderPhotos() {
       }
     });
 
+    let isAddingComment = false;
     addBtn.onclick = async () => {
-      if (!textArea.value.trim()) return;
-      state.openAccordions.add(photo.photoId);
-      state.restoreScrollY = window.scrollY;
-      await api(`/photos/${photo.photoId}/comments`, {
-        method: 'POST',
-        body: JSON.stringify({ text: textArea.value.trim() }),
-      });
-      await loadPhotos();
+      const text = textArea.value.trim();
+      if (isAddingComment || !text) return;
+      isAddingComment = true;
+      addBtn.disabled = true;
+      textArea.disabled = true;
+      try {
+        state.openAccordions.add(photo.photoId);
+        state.restoreScrollY = window.scrollY;
+        await api(`/photos/${photo.photoId}/comments`, {
+          method: 'POST',
+          body: JSON.stringify({ text }),
+        });
+        await loadPhotos();
+      } catch (error) {
+        addBtn.disabled = false;
+        textArea.disabled = false;
+        isAddingComment = false;
+        throw error;
+      }
     };
 
     const delBtn = card.querySelector('.js-del-photo');

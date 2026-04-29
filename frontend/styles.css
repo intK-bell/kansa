@@ -930,6 +930,25 @@ button.is-loading::before {
   animation: modalIn 0.14s ease-out;
 }
 
+.folder-password-target {
+  display: grid;
+  gap: 4px;
+  margin: 12px 0 8px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.folder-password-target span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.folder-password-target strong {
+  overflow-wrap: anywhere;
+}
+
 .photo-preview-card {
   width: min(1080px, 100%);
 }
