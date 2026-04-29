@@ -1881,7 +1881,8 @@ async function loadAdminPanel() {
         const folderSelect = el('select');
         folderSelect.appendChild(el('option', { value: '' }, 'フォルダを選択してください'));
         folders.forEach((f) => {
-          const label = `${f.folderCode ? `${f.folderCode} ` : ''}${f.title || f.folderId}`;
+          const locked = Boolean(f.hasPassword);
+          const label = `${f.folderCode ? `${f.folderCode} ` : ''}${f.title || f.folderId}${locked ? ' [鍵]' : ''}`;
           folderSelect.appendChild(el('option', { value: f.folderId }, label));
         });
         folderSelect.value = state.adminFolderId || '';

@@ -1209,6 +1209,22 @@ body.dark .room-row {
     height: 44px;
   }
 
+  .row .invite-url-cell {
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .row .invite-url-cell input {
+    width: auto;
+    flex: 1 1 0;
+  }
+
+  .row .invite-url-cell button {
+    width: auto;
+    flex: 0 0 auto;
+  }
+
   .upload-draft-grid {
     grid-template-columns: 1fr;
   }
