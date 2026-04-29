@@ -1863,7 +1863,8 @@ async function loadAdminPanel() {
         els.folderAdminList.appendChild(el('div', { class: 'muted' }, 'フォルダがなかです'));
       } else {
         folders.forEach((f) => {
-          const row = el('div', { class: 'member-row' });
+          const wrap = el('div', { class: 'folder-admin-block' });
+          const header = el('div', { class: 'folder-admin-header' });
           const left = el(
             'div',
             {},
@@ -1871,8 +1872,10 @@ async function loadAdminPanel() {
               Number(f.usageBytes || 0)
             )}）`
           );
-          row.appendChild(left);
-          const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
+          header.appendChild(left);
+          wrap.appendChild(header);
+
+          const inviteRow = el('div', { class: 'row folder-admin-actions' });
           const folderInviteInput = el('input', {
             placeholder: 'フォルダ招待URL',
             readonly: 'readonly',
@@ -1889,11 +1892,12 @@ async function loadAdminPanel() {
             state.lastFolderInviteTokens[f.folderId] = token;
             const base = window.location.origin + window.location.pathname;
             const url = `${base}?invite=${encodeURIComponent(token)}`;
+            if (revokeFolderInviteBtn) revokeFolderInviteBtn.classList.remove('hidden');
             await setInviteUrlText(url, folderInviteInput);
           }, 'フォルダ招待URL発行');
-          actions.appendChild(createFolderInviteBtn);
+          inviteRow.appendChild(createFolderInviteBtn);
 
-          const revokeFolderInviteBtn = el('button', { type: 'button', class: 'danger' }, '招待URL失効');
+          const revokeFolderInviteBtn = el('button', { type: 'button', class: 'danger hidden' }, '招待URL失効');
           revokeFolderInviteBtn.onclick = safeAction(async () => {
             const token = state.lastFolderInviteTokens[f.folderId];
             if (!token) {
@@ -1905,12 +1909,18 @@ async function loadAdminPanel() {
             await api('/invites/revoke', { method: 'POST', body: JSON.stringify({ token }) });
             delete state.lastFolderInviteTokens[f.folderId];
             folderInviteInput.value = '';
+            revokeFolderInviteBtn.classList.add('hidden');
             showToast('フォルダ招待URLを失効しました。');
           }, 'フォルダ招待URL失効');
-          actions.appendChild(revokeFolderInviteBtn);
-          actions.appendChild(folderInviteInput);
+          inviteRow.appendChild(revokeFolderInviteBtn);
+          inviteRow.appendChild(folderInviteInput);
+          wrap.appendChild(inviteRow);
+
+          const membersBox = el('div', { class: 'muted folder-admin-members' }, 'メンバー読み込み中...');
+          wrap.appendChild(membersBox);
 
           if (f.hasPassword) {
+            const passwordRow = el('div', { class: 'row folder-admin-actions' });
             const resetBtn = el('button', { type: 'button' }, 'パスワード解除');
             resetBtn.onclick = safeAction(async () => {
               const ok = window.confirm(`フォルダ「${f.title || f.folderId}」のパスワードを解除してよろしいですか？`);
@@ -1924,8 +1934,11 @@ async function loadAdminPanel() {
               await loadFolders();
               await loadAdminPanel();
             }, 'フォルダパスワード解除');
-            actions.appendChild(resetBtn);
+            passwordRow.appendChild(resetBtn);
+            wrap.appendChild(passwordRow);
           }
+
+          const deleteRow = el('div', { class: 'row folder-admin-actions' });
           const delBtn = el('button', { type: 'button', class: 'danger' }, '削除');
           delBtn.onclick = safeAction(async () => {
             const ok = window.confirm(`フォルダ「${f.title || f.folderId}」を削除してよかですか？（写真とコメントも消えます）`);
@@ -1935,12 +1948,9 @@ async function loadAdminPanel() {
             await loadTeamMe();
             await loadAdminPanel();
           }, 'フォルダ削除');
-          actions.appendChild(delBtn);
-          row.appendChild(actions);
-          const membersBox = el('div', { class: 'muted', style: 'margin-top:6px; font-size:0.92rem;' }, 'メンバー読み込み中...');
-          const wrap = el('div', {});
-          wrap.appendChild(row);
-          wrap.appendChild(membersBox);
+          deleteRow.appendChild(delBtn);
+          wrap.appendChild(deleteRow);
+
           els.folderAdminList.appendChild(wrap);
           api(`/folders/${encodeURIComponent(f.folderId)}/members`, { method: 'GET' })
             .then((members) => {

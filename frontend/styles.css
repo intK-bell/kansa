@@ -223,6 +223,40 @@ h3 {
   gap: 8px;
 }
 
+.admin-panel {
+  margin-bottom: 16px;
+}
+
+.admin-card h3 {
+  margin: 0 0 8px;
+}
+
+.folder-admin-block {
+  border-top: 1px solid var(--border);
+  padding: 12px 0;
+}
+
+.folder-admin-block:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.folder-admin-header {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.folder-admin-actions {
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.folder-admin-members {
+  font-size: 0.92rem;
+  margin-top: 8px;
+}
+
 input,
 button,
 textarea,

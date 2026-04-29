@@ -129,50 +129,54 @@
           <p id="billing-bar" class="billing-bar muted hidden"></p>
         </div>
 
-        <section id="team-admin" class="card hidden">
+        <section id="team-admin" class="admin-panel hidden">
           <h2>お部屋管理（管理者）</h2>
-          <h3 style="margin-top:8px;">メンバー</h3>
-          <div class="row" style="margin-top:10px;">
-            <button id="create-invite-btn" type="button">招待URLを発行（7日）</button>
-            <button id="revoke-invite-btn" type="button" class="danger hidden">招待URLを失効</button>
-            <input id="invite-url" placeholder="招待URL" readonly style="flex:1; min-width:180px;" />
-          </div>
-          <div id="member-list" style="margin-top:10px;"></div>
-
-          <h3 style="margin-top:16px;">フォルダ</h3>
-          <div id="folder-admin-list" style="margin-top:10px;"></div>
-
-          <h3 style="margin-top:16px;">容量</h3>
-          <p id="billing-status" class="muted"></p>
-          <div id="billing-graph" class="storage-graph hidden" aria-label="ストレージ使用量">
-            <div class="storage-graph-bar">
-              <div id="billing-graph-used" class="storage-graph-used" style="width:0%;"></div>
-              <div id="billing-graph-remaining" class="storage-graph-remaining" style="width:100%;"></div>
+          <div class="card admin-card">
+            <h3>お部屋</h3>
+            <div class="row" style="margin-top:10px;">
+              <button id="create-invite-btn" type="button">招待URLを発行（7日）</button>
+              <button id="revoke-invite-btn" type="button" class="danger hidden">招待URLを失効</button>
+              <input id="invite-url" placeholder="招待URL" readonly style="flex:1; min-width:180px;" />
             </div>
-            <div class="storage-graph-meta">
-              <span id="billing-graph-used-label">使用量 0MB</span>
-              <span id="billing-graph-remain-label">残り 0MB</span>
+            <div id="member-list" style="margin-top:10px;"></div>
+            <div class="row" style="margin-top:10px;">
+              <button id="delete-team-btn" type="button" class="danger">お部屋を削除（全データ）</button>
             </div>
+            <p class="muted" style="margin-top:10px;">
+              ※ 削除は、アップロード画像に加え、サムネイル等の自動生成データも含みます。
+            </p>
           </div>
-          <div class="row">
-            <button id="subscribe-free" type="button">フリープランに戻る</button>
-            <button id="subscribe-basic" type="button">1GBプラン (¥980/月)</button>
-            <button id="subscribe-plus" type="button">5GBプラン (¥1,980/月)</button>
-            <button id="subscribe-pro" type="button">10GBプラン (¥2,980/月)</button>
-          </div>
-          <p id="billing-plan-guide" class="muted" style="margin-top:8px;"></p>
-          <p class="muted" style="margin-top:8px;">
-            ※ 本サービスの容量表示は2進単位です（1GB=1,024MB、5GB=5,120MB、10GB=10,240MB）。
-          </p>
-          <p id="billing-archive-note" class="muted" style="margin-top:4px;"></p>
 
-          <h3 style="margin-top:16px;">お部屋</h3>
-          <div class="row" style="margin-top:10px;">
-            <button id="delete-team-btn" type="button" class="danger">お部屋を削除（全データ）</button>
+          <div class="card admin-card">
+            <h3>フォルダ</h3>
+            <div id="folder-admin-list" style="margin-top:10px;"></div>
           </div>
-          <p class="muted" style="margin-top:10px;">
-            ※ 削除は、アップロード画像に加え、サムネイル等の自動生成データも含みます。
-          </p>
+
+          <div class="card admin-card">
+            <h3>容量</h3>
+            <p id="billing-status" class="muted"></p>
+            <div id="billing-graph" class="storage-graph hidden" aria-label="ストレージ使用量">
+              <div class="storage-graph-bar">
+                <div id="billing-graph-used" class="storage-graph-used" style="width:0%;"></div>
+                <div id="billing-graph-remaining" class="storage-graph-remaining" style="width:100%;"></div>
+              </div>
+              <div class="storage-graph-meta">
+                <span id="billing-graph-used-label">使用量 0MB</span>
+                <span id="billing-graph-remain-label">残り 0MB</span>
+              </div>
+            </div>
+            <div class="row">
+              <button id="subscribe-free" type="button">フリープランに戻る</button>
+              <button id="subscribe-basic" type="button">1GBプラン (¥980/月)</button>
+              <button id="subscribe-plus" type="button">5GBプラン (¥1,980/月)</button>
+              <button id="subscribe-pro" type="button">10GBプラン (¥2,980/月)</button>
+            </div>
+            <p id="billing-plan-guide" class="muted" style="margin-top:8px;"></p>
+            <p class="muted" style="margin-top:8px;">
+              ※ 本サービスの容量表示は2進単位です（1GB=1,024MB、5GB=5,120MB、10GB=10,240MB）。
+            </p>
+            <p id="billing-archive-note" class="muted" style="margin-top:4px;"></p>
+          </div>
 
           <div class="row" style="margin-top:10px;">
             <button id="team-admin-back-btn" type="button">戻る</button>
@@ -368,6 +372,6 @@
         </div>
       </div>
     </div>
-    <script src="./demo.js?v=20260429-1" type="module"></script>
+    <script src="./demo.js?v=20260429-2" type="module"></script>
   </body>
 </html>
