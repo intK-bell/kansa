@@ -281,6 +281,7 @@ h3 {
   flex: 1 1 260px;
   min-width: 220px;
   gap: 6px;
+  overflow: hidden;
 }
 
 .invite-url-cell input {
@@ -1158,6 +1159,19 @@ body.dark .room-row {
     padding: 14px;
   }
 
+  .invite-url-cell {
+    display: flex;
+    flex: 1;
+  }
+
+  .invite-url-cell button {
+    width: auto;
+  }
+  
+  .folder-admin-picker select {
+    flex: 1;
+  }
+
   .page-header {
     align-items: flex-start;
   }
@@ -1191,6 +1205,8 @@ body.dark .room-row {
   .row input,
   .row textarea {
     width: 100%;
+    flex: 0 0 auto;
+    height: 44px;
   }
 
   .upload-draft-grid {

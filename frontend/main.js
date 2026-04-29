@@ -1782,7 +1782,7 @@ async function loadAdminPanel() {
   // Members
   try {
     const members = await api('/team/members', { method: 'GET' });
-    const items = members.items || [];
+    const items = (members.items || []).filter((m) => m.status !== 'left');
     if (els.memberList) {
       els.memberList.innerHTML = '';
       if (!items.length) {
@@ -2019,18 +2019,18 @@ async function loadAdminPanel() {
                   )
                 );
                 const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
-                if (m.role !== 'admin' && m.userKey !== state.ownerUserKey) {
-                  const removeBtn = el('button', { type: 'button', class: 'danger' }, '削除');
+                if (m.accessReason === 'invited' && m.folderScope === 'invited') {
+                  const removeBtn = el('button', { type: 'button', class: 'danger' }, 'このフォルダから外す');
                   removeBtn.onclick = safeAction(async () => {
-                    const ok = window.confirm(`メンバー「${name}」をお部屋から削除してよかですか？（本人は入れんごとなります）`);
+                    const ok = window.confirm(`メンバー「${name}」をこのフォルダから外してよかですか？`);
                     if (!ok) return;
-                    await api(`/team/members/${encodeURIComponent(m.userKey)}`, {
-                      method: 'PUT',
-                      body: JSON.stringify({ status: 'left' }),
-                    });
-                    window.alert('メンバーを削除しました。');
+                    await api(
+                      `/folders/${encodeURIComponent(f.folderId)}/members/${encodeURIComponent(m.userKey)}`,
+                      { method: 'DELETE' }
+                    );
+                    window.alert('フォルダメンバーを外しました。');
                     await loadAdminPanel();
-                  }, 'メンバー削除');
+                  }, 'フォルダメンバー解除');
                   actions.appendChild(removeBtn);
                 }
                 row.appendChild(actions);

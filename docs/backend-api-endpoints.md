@@ -3,6 +3,23 @@
 対象: `backend/src/api.js` の `exports.handler` 分岐  
 目的: `method + path` から handler と前提条件を即把握する。
 
+## 0. ユーザー/メンバー方針
+
+- 永続的なユーザーキーは Cognito ID token の `sub` を使う。メールアドレスは表示・連絡用であり、DB主キーには使わない。
+- ユーザー種別は分けない。Cognitoユーザーに対して、部屋ごとの `role` / `folderScope` / `folderIds` で権限を表現する。
+- `role=admin`: 部屋管理者。常に全フォルダを閲覧できる。
+- `role=member` + `folderScope=all`: お部屋招待メンバー。全フォルダを閲覧できる。
+- `role=member` + `folderScope=own`: 自分が作成したフォルダを閲覧できる。
+- `role=member` + `folderScope=invited`: フォルダ招待メンバー。`folderIds` に含まれるフォルダだけ閲覧できる。
+- 1つのお部屋内では、ユーザーの立場は `admin` / お部屋メンバー / フォルダメンバーのどれか1つだけとする。
+- お部屋メンバーはお部屋管理でだけ削除する。フォルダ管理では削除しない。
+- フォルダメンバーは対象フォルダの管理でだけ外す。お部屋メンバー一覧では削除対象にしない。
+- フォルダメンバーをフォルダから外す操作は、対象 `folderId` を `folderIds` から外す。残り `folderIds` が空になった場合は `status=left` としてお部屋からも外す。
+- 既にお部屋メンバーのユーザーがフォルダ招待を受けた場合、お部屋メンバーのまま扱う。`folderScope=all` は変更せず、`folderScope=own` は対象フォルダを `folderIds` に追加して閲覧可能にする。
+- フォルダメンバーが お部屋招待を受けた場合、お部屋メンバーへ昇格する。`folderScope=all` に変更し、`folderIds` は空にする。
+- メンバー削除は物理削除ではなく `status=left` として保持する。再招待された場合は `active` に戻して再参加できる。
+- `ROOM#... / MEMBER#...` は部屋からメンバーを引くため、`USER#... / ROOMMEMBER#...` はユーザーから所属部屋/active部屋を引くための逆引きとして使う。
+
 ## 1. ルーム不要エンドポイント
 
 | Method | Path | Handler | 備考 |
@@ -43,8 +60,12 @@
 | POST | `/team/delete` | `teamDelete` |
 
 補足:
+- `GET /team/members` は管理画面表示用として `left` と `folderScope=invited` のメンバーを返さない。お部屋メンバー一覧には管理者とお部屋メンバーだけを返す。
+- `GET /team/members` の `userKey` は、管理画面から `PUT /team/members/{userKey}` に渡す更新用キーとして返す。
 - `PUT /team/members/{userKey}` の削除操作は `status:left` 更新であり、監査・再招待のためメンバー情報は残す。
+- `folderScope=invited` かつ複数 `folderIds` を持つフォルダメンバーは、`PUT /team/members/{userKey}` の `status:left` では削除しない。必ず `DELETE /folders/{folderId}/members/{userKey}` を使う。
 - 古いメンバー item で `userKey` 属性と `MEMBER#...` キーが一致しない場合は、`userKey` から同じ部屋の item を引き直して更新する。
+- DynamoDB の更新では `status` を予約語衝突回避のため `#status` で指定する。
 
 ### フォルダ
 | Method | Path | Handler |
@@ -52,7 +73,12 @@
 | GET | `/folders` | `listFolders` |
 | POST | `/folders` | `createFolder` |
 | GET | `/folders/{folderId}/members` | `listFolderMembers` |
+| DELETE | `/folders/{folderId}/members/{userKey}` | `removeFolderMember` |
 | DELETE | `/folders/{folderId}` | `deleteFolder` |
+
+補足:
+- `GET /folders/{folderId}/members` はフォルダ管理用として、対象フォルダに紐づく `folderScope=invited` のフォルダメンバーだけを返す。
+- `DELETE /folders/{folderId}/members/{userKey}` はフォルダメンバーだけを対象にし、対象 `folderId` を `folderIds` から外す。残りが空の場合のみ `status=left` にする。
 | PUT | `/folders/{folderId}/password` | `updateFolderPassword` |
 
 ### 写真

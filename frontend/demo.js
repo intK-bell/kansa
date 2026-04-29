@@ -1794,7 +1794,7 @@ async function loadAdminPanel() {
   // Members
   try {
     const members = await api('/team/members', { method: 'GET' });
-    const items = members.items || [];
+    const items = (members.items || []).filter((m) => m.status !== 'left');
     if (els.memberList) {
       els.memberList.innerHTML = '';
       if (!items.length) {
@@ -2031,18 +2031,18 @@ async function loadAdminPanel() {
                   )
                 );
                 const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
-                if (m.role !== 'admin' && m.userKey !== state.ownerUserKey) {
-                  const removeBtn = el('button', { type: 'button', class: 'danger' }, '削除');
+                if (m.accessReason === 'invited' && m.folderScope === 'invited') {
+                  const removeBtn = el('button', { type: 'button', class: 'danger' }, 'このフォルダから外す');
                   removeBtn.onclick = safeAction(async () => {
-                    const ok = window.confirm(`メンバー「${name}」をお部屋から削除してよかですか？（本人は入れんごとなります）`);
+                    const ok = window.confirm(`メンバー「${name}」をこのフォルダから外してよかですか？`);
                     if (!ok) return;
-                    await api(`/team/members/${encodeURIComponent(m.userKey)}`, {
-                      method: 'PUT',
-                      body: JSON.stringify({ status: 'left' }),
-                    });
-                    window.alert('メンバーを削除しました。');
+                    await api(
+                      `/folders/${encodeURIComponent(f.folderId)}/members/${encodeURIComponent(m.userKey)}`,
+                      { method: 'DELETE' }
+                    );
+                    window.alert('フォルダメンバーを外しました。');
                     await loadAdminPanel();
-                  }, 'メンバー削除');
+                  }, 'フォルダメンバー解除');
                   actions.appendChild(removeBtn);
                 }
                 row.appendChild(actions);
@@ -3715,7 +3715,7 @@ api = async function (path, options = {}) {
 
   if (path === '/team/members' && method === 'GET') {
     if (!activeRoom) throw demoError(404, 'no active room');
-    return { items: activeRoom.members.map((member) => demoClone(member)) };
+    return { items: activeRoom.members.filter((member) => member.status !== 'left').map((member) => demoClone(member)) };
   }
 
   if (path.startsWith('/team/members/') && method === 'PUT') {
@@ -3740,7 +3740,10 @@ api = async function (path, options = {}) {
     const folder = activeRoom.folders.find((item) => item.folderId === folderId);
     if (!folder) throw demoError(404, 'folder not found');
     return {
-      items: activeRoom.members.filter((member) => demoCanAccessFolder(folder, member)).map((member) => {
+      items: activeRoom.members.filter((member) => {
+        const folderIds = Array.isArray(member.folderIds) ? member.folderIds : [];
+        return member.status === 'active' && member.role !== 'admin' && member.folderScope === 'invited' && folderIds.includes(folder.folderId);
+      }).map((member) => {
         const folderIds = Array.isArray(member.folderIds) ? member.folderIds : [];
         const accessReason =
           member.role === 'admin'
@@ -3753,6 +3756,22 @@ api = async function (path, options = {}) {
         return { ...demoClone(member), accessReason };
       }),
     };
+  }
+
+  if (path.startsWith('/folders/') && path.includes('/members/') && method === 'DELETE') {
+    if (!activeRoom) throw demoError(404, 'no active room');
+    const parts = path.split('/');
+    const folderId = decodeURIComponent(parts[2] || '');
+    const userKey = decodeURIComponent(parts[4] || '');
+    const folder = activeRoom.folders.find((item) => item.folderId === folderId);
+    if (!folder) throw demoError(404, 'folder not found');
+    const member = activeRoom.members.find((item) => item.userKey === userKey);
+    if (!member || member.folderScope !== 'invited') throw demoError(404, 'folder member not found');
+    const nextIds = (Array.isArray(member.folderIds) ? member.folderIds : []).filter((id) => id !== folderId);
+    member.folderIds = nextIds;
+    if (!nextIds.length) member.status = 'left';
+    demoRecalculate();
+    return { ok: true, status: member.status, folderIds: nextIds };
   }
 
   if (path === '/folders' && method === 'POST') {

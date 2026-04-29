@@ -937,6 +937,12 @@ function userRoomMemberKey(userKey, roomId) {
   return { PK: `USER#${userKey}`, SK: `ROOMMEMBER#${roomId}` };
 }
 
+function roomMemberUserKey(member) {
+  const sk = String(member?.SK || '');
+  if (sk.startsWith('MEMBER#')) return sk.slice('MEMBER#'.length);
+  return String(member?.userKey || '');
+}
+
 function userRoomConstraintKey(userKey) {
   return { PK: `USER#${userKey}`, SK: 'CONSTRAINT#ROOM' };
 }
@@ -1663,6 +1669,29 @@ async function applyFolderInviteAccess(room, member, folderId, nowIso, nextScope
   return updated;
 }
 
+async function applyRoomInviteAccess(room, member, nowIso) {
+  if (!member?.userKey || isAdminRole(member.role)) return member;
+  const currentScope = normalizeFolderScope(member.folderScope || member.folder_scope || 'all');
+  if (currentScope !== 'invited') return member;
+  const res = await ddb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: roomMemberKey(room.roomId, member.userKey),
+      UpdateExpression: 'SET folderScope = :scope, folderIds = :folderIds, updatedAt = :u',
+      ExpressionAttributeValues: {
+        ':scope': 'all',
+        ':folderIds': [],
+        ':u': nowIso,
+      },
+      ConditionExpression: 'attribute_exists(PK) and attribute_exists(SK)',
+      ReturnValues: 'ALL_NEW',
+    })
+  );
+  const updated = res.Attributes || { ...member, folderScope: 'all', folderIds: [] };
+  await upsertUserRoomMemberIndex(room, updated, nowIso);
+  return updated;
+}
+
 async function acceptInvite(event, user, ctx) {
   const body = event.body ? JSON.parse(event.body) : {};
   const token = String(body.token || '').trim();
@@ -1764,6 +1793,8 @@ async function acceptInvite(event, user, ctx) {
         shouldRestrictToInvite ? 'invited' : 'own'
       );
     }
+  } else if (!inviteFolder && !isAdminRole(member.role)) {
+    member = await applyRoomInviteAccess(room, member, nowIso);
   }
   await maybeUpsertUserRoomMemberIndex(room, member, nowIso);
   const billing = await ensureBillingMeta(ddb, {
@@ -2214,18 +2245,25 @@ async function listTeamMembers(room, authz) {
       ScanIndexForward: true,
     })
   );
-  const raw = res.Items || [];
-  const nameMap = await loadDisplayNameMap(raw.map((m) => m.userKey));
-  const items = raw.map((m) => ({
-    userKey: m.userKey,
-    displayName: nameMap[m.userKey] || '',
-    role: m.role || 'member',
-    status: normalizeMemberStatus(m.status),
-    folderScope: normalizeFolderScope(m.folderScope || m.folder_scope || (isAdminRole(m.role) ? 'all' : 'all')),
-    folderIds: normalizeFolderIds(m.folderIds || m.folder_ids),
-    joinedAt: m.joinedAt || null,
-    updatedAt: m.updatedAt || null,
-  }));
+  const raw = (res.Items || []).filter((m) => {
+    if (normalizeMemberStatus(m.status) === 'left') return false;
+    if (isAdminRole(m.role)) return true;
+    return normalizeFolderScope(m.folderScope || m.folder_scope || 'all') !== 'invited';
+  });
+  const nameMap = await loadDisplayNameMap(raw.flatMap((m) => [m.userKey, roomMemberUserKey(m)]));
+  const items = raw.map((m) => {
+    const updateUserKey = roomMemberUserKey(m);
+    return {
+      userKey: updateUserKey,
+      displayName: nameMap[m.userKey] || nameMap[updateUserKey] || '',
+      role: m.role || 'member',
+      status: normalizeMemberStatus(m.status),
+      folderScope: normalizeFolderScope(m.folderScope || m.folder_scope || (isAdminRole(m.role) ? 'all' : 'all')),
+      folderIds: normalizeFolderIds(m.folderIds || m.folder_ids),
+      joinedAt: m.joinedAt || null,
+      updatedAt: m.updatedAt || null,
+    };
+  });
   return json(200, { items });
 }
 
@@ -2267,11 +2305,15 @@ async function listFolderMembers(folderId, room, authz) {
     })
   );
   const raw = (res.Items || []).filter((m) => normalizeMemberStatus(m.status) === 'active');
-  const accessible = raw.filter((m) =>
-    canAccessFolder(folder, { userKey: m.userKey }, { member: m, isAdmin: isAdminRole(m.role) })
-  );
-  const nameMap = await loadDisplayNameMap(accessible.map((m) => m.userKey));
+  const accessible = raw.filter((m) => {
+    if (isAdminRole(m.role)) return false;
+    const scope = folderScopeForMember(m, false);
+    const folderIds = normalizeFolderIds(m.folderIds || m.folder_ids);
+    return scope === 'invited' && folder.folderId && folderIds.includes(folder.folderId);
+  });
+  const nameMap = await loadDisplayNameMap(accessible.flatMap((m) => [m.userKey, roomMemberUserKey(m)]));
   const items = accessible.map((m) => {
+    const updateUserKey = roomMemberUserKey(m);
     const scope = folderScopeForMember(m, isAdminRole(m.role));
     const folderIds = normalizeFolderIds(m.folderIds || m.folder_ids);
     const reason = isAdminRole(m.role)
@@ -2282,8 +2324,8 @@ async function listFolderMembers(folderId, room, authz) {
           ? 'invited'
           : 'owner';
     return {
-      userKey: m.userKey,
-      displayName: nameMap[m.userKey] || '',
+      userKey: updateUserKey,
+      displayName: nameMap[m.userKey] || nameMap[updateUserKey] || '',
       role: m.role || 'member',
       status: normalizeMemberStatus(m.status),
       folderScope: scope,
@@ -2293,6 +2335,99 @@ async function listFolderMembers(folderId, room, authz) {
     };
   });
   return json(200, { items });
+}
+
+async function removeFolderMember(folderId, targetUserKey, user, room, authz, ctx) {
+  if (!authz.isAdmin) return json(403, { message: 'forbidden' });
+  const folderRes = await ddb.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: 'ORG#DEFAULT', SK: `FOLDER#${folderId}` },
+    })
+  );
+  const folder = folderRes.Item || null;
+  if (!folder || !isRoomMatch(folder.roomName, room.roomName)) return json(404, { message: 'folder not found' });
+  if (targetUserKey === room.createdBy) return badRequest('cannot remove owner from folder');
+
+  const key = roomMemberKey(room.roomId, targetUserKey);
+  let memberRes = await ddb.send(new GetCommand({ TableName: TABLE_NAME, Key: key, ConsistentRead: true }));
+  let member = memberRes.Item || null;
+  if (!member) {
+    member = await findRoomMemberByUserKey(room.roomId, targetUserKey);
+  }
+  if (!member?.PK || !member?.SK) return json(404, { message: 'member not found' });
+  if (isAdminRole(member.role)) return badRequest('cannot remove admin from folder');
+  if (normalizeMemberStatus(member.status) !== 'active') return json(404, { message: 'member not found' });
+  const scope = normalizeFolderScope(member.folderScope || member.folder_scope || 'all');
+  if (scope !== 'invited') return badRequest('member is not a folder member');
+
+  const folderIds = normalizeFolderIds(member.folderIds || member.folder_ids);
+  if (!folderIds.includes(folder.folderId)) return json(404, { message: 'folder member not found' });
+  const nextFolderIds = folderIds.filter((id) => id !== folder.folderId);
+  const nowIso = new Date().toISOString();
+  let updated = null;
+
+  if (nextFolderIds.length) {
+    const res = await ddb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: member.PK, SK: member.SK },
+        UpdateExpression: 'SET folderIds = :folderIds, updatedAt = :u',
+        ExpressionAttributeValues: { ':folderIds': nextFolderIds, ':u': nowIso },
+        ConditionExpression: 'attribute_exists(PK) and attribute_exists(SK)',
+        ReturnValues: 'ALL_NEW',
+      })
+    );
+    updated = res.Attributes || { ...member, folderIds: nextFolderIds, updatedAt: nowIso };
+    await upsertUserRoomMemberIndex(room, updated, nowIso);
+  } else {
+    const res = await ddb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: member.PK, SK: member.SK },
+        UpdateExpression: 'SET #status = :status, folderIds = :folderIds, updatedAt = :u',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':status': 'left', ':folderIds': [], ':u': nowIso },
+        ConditionExpression: 'attribute_exists(PK) and attribute_exists(SK)',
+        ReturnValues: 'ALL_NEW',
+      })
+    );
+    updated = res.Attributes || { ...member, status: 'left', folderIds: [], updatedAt: nowIso };
+    await upsertUserRoomMemberIndex(room, updated, nowIso);
+    try {
+      await ddb.send(
+        new UpdateCommand({
+          TableName: TABLE_NAME,
+          Key: userRoomMemberKey(updated.userKey || targetUserKey, room.roomId),
+          UpdateExpression: 'SET #status = :selection, memberStatus = :memberStatus, updatedAt = :u',
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: { ':selection': 'inactive', ':memberStatus': 'left', ':u': nowIso },
+          ConditionExpression: 'attribute_exists(PK) and attribute_exists(SK)',
+        })
+      );
+    } catch (_) {
+      // Reverse index is best-effort; upsert above already creates/updates the expected index.
+    }
+  }
+
+  auditLog({
+    requestId: ctx.requestId,
+    action: 'folder.member.remove',
+    actor: user.userKey,
+    actorName: user.userName,
+    roomId: room.roomId,
+    roomName: room.roomName,
+    folderId: folder.folderId,
+    targetUserKey,
+    result: 'success',
+    remainingFolderCount: nextFolderIds.length,
+  });
+
+  return json(200, {
+    ok: true,
+    status: normalizeMemberStatus(updated?.status),
+    folderIds: normalizeFolderIds(updated?.folderIds || updated?.folder_ids),
+  });
 }
 
 async function updateTeamMember(targetUserKey, event, user, room, authz, ctx) {
@@ -2311,10 +2446,22 @@ async function updateTeamMember(targetUserKey, event, user, room, authz, ctx) {
   const key = roomMemberKey(room.roomId, targetUserKey);
   const nowIso = new Date().toISOString();
 
+  if (nextStatus === 'left') {
+    const existingRes = await ddb.send(new GetCommand({ TableName: TABLE_NAME, Key: key, ConsistentRead: true }));
+    const existingMember = existingRes.Item || (await findRoomMemberByUserKey(room.roomId, targetUserKey));
+    const existingScope = normalizeFolderScope(existingMember?.folderScope || existingMember?.folder_scope || '');
+    const existingFolderIds = normalizeFolderIds(existingMember?.folderIds || existingMember?.folder_ids);
+    if (existingScope === 'invited' && existingFolderIds.length > 1) {
+      return badRequest('folder member belongs to multiple folders; remove from folder instead');
+    }
+  }
+
   const updates = [];
   const values = { ':u': nowIso };
+  const names = {};
   if (nextStatus) {
-    updates.push('status = :s');
+    updates.push('#status = :s');
+    names['#status'] = 'status';
     values[':s'] = nextStatus;
   }
   if (nextFolderScope) {
@@ -2330,6 +2477,7 @@ async function updateTeamMember(targetUserKey, event, user, room, authz, ctx) {
         TableName: TABLE_NAME,
         Key: key,
         UpdateExpression: `SET ${updates.join(', ')}, updatedAt = :u`,
+        ...(Object.keys(names).length ? { ExpressionAttributeNames: names } : {}),
         ExpressionAttributeValues: values,
         ConditionExpression: 'attribute_exists(PK) and attribute_exists(SK)',
         ReturnValues: 'ALL_NEW',
@@ -2348,6 +2496,7 @@ async function updateTeamMember(targetUserKey, event, user, room, authz, ctx) {
           TableName: TABLE_NAME,
           Key: { PK: legacyMember.PK, SK: legacyMember.SK },
           UpdateExpression: `SET ${updates.join(', ')}, updatedAt = :u`,
+          ...(Object.keys(names).length ? { ExpressionAttributeNames: names } : {}),
           ExpressionAttributeValues: values,
           ConditionExpression: 'attribute_exists(PK) and attribute_exists(SK)',
           ReturnValues: 'ALL_NEW',
@@ -2365,13 +2514,14 @@ async function updateTeamMember(targetUserKey, event, user, room, authz, ctx) {
   }
   if (after) await upsertUserRoomMemberIndex(room, after, nowIso);
   if (nextStatus === 'left') {
+    const reverseUserKey = after?.userKey || targetUserKey;
     // If the user was currently selecting this room, force-clear it.
     // Keep membership record (status=left) so we can audit and allow re-invite later.
     try {
       await ddb.send(
         new UpdateCommand({
           TableName: TABLE_NAME,
-          Key: userRoomMemberKey(targetUserKey, room.roomId),
+          Key: userRoomMemberKey(reverseUserKey, room.roomId),
           UpdateExpression: 'SET #status = :sel, memberStatus = :ms, updatedAt = :u',
           ExpressionAttributeNames: { '#status': 'status' },
           ExpressionAttributeValues: { ':sel': 'inactive', ':ms': 'left', ':u': nowIso },
@@ -2391,7 +2541,10 @@ async function updateTeamMember(targetUserKey, event, user, room, authz, ctx) {
     roomId: room.roomId,
     roomName: room.roomName,
     targetUserKey,
-    updates: { status: nextStatus || undefined, folderScope: nextFolderScope || undefined },
+    updates: {
+      status: nextStatus || undefined,
+      folderScope: nextFolderScope || undefined,
+    },
     result: 'success',
   });
 
@@ -3851,6 +4004,9 @@ exports.handler = async (event) => {
     if (method === 'POST' && path === '/folders') return finish(await createFolder(event, user, room, ctx));
     if (method === 'GET' && p.folderId && path.endsWith(`/folders/${p.folderId}/members`)) {
       return finish(await listFolderMembers(p.folderId, room, authz));
+    }
+    if (method === 'DELETE' && p.folderId && p.userKey && path.endsWith(`/folders/${p.folderId}/members/${p.userKey}`)) {
+      return finish(await removeFolderMember(p.folderId, p.userKey, user, room, authz, ctx));
     }
     if (method === 'DELETE' && p.folderId && path.endsWith(`/folders/${p.folderId}`)) {
       return finish(await deleteFolder(event, p.folderId, user, room, authz, ctx));

@@ -41,6 +41,18 @@ aws cloudformation describe-stacks \
 
 `UPDATE_COMPLETE` が返れば反映完了。
 
+### デプロイ履歴
+
+- 2026-04-29 19:55 JST: `./scripts/deploy_backend.sh` で `kansa-backend` を更新。`sam build` / `sam deploy` 成功、CloudFormation `UPDATE_COMPLETE`。Stripe秘密値は環境変数未指定のため未注入。
+- 2026-04-29 21:52 JST: メンバー削除の冪等化修正を `./scripts/deploy_backend.sh` で再デプロイ。`sam build` / `sam deploy` 成功、CloudFormation `UPDATE_COMPLETE`。Stripe秘密値は環境変数未指定のため未注入。
+- 2026-04-29 21:57 JST: `GET /team/members` で `left` メンバーを返さない修正を `./scripts/deploy_backend.sh` で再デプロイ。`sam build` / `sam deploy` 成功、CloudFormation `UPDATE_COMPLETE`。Stripe秘密値は環境変数未指定のため未注入。
+- 2026-04-29 22:08 JST: メンバー一覧の `userKey` を ROOM member の実キーへ揃え、削除APIが対象を正しく更新できるようにした修正を `./scripts/deploy_backend.sh` で再デプロイ。`sam build` / `sam deploy` 成功、CloudFormation `UPDATE_COMPLETE`。Stripe秘密値は環境変数未指定のため未注入。
+- 2026-04-29 22:29 JST: `PUT /team/members/{userKey}` の `status:left` 更新で DynamoDB 予約語 `status` を `#status` に修正し、`./scripts/deploy_backend.sh` で再デプロイ。`sam build` / `sam deploy` 成功、CloudFormation `UPDATE_COMPLETE`。デプロイ後に `status:left` 更新が `200` になり、ROOM側 `status=left` / USER側 `memberStatus=left` を確認済み。
+- 2026-04-29 22:48 JST: 招待受諾時のメンバー種別整理を実装。お部屋メンバーがフォルダ招待を受けても降格せず、フォルダメンバーが お部屋招待を受けた場合は `folderScope=all` / `folderIds=[]` に昇格する修正を `./scripts/deploy_backend.sh` で再デプロイ。`sam build` / `sam deploy` 成功、CloudFormation `UPDATE_COMPLETE`。
+- 2026-04-29 22:56 JST: お部屋メンバー一覧から `folderScope=invited` を除外し、フォルダメンバー一覧は対象フォルダの `folderScope=invited` だけ返す修正を `./scripts/deploy_backend.sh` で再デプロイ。`sam build` / `sam deploy` 成功、CloudFormation `UPDATE_COMPLETE`。デプロイ後に bell が お部屋メンバー一覧から除外され、対象フォルダメンバー一覧だけに表示されることを確認済み。
+- 2026-04-29 23:12 JST: フォルダメンバー解除を `status:left` ではなく `folderIds` から対象フォルダだけ外す `DELETE /folders/{folderId}/members/{userKey}` に変更。残りフォルダが空の場合のみ `status=left` にする修正を `./scripts/deploy_backend.sh` で再デプロイ。`sam build` / `sam deploy` 成功、CloudFormation `UPDATE_COMPLETE`。
+- 2026-04-29 23:16 JST: 本番フロントが古い間の安全装置として、複数 `folderIds` を持つフォルダメンバーは `PUT /team/members/{userKey}` の `status:left` で削除できないようにする修正を `./scripts/deploy_backend.sh` で再デプロイ。`sam build` / `sam deploy` 成功、CloudFormation `UPDATE_COMPLETE`。
+
 ### 手動で実行したい場合
 
 ```bash

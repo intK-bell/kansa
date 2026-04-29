@@ -303,6 +303,12 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /folders/{folderId}/members
             Method: GET
+        RemoveFolderMember:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /folders/{folderId}/members/{userKey}
+            Method: DELETE
         CreateRoom:
           Type: HttpApi
           Properties:
