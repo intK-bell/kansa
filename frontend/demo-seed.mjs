@@ -75,6 +75,10 @@ export function createDemoStore() {
           { userKey: DEMO_USER_KEY, displayName: 'デモ利用者', role: 'admin', status: 'active', folderScope: 'all' },
           { userKey: 'user-sato', displayName: '佐藤', role: 'member', status: 'active', folderScope: 'all' },
           { userKey: 'user-suzuki', displayName: '鈴木', role: 'member', status: 'active', folderScope: 'own' },
+          { userKey: 'user-yamada', displayName: '山田', role: 'member', status: 'active', folderScope: 'invited', folderIds: ['folder-demo-1'] },
+          { userKey: 'user-inoue', displayName: '井上', role: 'member', status: 'active', folderScope: 'invited', folderIds: ['folder-demo-1'] },
+          { userKey: 'user-kobayashi', displayName: '小林', role: 'member', status: 'active', folderScope: 'invited', folderIds: ['folder-demo-1', 'folder-demo-2'] },
+          { userKey: 'user-nakamura', displayName: '中村', role: 'member', status: 'active', folderScope: 'invited', folderIds: ['folder-demo-2'] },
         ],
         folders: [
           {

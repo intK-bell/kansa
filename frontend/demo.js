@@ -3741,7 +3741,13 @@ api = async function (path, options = {}) {
 
   if (path === '/team/members' && method === 'GET') {
     if (!activeRoom) throw demoError(404, 'no active room');
-    return { items: activeRoom.members.filter((member) => member.status !== 'left').map((member) => demoClone(member)) };
+    return {
+      items: activeRoom.members.filter((member) => {
+        if (member.status === 'left') return false;
+        if (member.role === 'admin') return true;
+        return member.folderScope !== 'invited';
+      }).map((member) => demoClone(member)),
+    };
   }
 
   if (path.startsWith('/team/members/') && method === 'PUT') {
@@ -3749,6 +3755,7 @@ api = async function (path, options = {}) {
     const userKey = decodeURIComponent(path.split('/').pop() || '');
     const member = activeRoom.members.find((item) => item.userKey === userKey);
     if (!member) throw demoError(404, 'member not found');
+    if (member.folderScope === 'invited') throw demoError(400, 'folder member cannot be managed as room member');
     if (body.folderScope) member.folderScope = body.folderScope;
     if (body.status) member.status = body.status;
     demoRecalculate();
