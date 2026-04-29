@@ -36,6 +36,7 @@ const state = {
   ownerUserKey: null,
   lastInviteToken: null,
   lastFolderInviteTokens: {},
+  adminFolderId: '',
   availableRooms: [],
   folderPasswordById: {},
   folders: [],
@@ -153,6 +154,8 @@ function resetRoomContext() {
   state.billing = null;
   state.ownerUserKey = null;
   state.lastInviteToken = null;
+  state.lastFolderInviteTokens = {};
+  state.adminFolderId = '';
   state.availableRooms = [];
   state.folderPasswordById = {};
   state.folders = [];
@@ -389,6 +392,7 @@ const els = {
   deleteTeamBtn: document.querySelector('#delete-team-btn'),
   createInviteBtn: document.querySelector('#create-invite-btn'),
   revokeInviteBtn: document.querySelector('#revoke-invite-btn'),
+  copyInviteUrlBtn: document.querySelector('#copy-invite-url-btn'),
   inviteUrl: document.querySelector('#invite-url'),
   memberList: document.querySelector('#member-list'),
   folderAdminList: document.querySelector('#folder-admin-list'),
@@ -1817,17 +1821,24 @@ async function loadAdminPanel() {
             scopeSelect.disabled = m.role === 'admin' || m.userKey === state.ownerUserKey;
             scopeSelect.onchange = safeAction(async () => {
               const next = scopeSelect.value;
+              const prev = m.folderScope || 'all';
+              const ok = window.confirm(`メンバー「${name}」の閲覧権限を変更してよかですか？`);
+              if (!ok) {
+                scopeSelect.value = prev;
+                return;
+              }
               await api(`/team/members/${encodeURIComponent(m.userKey)}`, {
                 method: 'PUT',
                 body: JSON.stringify({ folderScope: next }),
               });
+              window.alert('閲覧権限を更新しました。');
               await loadAdminPanel();
             }, '権限更新');
             actions.appendChild(scopeSelect);
           }
 
           // Remove member (kick) with confirm.
-          if (m.role !== 'admin' && m.userKey !== state.ownerUserKey && m.status !== 'left') {
+          if (m.role !== 'admin' && m.userKey !== state.ownerUserKey) {
             const removeBtn = el('button', { type: 'button', class: 'danger' }, '削除');
             removeBtn.onclick = safeAction(async () => {
               const ok = window.confirm(`メンバー「${name}」をお部屋から削除してよかですか？（本人は入れんごとなります）`);
@@ -1836,7 +1847,7 @@ async function loadAdminPanel() {
                 method: 'PUT',
                 body: JSON.stringify({ status: 'left' }),
               });
-              showToast('メンバーを削除しました。');
+              window.alert('メンバーを削除しました。');
               await loadAdminPanel();
             }, 'メンバー削除');
             actions.appendChild(removeBtn);
@@ -1860,9 +1871,32 @@ async function loadAdminPanel() {
     if (els.folderAdminList) {
       els.folderAdminList.innerHTML = '';
       if (!folders.length) {
+        state.adminFolderId = '';
         els.folderAdminList.appendChild(el('div', { class: 'muted' }, 'フォルダがなかです'));
       } else {
+        if (state.adminFolderId && !folders.some((f) => f.folderId === state.adminFolderId)) {
+          state.adminFolderId = '';
+        }
+        const pickerRow = el('div', { class: 'row folder-admin-picker' });
+        const folderSelect = el('select');
+        folderSelect.appendChild(el('option', { value: '' }, 'フォルダを選択してください'));
         folders.forEach((f) => {
+          const label = `${f.folderCode ? `${f.folderCode} ` : ''}${f.title || f.folderId}`;
+          folderSelect.appendChild(el('option', { value: f.folderId }, label));
+        });
+        folderSelect.value = state.adminFolderId || '';
+        folderSelect.onchange = safeAction(async () => {
+          state.adminFolderId = folderSelect.value;
+          await loadAdminPanel();
+        }, '管理フォルダ選択');
+        pickerRow.appendChild(folderSelect);
+        pickerRow.appendChild(el('span', { class: 'muted' }, `${folders.length}件`));
+        els.folderAdminList.appendChild(pickerRow);
+
+        const f = folders.find((item) => item.folderId === state.adminFolderId);
+        if (!f) {
+          els.folderAdminList.appendChild(el('div', { class: 'muted folder-admin-empty' }, 'フォルダを選択してください'));
+        } else {
           const wrap = el('div', { class: 'folder-admin-block' });
           const header = el('div', { class: 'folder-admin-header' });
           const left = el(
@@ -1879,8 +1913,12 @@ async function loadAdminPanel() {
           const folderInviteInput = el('input', {
             placeholder: 'フォルダ招待URL',
             readonly: 'readonly',
-            style: 'min-width:180px; flex:1;',
           });
+          const folderInviteCell = el('div', { class: 'invite-url-cell' });
+          const copyFolderInviteBtn = el('button', { type: 'button' }, 'コピー');
+          copyFolderInviteBtn.onclick = safeAction(async () => {
+            await copyInviteUrlFromInput(folderInviteInput);
+          }, 'フォルダ招待URLコピー');
           const createFolderInviteBtn = el('button', { type: 'button' }, '招待URL発行（7日）');
           createFolderInviteBtn.onclick = safeAction(async () => {
             const res = await api('/invites/create', {
@@ -1913,30 +1951,43 @@ async function loadAdminPanel() {
             showToast('フォルダ招待URLを失効しました。');
           }, 'フォルダ招待URL失効');
           inviteRow.appendChild(revokeFolderInviteBtn);
-          inviteRow.appendChild(folderInviteInput);
+          folderInviteCell.appendChild(folderInviteInput);
+          folderInviteCell.appendChild(copyFolderInviteBtn);
+          inviteRow.appendChild(folderInviteCell);
           wrap.appendChild(inviteRow);
 
           const membersBox = el('div', { class: 'muted folder-admin-members' }, 'メンバー読み込み中...');
           wrap.appendChild(membersBox);
 
-          if (f.hasPassword) {
-            const passwordRow = el('div', { class: 'row folder-admin-actions' });
-            const resetBtn = el('button', { type: 'button' }, 'パスワード解除');
-            resetBtn.onclick = safeAction(async () => {
-              const ok = window.confirm(`フォルダ「${f.title || f.folderId}」のパスワードを解除してよろしいですか？`);
-              if (!ok) return;
-              await api(`/folders/${f.folderId}/password`, {
-                method: 'PUT',
-                body: JSON.stringify({ folderPassword: '' }),
-              });
-              delete state.folderPasswordById[f.folderId];
-              showToast('フォルダのパスワードを解除しました。');
-              await loadFolders();
-              await loadAdminPanel();
-            }, 'フォルダパスワード解除');
-            passwordRow.appendChild(resetBtn);
-            wrap.appendChild(passwordRow);
-          }
+          const passwordRow = el('div', { class: 'row folder-admin-actions folder-admin-password' });
+          const passwordInput = el('input', {
+            placeholder: 'フォルダパスワード（空で解除）',
+            type: 'password',
+          });
+          const passwordBtn = el('button', { type: 'button' }, '設定/解除');
+          passwordBtn.onclick = safeAction(async () => {
+            const next = String(passwordInput.value || '').trim();
+            const ok = window.confirm(
+              next
+                ? `フォルダ「${f.title || f.folderId}」のパスワードを設定してよかですか？`
+                : `フォルダ「${f.title || f.folderId}」のパスワードを解除してよかですか？`
+            );
+            if (!ok) return;
+            await api(`/folders/${f.folderId}/password`, {
+              method: 'PUT',
+              headers: { ...folderPasswordHeader(f.folderId) },
+              body: JSON.stringify({ folderPassword: next }),
+            });
+            if (next) state.folderPasswordById[f.folderId] = next;
+            else delete state.folderPasswordById[f.folderId];
+            passwordInput.value = '';
+            window.alert(next ? 'フォルダのパスワードを設定しました。' : 'フォルダのパスワードを解除しました。');
+            await loadFolders();
+            await loadAdminPanel();
+          }, 'フォルダパスワード設定');
+          passwordRow.appendChild(passwordInput);
+          passwordRow.appendChild(passwordBtn);
+          wrap.appendChild(passwordRow);
 
           const deleteRow = el('div', { class: 'row folder-admin-actions' });
           const delBtn = el('button', { type: 'button', class: 'danger' }, '削除');
@@ -1944,6 +1995,8 @@ async function loadAdminPanel() {
             const ok = window.confirm(`フォルダ「${f.title || f.folderId}」を削除してよかですか？（写真とコメントも消えます）`);
             if (!ok) return;
             await api(`/folders/${f.folderId}`, { method: 'DELETE' });
+            state.adminFolderId = '';
+            window.alert('フォルダを削除しました。');
             await loadFolders();
             await loadTeamMe();
             await loadAdminPanel();
@@ -1955,8 +2008,9 @@ async function loadAdminPanel() {
           api(`/folders/${encodeURIComponent(f.folderId)}/members`, { method: 'GET' })
             .then((members) => {
               const items = members.items || [];
+              membersBox.innerHTML = '';
               if (!items.length) {
-                membersBox.textContent = 'メンバーがおらんばい';
+                membersBox.appendChild(el('div', { class: 'muted' }, 'メンバーがおらんばい'));
                 return;
               }
               const reasonLabel = {
@@ -1965,17 +2019,40 @@ async function loadAdminPanel() {
                 owner: '作成者',
                 invited: 'フォルダ招待',
               };
-              membersBox.textContent = `メンバー: ${items
-                .map((m) => {
-                  const name = m.displayName || m.userKey;
-                  return `${name}（${reasonLabel[m.accessReason] || m.accessReason || m.folderScope || '権限'}）`;
-                })
-                .join('、')}`;
+              membersBox.appendChild(el('div', { class: 'muted' }, 'メンバー'));
+              items.forEach((m) => {
+                const name = m.displayName || m.userKey;
+                const row = el('div', { class: 'member-row folder-admin-member-row' });
+                row.appendChild(
+                  el(
+                    'div',
+                    {},
+                    `${name}（${reasonLabel[m.accessReason] || m.accessReason || m.folderScope || '権限'} / ${m.status || 'active'}）`
+                  )
+                );
+                const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
+                if (m.role !== 'admin' && m.userKey !== state.ownerUserKey) {
+                  const removeBtn = el('button', { type: 'button', class: 'danger' }, '削除');
+                  removeBtn.onclick = safeAction(async () => {
+                    const ok = window.confirm(`メンバー「${name}」をお部屋から削除してよかですか？（本人は入れんごとなります）`);
+                    if (!ok) return;
+                    await api(`/team/members/${encodeURIComponent(m.userKey)}`, {
+                      method: 'PUT',
+                      body: JSON.stringify({ status: 'left' }),
+                    });
+                    window.alert('メンバーを削除しました。');
+                    await loadAdminPanel();
+                  }, 'メンバー削除');
+                  actions.appendChild(removeBtn);
+                }
+                row.appendChild(actions);
+                membersBox.appendChild(row);
+              });
             })
             .catch((error) => {
               membersBox.textContent = `メンバー取得失敗: ${asMessage(error)}`;
             });
-        });
+        }
       }
     }
   } catch (error) {
@@ -2016,16 +2093,39 @@ async function loadAdminPanel() {
 async function setInviteUrlText(url, targetInput = els.inviteUrl) {
   if (targetInput) targetInput.value = url || '';
   if (!url) return;
+  await copyInviteUrl(url, true);
+}
+
+async function copyInviteUrl(url, showFallbackPrompt = false) {
+  const text = String(url || '').trim();
+  if (!text) {
+    showError('コピーする招待URLがなかです（先に発行してください）');
+    return;
+  }
   try {
     if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(text);
       showToast('招待URLをコピーしました。');
       return;
     }
   } catch (_) {
     // Ignore and fall back.
   }
-  window.prompt('招待URL（コピーしてください）', url);
+  if (showFallbackPrompt) {
+    window.prompt('招待URL（コピーしてください）', text);
+    return;
+  }
+  showError('ブラウザがコピー操作を許可しませんでした。URL欄からコピーしてください。');
+}
+
+async function copyInviteUrlFromInput(targetInput) {
+  await copyInviteUrl(targetInput?.value || '', true);
+}
+
+if (els.copyInviteUrlBtn) {
+  els.copyInviteUrlBtn.onclick = safeAction(async () => {
+    await copyInviteUrlFromInput(els.inviteUrl);
+  }, '招待URLコピー');
 }
 
 if (els.createInviteBtn) {
@@ -3196,11 +3296,12 @@ if (els.folderDeleteBtn) {
     if (!ok) return;
     const folderId = state.selectedFolder.folderId;
     await api(`/folders/${folderId}`, { method: 'DELETE', headers: { ...folderPasswordHeader(folderId) } });
-    showToast('フォルダを削除しました。');
+    window.alert('フォルダを削除しました。');
     state.selectedFolder = null;
     els.folderDetail.classList.add('hidden');
     await loadFolders();
     await loadTeamMe();
+    await loadAdminPanel();
   }, 'フォルダ削除');
 }
 

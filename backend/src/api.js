@@ -2229,6 +2229,21 @@ async function listTeamMembers(room, authz) {
   return json(200, { items });
 }
 
+async function findRoomMemberByUserKey(roomId, userKey) {
+  const res = await ddb.send(
+    new QueryCommand({
+      TableName: TABLE_NAME,
+      KeyConditionExpression: 'PK = :pk and begins_with(SK, :sk)',
+      ExpressionAttributeValues: {
+        ':pk': `ROOM#${roomId}`,
+        ':sk': 'MEMBER#',
+      },
+      ScanIndexForward: true,
+    })
+  );
+  return (res.Items || []).find((m) => String(m.userKey || '') === String(userKey || '')) || null;
+}
+
 async function listFolderMembers(folderId, room, authz) {
   if (!authz.isAdmin) return json(403, { message: 'forbidden' });
   const folderRes = await ddb.send(
@@ -2322,7 +2337,26 @@ async function updateTeamMember(targetUserKey, event, user, room, authz, ctx) {
     );
     after = res.Attributes || null;
   } catch (_) {
-    return json(404, { message: 'member not found' });
+    // Some legacy room-member records can have a userKey attribute that differs
+    // from the MEMBER#... suffix. The admin list returns userKey, so resolve
+    // that listed member and update the actual item instead of surfacing 404.
+    const legacyMember = await findRoomMemberByUserKey(room.roomId, targetUserKey);
+    if (!legacyMember?.PK || !legacyMember?.SK) return json(404, { message: 'member not found' });
+    try {
+      const res = await ddb.send(
+        new UpdateCommand({
+          TableName: TABLE_NAME,
+          Key: { PK: legacyMember.PK, SK: legacyMember.SK },
+          UpdateExpression: `SET ${updates.join(', ')}, updatedAt = :u`,
+          ExpressionAttributeValues: values,
+          ConditionExpression: 'attribute_exists(PK) and attribute_exists(SK)',
+          ReturnValues: 'ALL_NEW',
+        })
+      );
+      after = res.Attributes || null;
+    } catch (_) {
+      return json(404, { message: 'member not found' });
+    }
   }
 
   if (!after) {

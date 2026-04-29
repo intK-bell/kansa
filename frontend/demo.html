@@ -136,7 +136,10 @@
             <div class="row" style="margin-top:10px;">
               <button id="create-invite-btn" type="button">招待URLを発行（7日）</button>
               <button id="revoke-invite-btn" type="button" class="danger hidden">招待URLを失効</button>
-              <input id="invite-url" placeholder="招待URL" readonly style="flex:1; min-width:180px;" />
+              <div class="invite-url-cell">
+                <input id="invite-url" placeholder="招待URL" readonly />
+                <button id="copy-invite-url-btn" type="button">コピー</button>
+              </div>
             </div>
             <div id="member-list" style="margin-top:10px;"></div>
             <div class="row" style="margin-top:10px;">
@@ -372,6 +375,6 @@
         </div>
       </div>
     </div>
-    <script src="./demo.js?v=20260429-2" type="module"></script>
+    <script src="./demo.js?v=20260429-6" type="module"></script>
   </body>
 </html>

@@ -257,6 +257,41 @@ h3 {
   margin-top: 8px;
 }
 
+.folder-admin-picker {
+  justify-content: flex-start;
+  margin-bottom: 10px;
+}
+
+.folder-admin-picker select {
+  flex: 1 1 260px;
+  max-width: 520px;
+}
+
+.folder-admin-empty {
+  margin-top: 8px;
+}
+
+.folder-admin-password input {
+  flex: 1 1 220px;
+  min-width: 180px;
+}
+
+.invite-url-cell {
+  display: flex;
+  flex: 1 1 260px;
+  min-width: 220px;
+  gap: 6px;
+}
+
+.invite-url-cell input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.invite-url-cell button {
+  flex: 0 0 auto;
+}
+
 input,
 button,
 textarea,

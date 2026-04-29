@@ -42,6 +42,10 @@
 | POST | `/team/leave` | `teamLeave` |
 | POST | `/team/delete` | `teamDelete` |
 
+補足:
+- `PUT /team/members/{userKey}` の削除操作は `status:left` 更新であり、監査・再招待のためメンバー情報は残す。
+- 古いメンバー item で `userKey` 属性と `MEMBER#...` キーが一致しない場合は、`userKey` から同じ部屋の item を引き直して更新する。
+
 ### フォルダ
 | Method | Path | Handler |
 |---|---|---|
