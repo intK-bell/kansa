@@ -948,7 +948,13 @@ function isAdminRole(role) {
 function normalizeFolderScope(value) {
   const v = String(value || '').trim().toLowerCase();
   if (v === 'all') return 'all';
+  if (v === 'invited') return 'invited';
   return 'own';
+}
+
+function normalizeFolderIds(value) {
+  const raw = Array.isArray(value) ? value : [];
+  return [...new Set(raw.map((id) => String(id || '').trim()).filter(Boolean))];
 }
 
 function normalizeMemberStatus(value) {
@@ -966,6 +972,7 @@ async function upsertUserRoomMemberIndex(room, member, nowIso) {
   const memberStatus = normalizeMemberStatus(member.status);
   const folderScope =
     isAdminRole(member.role) ? 'all' : normalizeFolderScope(member.folderScope || member.folder_scope || 'own');
+  const folderIds = normalizeFolderIds(member.folderIds || member.folder_ids);
   await ddb.send(
     new UpdateCommand({
       TableName: TABLE_NAME,
@@ -974,7 +981,7 @@ async function upsertUserRoomMemberIndex(room, member, nowIso) {
         // USER#... items store:
         // - status: active selection (active|inactive)
         // - memberStatus: membership status (active|disabled|left)
-        'SET #type = if_not_exists(#type, :type), roomId = :roomId, roomName = :roomName, userKey = :userKey, #role = :role, memberStatus = :memberStatus, folderScope = :folderScope, joinedAt = if_not_exists(joinedAt, :joinedAt), updatedAt = :updatedAt, #status = if_not_exists(#status, :defaultSelection)',
+        'SET #type = if_not_exists(#type, :type), roomId = :roomId, roomName = :roomName, userKey = :userKey, #role = :role, memberStatus = :memberStatus, folderScope = :folderScope, folderIds = :folderIds, joinedAt = if_not_exists(joinedAt, :joinedAt), updatedAt = :updatedAt, #status = if_not_exists(#status, :defaultSelection)',
       ExpressionAttributeNames: {
         '#type': 'type',
         '#role': 'role',
@@ -988,6 +995,7 @@ async function upsertUserRoomMemberIndex(room, member, nowIso) {
         ':role': member.role || 'member',
         ':memberStatus': memberStatus,
         ':folderScope': folderScope,
+        ':folderIds': folderIds,
         ':joinedAt': member.joinedAt || nowIso,
         ':updatedAt': nowIso,
         ':defaultSelection': 'inactive',
@@ -1006,6 +1014,7 @@ async function maybeUpsertUserRoomMemberIndex(room, member, nowIso) {
     memberStatus: normalizeMemberStatus(member.status),
     folderScope:
       isAdminRole(member.role) ? 'all' : normalizeFolderScope(member.folderScope || member.folder_scope || 'own'),
+    folderIds: normalizeFolderIds(member.folderIds || member.folder_ids),
   };
 
   const existing = await ddb.send(
@@ -1025,7 +1034,8 @@ async function maybeUpsertUserRoomMemberIndex(room, member, nowIso) {
     String(item.roomName || '') === String(desired.roomName) &&
     String(item.role || '') === String(desired.role) &&
     String(item.memberStatus || 'active').toLowerCase() === String(desired.memberStatus) &&
-    String(item.folderScope || item.folder_scope || '').toLowerCase() === String(desired.folderScope);
+    String(item.folderScope || item.folder_scope || '').toLowerCase() === String(desired.folderScope) &&
+    JSON.stringify(normalizeFolderIds(item.folderIds || item.folder_ids)) === JSON.stringify(desired.folderIds);
   if (same) return;
 
   await upsertUserRoomMemberIndex(room, member, nowIso);
@@ -1236,6 +1246,11 @@ function canAccessFolder(folder, user, authz) {
   if (authz.isAdmin) return true;
   const scope = folderScopeForMember(authz.member, authz.isAdmin);
   if (scope === 'all') return true;
+  const folderIds = normalizeFolderIds(authz.member?.folderIds || authz.member?.folder_ids);
+  if (folder.folderId && folderIds.includes(folder.folderId)) return true;
+  if (scope === 'invited') {
+    return false;
+  }
   return folder.createdBy && folder.createdBy === user.userKey;
 }
 
@@ -1467,6 +1482,7 @@ async function listMyRooms(user) {
     status: String(m.status || 'inactive').toLowerCase(),
     memberStatus: String(m.memberStatus || 'active').toLowerCase(),
     folderScope: normalizeFolderScope(m.folderScope || m.folder_scope || (isAdminRole(m.role) ? 'all' : 'all')),
+    folderIds: normalizeFolderIds(m.folderIds || m.folder_ids),
     updatedAt: m.updatedAt || null,
   }));
   const active = mapped.find((m) => m.status === 'active') || null;
@@ -1506,6 +1522,20 @@ async function createInvite(event, user, room, authz, ctx) {
   if (!authz.isAdmin) return json(403, { message: 'forbidden' });
   if (!room.createdBy || room.createdBy !== user.userKey) return json(403, { message: 'forbidden' });
 
+  const body = event.body ? JSON.parse(event.body) : {};
+  const folderId = String(body.folderId || '').trim();
+  let folder = null;
+  if (folderId) {
+    const folderRes = await ddb.send(
+      new GetCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: 'ORG#DEFAULT', SK: `FOLDER#${folderId}` },
+      })
+    );
+    folder = folderRes.Item || null;
+    if (!folder || !isRoomMatch(folder.roomName, room.roomName)) return json(404, { message: 'folder not found' });
+  }
+
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
   const ttlSeconds = Math.floor(now / 1000) + 7 * 24 * 60 * 60;
@@ -1519,6 +1549,10 @@ async function createInvite(event, user, room, authz, ctx) {
     token,
     roomId: room.roomId,
     roomName: room.roomName,
+    inviteScope: folder ? 'folder' : 'room',
+    folderId: folder?.folderId || null,
+    folderTitle: folder?.title || null,
+    folderCode: folder?.folderCode || null,
     createdBy: room.createdBy || null,
     createdAt: nowIso,
     expiresAt: expiresAtIso,
@@ -1544,10 +1578,18 @@ async function createInvite(event, user, room, authz, ctx) {
     roomName: room.roomName,
     token,
     expiresAt: expiresAtIso,
+    inviteScope: folder ? 'folder' : 'room',
+    folderId: folder?.folderId || null,
     result: 'success',
   });
 
-  return json(201, { token, expiresAt: expiresAtIso, days: 7 });
+  return json(201, {
+    token,
+    expiresAt: expiresAtIso,
+    days: 7,
+    inviteScope: folder ? 'folder' : 'room',
+    folderId: folder?.folderId || null,
+  });
 }
 
 async function revokeInvite(event, user, room, authz, ctx) {
@@ -1598,6 +1640,29 @@ async function revokeInvite(event, user, room, authz, ctx) {
   return json(200, { ok: true });
 }
 
+async function applyFolderInviteAccess(room, member, folderId, nowIso, nextScope = 'invited') {
+  if (!folderId || !member?.userKey || isAdminRole(member.role)) return member;
+  const existingIds = normalizeFolderIds(member.folderIds || member.folder_ids);
+  const folderIds = normalizeFolderIds([...existingIds, folderId]);
+  const res = await ddb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: roomMemberKey(room.roomId, member.userKey),
+      UpdateExpression: 'SET folderScope = :scope, folderIds = :folderIds, updatedAt = :u',
+      ExpressionAttributeValues: {
+        ':scope': normalizeFolderScope(nextScope),
+        ':folderIds': folderIds,
+        ':u': nowIso,
+      },
+      ConditionExpression: 'attribute_exists(PK) and attribute_exists(SK)',
+      ReturnValues: 'ALL_NEW',
+    })
+  );
+  const updated = res.Attributes || { ...member, folderScope: normalizeFolderScope(nextScope), folderIds };
+  await upsertUserRoomMemberIndex(room, updated, nowIso);
+  return updated;
+}
+
 async function acceptInvite(event, user, ctx) {
   const body = event.body ? JSON.parse(event.body) : {};
   const token = String(body.token || '').trim();
@@ -1642,7 +1707,29 @@ async function acceptInvite(event, user, ctx) {
   }
   const room = { roomId: roomItem.roomId, roomName: roomItem.roomName, createdBy: roomItem.createdBy || null };
 
-  const member = await ensureRoomMember(room, user, nowIso, ctx);
+  let inviteFolder = null;
+  if (inviteItem.folderId) {
+    const folderRes = await ddb.send(
+      new GetCommand({
+        TableName: TABLE_NAME,
+        Key: { PK: 'ORG#DEFAULT', SK: `FOLDER#${inviteItem.folderId}` },
+      })
+    );
+    inviteFolder = folderRes.Item || null;
+    if (!inviteFolder || !isRoomMatch(inviteFolder.roomName, room.roomName)) {
+      return json(410, { message: 'invite expired or invalid' });
+    }
+  }
+
+  const existingMemberRes = await ddb.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: roomMemberKey(room.roomId, user.userKey),
+    })
+  );
+  const existingMember = existingMemberRes.Item || null;
+
+  let member = await ensureRoomMember(room, user, nowIso, ctx);
   if (member.status === 'disabled') return json(403, { message: 'forbidden' });
   if (member.status === 'left') {
     // Allow re-joining after being removed/left: reactivate membership on invite acceptance.
@@ -1661,6 +1748,21 @@ async function acceptInvite(event, user, ctx) {
       member.updatedAt = nowIso;
     } catch (_) {
       return json(403, { message: 'forbidden' });
+    }
+  }
+  if (inviteFolder && !isAdminRole(member.role)) {
+    const existingStatus = normalizeMemberStatus(existingMember?.status);
+    const existingScope = normalizeFolderScope(existingMember?.folderScope || existingMember?.folder_scope || '');
+    const shouldRestrictToInvite =
+      !existingMember || existingStatus === 'left' || existingScope === 'invited';
+    if (shouldRestrictToInvite || existingScope === 'own') {
+      member = await applyFolderInviteAccess(
+        room,
+        member,
+        inviteFolder.folderId,
+        nowIso,
+        shouldRestrictToInvite ? 'invited' : 'own'
+      );
     }
   }
   await maybeUpsertUserRoomMemberIndex(room, member, nowIso);
@@ -1682,6 +1784,8 @@ async function acceptInvite(event, user, ctx) {
     token,
     roomId: room.roomId,
     roomName: room.roomName,
+    inviteScope: inviteFolder ? 'folder' : 'room',
+    folderId: inviteFolder?.folderId || null,
     result: 'success',
   });
 
@@ -1690,6 +1794,8 @@ async function acceptInvite(event, user, ctx) {
     roomId: room.roomId,
     roomName: room.roomName,
     role: member.role || 'member',
+    folderScope: normalizeFolderScope(member.folderScope || member.folder_scope || 'all'),
+    folderIds: normalizeFolderIds(member.folderIds || member.folder_ids),
     billing: summarizeBilling(billing),
   });
 }
@@ -2116,9 +2222,61 @@ async function listTeamMembers(room, authz) {
     role: m.role || 'member',
     status: normalizeMemberStatus(m.status),
     folderScope: normalizeFolderScope(m.folderScope || m.folder_scope || (isAdminRole(m.role) ? 'all' : 'all')),
+    folderIds: normalizeFolderIds(m.folderIds || m.folder_ids),
     joinedAt: m.joinedAt || null,
     updatedAt: m.updatedAt || null,
   }));
+  return json(200, { items });
+}
+
+async function listFolderMembers(folderId, room, authz) {
+  if (!authz.isAdmin) return json(403, { message: 'forbidden' });
+  const folderRes = await ddb.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: 'ORG#DEFAULT', SK: `FOLDER#${folderId}` },
+    })
+  );
+  const folder = folderRes.Item || null;
+  if (!folder || !isRoomMatch(folder.roomName, room.roomName)) return json(404, { message: 'folder not found' });
+
+  const res = await ddb.send(
+    new QueryCommand({
+      TableName: TABLE_NAME,
+      KeyConditionExpression: 'PK = :pk and begins_with(SK, :sk)',
+      ExpressionAttributeValues: {
+        ':pk': `ROOM#${room.roomId}`,
+        ':sk': 'MEMBER#',
+      },
+      ScanIndexForward: true,
+    })
+  );
+  const raw = (res.Items || []).filter((m) => normalizeMemberStatus(m.status) === 'active');
+  const accessible = raw.filter((m) =>
+    canAccessFolder(folder, { userKey: m.userKey }, { member: m, isAdmin: isAdminRole(m.role) })
+  );
+  const nameMap = await loadDisplayNameMap(accessible.map((m) => m.userKey));
+  const items = accessible.map((m) => {
+    const scope = folderScopeForMember(m, isAdminRole(m.role));
+    const folderIds = normalizeFolderIds(m.folderIds || m.folder_ids);
+    const reason = isAdminRole(m.role)
+      ? 'admin'
+      : scope === 'all'
+        ? 'all'
+        : folderIds.includes(folder.folderId)
+          ? 'invited'
+          : 'owner';
+    return {
+      userKey: m.userKey,
+      displayName: nameMap[m.userKey] || '',
+      role: m.role || 'member',
+      status: normalizeMemberStatus(m.status),
+      folderScope: scope,
+      accessReason: reason,
+      joinedAt: m.joinedAt || null,
+      updatedAt: m.updatedAt || null,
+    };
+  });
   return json(200, { items });
 }
 
@@ -3657,6 +3815,9 @@ exports.handler = async (event) => {
 
     if (method === 'GET' && path === '/folders') return finish(await listFolders(room, user, authz));
     if (method === 'POST' && path === '/folders') return finish(await createFolder(event, user, room, ctx));
+    if (method === 'GET' && p.folderId && path.endsWith(`/folders/${p.folderId}/members`)) {
+      return finish(await listFolderMembers(p.folderId, room, authz));
+    }
     if (method === 'DELETE' && p.folderId && path.endsWith(`/folders/${p.folderId}`)) {
       return finish(await deleteFolder(event, p.folderId, user, room, authz, ctx));
     }

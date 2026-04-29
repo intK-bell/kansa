@@ -26,6 +26,10 @@
 | POST | `/invites/create` | `createInvite` |
 | POST | `/invites/revoke` | `revokeInvite` |
 
+補足:
+- `POST /invites/create` は body に `folderId` を渡すとフォルダ招待URLを発行する。
+- フォルダ招待URLで参加したメンバーは、対象フォルダのみ閲覧できる。
+
 ### チーム/課金
 | Method | Path | Handler |
 |---|---|---|
@@ -43,6 +47,7 @@
 |---|---|---|
 | GET | `/folders` | `listFolders` |
 | POST | `/folders` | `createFolder` |
+| GET | `/folders/{folderId}/members` | `listFolderMembers` |
 | DELETE | `/folders/{folderId}` | `deleteFolder` |
 | PUT | `/folders/{folderId}/password` | `updateFolderPassword` |
 

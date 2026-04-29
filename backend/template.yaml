@@ -297,6 +297,12 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /folders
             Method: POST
+        ListFolderMembers:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /folders/{folderId}/members
+            Method: GET
         CreateRoom:
           Type: HttpApi
           Properties:

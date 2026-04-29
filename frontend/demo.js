@@ -35,6 +35,7 @@ const state = {
   billing: null,
   ownerUserKey: null,
   lastInviteToken: null,
+  lastFolderInviteTokens: {},
   availableRooms: [],
   folderPasswordById: {},
   folders: [],
@@ -1806,20 +1807,24 @@ async function loadAdminPanel() {
           row.appendChild(left);
 
           const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
-          const scopeSelect = el('select', { style: 'min-width:120px;' });
-          scopeSelect.appendChild(el('option', { value: 'own' }, '自分のフォルダのみ'));
-          scopeSelect.appendChild(el('option', { value: 'all' }, '全フォルダ表示'));
-          scopeSelect.value = m.role === 'admin' ? 'all' : m.folderScope || 'all';
-          scopeSelect.disabled = m.role === 'admin' || m.userKey === state.ownerUserKey;
-          scopeSelect.onchange = safeAction(async () => {
-            const next = scopeSelect.value;
-            await api(`/team/members/${encodeURIComponent(m.userKey)}`, {
-              method: 'PUT',
-              body: JSON.stringify({ folderScope: next }),
-            });
-            await loadAdminPanel();
-          }, '権限更新');
-          actions.appendChild(scopeSelect);
+          if (m.folderScope === 'invited') {
+            actions.appendChild(el('span', { class: 'muted' }, 'フォルダ招待'));
+          } else {
+            const scopeSelect = el('select', { style: 'min-width:120px;' });
+            scopeSelect.appendChild(el('option', { value: 'own' }, '自分のフォルダのみ'));
+            scopeSelect.appendChild(el('option', { value: 'all' }, '全フォルダ表示'));
+            scopeSelect.value = m.role === 'admin' ? 'all' : m.folderScope || 'all';
+            scopeSelect.disabled = m.role === 'admin' || m.userKey === state.ownerUserKey;
+            scopeSelect.onchange = safeAction(async () => {
+              const next = scopeSelect.value;
+              await api(`/team/members/${encodeURIComponent(m.userKey)}`, {
+                method: 'PUT',
+                body: JSON.stringify({ folderScope: next }),
+              });
+              await loadAdminPanel();
+            }, '権限更新');
+            actions.appendChild(scopeSelect);
+          }
 
           // Remove member (kick) with confirm.
           if (m.role !== 'admin' && m.userKey !== state.ownerUserKey && m.status !== 'left') {
@@ -1868,6 +1873,43 @@ async function loadAdminPanel() {
           );
           row.appendChild(left);
           const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
+          const folderInviteInput = el('input', {
+            placeholder: 'フォルダ招待URL',
+            readonly: 'readonly',
+            style: 'min-width:180px; flex:1;',
+          });
+          const createFolderInviteBtn = el('button', { type: 'button' }, '招待URL発行（7日）');
+          createFolderInviteBtn.onclick = safeAction(async () => {
+            const res = await api('/invites/create', {
+              method: 'POST',
+              body: JSON.stringify({ folderId: f.folderId }),
+            });
+            const token = res.token;
+            if (!token) throw new Error('招待トークンが取得できませんでした。');
+            state.lastFolderInviteTokens[f.folderId] = token;
+            const base = window.location.origin + window.location.pathname;
+            const url = `${base}?invite=${encodeURIComponent(token)}`;
+            await setInviteUrlText(url, folderInviteInput);
+          }, 'フォルダ招待URL発行');
+          actions.appendChild(createFolderInviteBtn);
+
+          const revokeFolderInviteBtn = el('button', { type: 'button', class: 'danger' }, '招待URL失効');
+          revokeFolderInviteBtn.onclick = safeAction(async () => {
+            const token = state.lastFolderInviteTokens[f.folderId];
+            if (!token) {
+              showError('失効する招待URLがなかです（先に発行してください）');
+              return;
+            }
+            const ok = window.confirm(`フォルダ「${f.title || f.folderId}」の招待URLを失効してよかですか？`);
+            if (!ok) return;
+            await api('/invites/revoke', { method: 'POST', body: JSON.stringify({ token }) });
+            delete state.lastFolderInviteTokens[f.folderId];
+            folderInviteInput.value = '';
+            showToast('フォルダ招待URLを失効しました。');
+          }, 'フォルダ招待URL失効');
+          actions.appendChild(revokeFolderInviteBtn);
+          actions.appendChild(folderInviteInput);
+
           if (f.hasPassword) {
             const resetBtn = el('button', { type: 'button' }, 'パスワード解除');
             resetBtn.onclick = safeAction(async () => {
@@ -1895,7 +1937,34 @@ async function loadAdminPanel() {
           }, 'フォルダ削除');
           actions.appendChild(delBtn);
           row.appendChild(actions);
-          els.folderAdminList.appendChild(row);
+          const membersBox = el('div', { class: 'muted', style: 'margin-top:6px; font-size:0.92rem;' }, 'メンバー読み込み中...');
+          const wrap = el('div', {});
+          wrap.appendChild(row);
+          wrap.appendChild(membersBox);
+          els.folderAdminList.appendChild(wrap);
+          api(`/folders/${encodeURIComponent(f.folderId)}/members`, { method: 'GET' })
+            .then((members) => {
+              const items = members.items || [];
+              if (!items.length) {
+                membersBox.textContent = 'メンバーがおらんばい';
+                return;
+              }
+              const reasonLabel = {
+                admin: '管理者',
+                all: '全フォルダ',
+                owner: '作成者',
+                invited: 'フォルダ招待',
+              };
+              membersBox.textContent = `メンバー: ${items
+                .map((m) => {
+                  const name = m.displayName || m.userKey;
+                  return `${name}（${reasonLabel[m.accessReason] || m.accessReason || m.folderScope || '権限'}）`;
+                })
+                .join('、')}`;
+            })
+            .catch((error) => {
+              membersBox.textContent = `メンバー取得失敗: ${asMessage(error)}`;
+            });
         });
       }
     }
@@ -1934,8 +2003,8 @@ async function loadAdminPanel() {
   syncSubscriptionPlanButtons();
 }
 
-async function setInviteUrlText(url) {
-  if (els.inviteUrl) els.inviteUrl.value = url || '';
+async function setInviteUrlText(url, targetInput = els.inviteUrl) {
+  if (targetInput) targetInput.value = url || '';
   if (!url) return;
   try {
     if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
@@ -3306,6 +3375,16 @@ function demoRoomResponse(room) {
   };
 }
 
+function demoCanAccessFolder(folder, member) {
+  if (!folder || !member || member.status !== 'active') return false;
+  if (member.role === 'admin') return true;
+  const folderIds = Array.isArray(member.folderIds) ? member.folderIds : [];
+  if (folderIds.includes(folder.folderId)) return true;
+  if ((member.folderScope || 'all') === 'all') return true;
+  if ((member.folderScope || '') === 'invited') return false;
+  return folder.createdBy === member.userKey;
+}
+
 function demoFolderSummary(folder) {
   return {
     folderId: folder.folderId,
@@ -3544,6 +3623,27 @@ api = async function (path, options = {}) {
     return { items: activeRoom.folders.map((folder) => demoFolderSummary(folder)) };
   }
 
+  if (path.startsWith('/folders/') && path.endsWith('/members') && method === 'GET') {
+    if (!activeRoom) throw demoError(404, 'no active room');
+    const folderId = decodeURIComponent(path.split('/')[2] || '');
+    const folder = activeRoom.folders.find((item) => item.folderId === folderId);
+    if (!folder) throw demoError(404, 'folder not found');
+    return {
+      items: activeRoom.members.filter((member) => demoCanAccessFolder(folder, member)).map((member) => {
+        const folderIds = Array.isArray(member.folderIds) ? member.folderIds : [];
+        const accessReason =
+          member.role === 'admin'
+            ? 'admin'
+            : (member.folderScope || 'all') === 'all'
+              ? 'all'
+              : folderIds.includes(folder.folderId)
+                ? 'invited'
+                : 'owner';
+        return { ...demoClone(member), accessReason };
+      }),
+    };
+  }
+
   if (path === '/folders' && method === 'POST') {
     if (!activeRoom) throw demoError(404, 'no active room');
     if (String(activeRoom.subscriptionPlan || 'FREE').toUpperCase() === 'FREE' && activeRoom.folders.length >= 2) {
@@ -3706,11 +3806,15 @@ api = async function (path, options = {}) {
     if (!activeRoom) throw demoError(404, 'no active room');
     const token = `demo-invite-${demoStore.inviteCounter++}`;
     activeRoom.inviteToken = token;
-    return { token };
+    activeRoom.inviteFolderId = body.folderId || null;
+    return { token, inviteScope: body.folderId ? 'folder' : 'room', folderId: body.folderId || null };
   }
 
   if (path === '/invites/revoke' && method === 'POST') {
-    if (activeRoom) activeRoom.inviteToken = null;
+    if (activeRoom) {
+      activeRoom.inviteToken = null;
+      activeRoom.inviteFolderId = null;
+    }
     return { ok: true };
   }
 

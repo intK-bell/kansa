@@ -50,6 +50,30 @@ sam build
 sam deploy
 ```
 
+### 依存ライブラリの脆弱性確認
+
+Backend 依存の脆弱性確認は `backend/src` で実行します。
+
+```bash
+cd /Users/aokikensaku/Documents/Devapps/kansa/backend/src
+npm audit
+```
+
+対応方針:
+
+- `npm audit fix` で解消できるものは、差分を確認してから反映する
+- `npm audit fix --force` が必要なものは破壊的更新を含むため、先に影響範囲を確認する
+- 未使用の直接依存は、更新より削除を優先する
+- `package.json` / `package-lock.json` 更新後は `node --check api.js` と `npm audit` を再実行する
+- 依存更新は Lambda パッケージへ反映するため、Backend 再デプロイが必要
+
+2026-04-29 対応メモ:
+
+- `uuid@11.1.0` は実コードで未使用だったため直接依存から削除した
+- ID 生成は Node.js 標準の `node:crypto` `randomUUID()` を利用している
+- AWS SDK 経由の `@aws-sdk/xml-builder` を `3.972.21` へ更新し、`fast-xml-parser` を `5.7.2` へ更新した
+- 対応後の `npm audit` は `found 0 vulnerabilities`
+
 ## 1. 監査ログ（CloudWatch Logs）
 APIの作成/修正/削除時、Lambdaは `kind=audit` のJSONログを出力します。
 
