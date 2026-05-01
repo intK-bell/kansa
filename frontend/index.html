@@ -45,6 +45,7 @@
               <summary class="menu-group-summary">アカウント</summary>
               <div class="menu-group-items">
                 <button id="open-theme-btn" type="button">テーマ</button>
+                <button id="developer-dashboard-btn" type="button" class="hidden">開発者</button>
                 <button id="reset-user-btn" type="button">名前変更</button>
                 <button id="account-delete-btn" type="button" class="danger">削除</button>
               </div>
@@ -314,6 +315,18 @@
       </div>
     </div>
 
+    <div id="developer-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="開発者ダッシュボード">
+      <div class="modal-card developer-card">
+        <div class="modal-header">
+          <h3 style="margin:0;">開発者ダッシュボード</h3>
+          <button id="developer-close-btn" type="button" class="danger">閉じる</button>
+        </div>
+        <div id="developer-summary" class="developer-summary">
+          <p class="muted">読み込み中...</p>
+        </div>
+      </div>
+    </div>
+
     <div id="low-storage-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="容量不足のご案内">
       <div class="modal-card">
         <div class="modal-header">
@@ -380,6 +393,6 @@
       </div>
     </div>
     <script src="./config.js?v=20260215-2"></script>
-    <script src="./main.js?v=20260429-8" type="module"></script>
+    <script src="./main.js?v=20260501-1" type="module"></script>
   </body>
 </html>

@@ -8,6 +8,7 @@ const {
   GetCommand,
   BatchGetCommand,
   DeleteCommand,
+  ScanCommand,
   UpdateCommand,
 } = require('@aws-sdk/lib-dynamodb');
 const {
@@ -51,6 +52,18 @@ const TABLE_NAME = process.env.TABLE_NAME;
 const PHOTO_BUCKET = process.env.PHOTO_BUCKET;
 const EXPORT_BUCKET = process.env.EXPORT_BUCKET;
 const COGNITO_USER_POOL_ID = process.env.COGNITO_USER_POOL_ID || '';
+const DEVELOPER_USER_KEYS = new Set(
+  String(process.env.DEVELOPER_USER_KEYS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+);
+const DEVELOPER_USERNAMES = new Set(
+  String(process.env.DEVELOPER_USERNAMES || '')
+    .split(',')
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean)
+);
 const CORS_ALLOWED_ORIGINS = new Set(
   String(process.env.CORS_ALLOWED_ORIGINS || '')
     .split(',')
@@ -697,6 +710,8 @@ function getUserIdentity(event) {
       fallbackName,
       fromCognito: true,
       cognitoUsername: String(claims['cognito:username'] || '').trim() || null,
+      email: String(claims.email || '').trim() || null,
+      preferredUsername: String(claims.preferred_username || '').trim() || null,
     };
   }
 
@@ -712,7 +727,16 @@ function getUserIdentity(event) {
   if (!userKey) {
     throw new Error('MISSING_USER_KEY');
   }
-  return { userKey, fallbackName, fromCognito: false };
+  return { userKey, fallbackName, fromCognito: false, email: null, preferredUsername: null };
+}
+
+function isDeveloperUser(user) {
+  if (!user) return false;
+  if (user.userKey && DEVELOPER_USER_KEYS.has(String(user.userKey))) return true;
+  const candidates = [user.cognitoUsername, user.email, user.preferredUsername, user.fallbackName, user.userName]
+    .map((value) => String(value || '').trim().toLowerCase())
+    .filter(Boolean);
+  return candidates.some((value) => DEVELOPER_USERNAMES.has(value));
 }
 
 function normalizeDisplayName(rawValue) {
@@ -773,6 +797,8 @@ async function getUser(event) {
       fallbackName: identity.fallbackName || 'unknown',
       fromCognito: false,
       cognitoUsername: null,
+      email: null,
+      preferredUsername: null,
     };
   }
 
@@ -786,6 +812,8 @@ async function getUser(event) {
     fallbackName,
     fromCognito: true,
     cognitoUsername: identity.cognitoUsername || null,
+    email: identity.email || null,
+    preferredUsername: identity.preferredUsername || null,
   };
 }
 
@@ -1415,6 +1443,7 @@ async function getMe(user) {
     userKey: user.userKey,
     displayName: user.displayName || '',
     fallbackName: user.fallbackName || user.userName || 'unknown',
+    isDeveloper: isDeveloperUser(user),
   });
 }
 
@@ -1493,6 +1522,159 @@ async function listMyRooms(user) {
   }));
   const active = mapped.find((m) => m.status === 'active') || null;
   return json(200, { items: mapped, activeRoomId: active?.roomId || null });
+}
+
+async function scanAllItems(params) {
+  const items = [];
+  let ExclusiveStartKey = null;
+  do {
+    const res = await ddb.send(
+      new ScanCommand({
+        TableName: TABLE_NAME,
+        ...params,
+        ExclusiveStartKey: ExclusiveStartKey || undefined,
+      })
+    );
+    items.push(...(res.Items || []));
+    ExclusiveStartKey = res.LastEvaluatedKey || null;
+  } while (ExclusiveStartKey);
+  return items;
+}
+
+function percentOf(count, total) {
+  if (!total) return 0;
+  return Math.round((Number(count || 0) / total) * 1000) / 10;
+}
+
+function developerPlanLabel(code) {
+  const normalized = normalizeSubscriptionPlanCode(code);
+  if (normalized === 'BASIC') return '1GB';
+  if (normalized === 'PLUS') return '5GB';
+  if (normalized === 'PRO') return '10GB';
+  return 'FREE';
+}
+
+async function developerSummary(user) {
+  if (!isDeveloperUser(user)) return json(403, { message: 'forbidden' });
+
+  const [users, rooms, folders, members, billingItems] = await Promise.all([
+    scanAllItems({
+      ProjectionExpression: 'PK, SK, #type, userKey, displayName, cognitoName, createdAt',
+      ExpressionAttributeNames: { '#type': 'type' },
+      FilterExpression: '#type = :type',
+      ExpressionAttributeValues: { ':type': 'user_profile' },
+    }),
+    scanAllItems({
+      ProjectionExpression: 'PK, SK, #type, roomId, roomName, createdBy, createdByName, createdAt',
+      ExpressionAttributeNames: { '#type': 'type' },
+      FilterExpression: '#type = :type',
+      ExpressionAttributeValues: { ':type': 'room' },
+    }),
+    scanAllItems({
+      ProjectionExpression: 'PK, SK, #type, folderId, folderCode, title, roomName, createdBy, sizeBytes, bytesTotal, createdAt',
+      ExpressionAttributeNames: { '#type': 'type' },
+      FilterExpression: '#type = :type',
+      ExpressionAttributeValues: { ':type': 'folder' },
+    }),
+    scanAllItems({
+      ProjectionExpression: 'PK, SK, #type, roomId, roomName, userKey, #role, #status, folderScope, folderIds',
+      ExpressionAttributeNames: { '#type': 'type', '#role': 'role', '#status': 'status' },
+      FilterExpression: '#type = :type',
+      ExpressionAttributeValues: { ':type': 'room_member' },
+    }),
+    scanAllItems({
+      ProjectionExpression:
+        'PK, SK, #type, roomId, roomName, billingMode, currentPlan, usageBytes, freeBytes, gibDaysBalance, updatedAt',
+      ExpressionAttributeNames: { '#type': 'type' },
+      FilterExpression: '#type = :type',
+      ExpressionAttributeValues: { ':type': 'billing_meta' },
+    }),
+  ]);
+
+  const activeMembers = members.filter((m) => {
+    const status = String(m.status || 'active').toLowerCase();
+    return status !== 'left' && status !== 'disabled';
+  });
+  const adminMembers = activeMembers.filter((m) => isAdminRole(m.role));
+  const folderMembers = activeMembers.filter((m) => {
+    const scope = normalizeFolderScope(m.folderScope || m.folder_scope || '');
+    return scope === 'invited' || normalizeFolderIds(m.folderIds || m.folder_ids).length > 0;
+  });
+
+  const folderCountsByRoomName = new Map();
+  folders.forEach((folder) => {
+    const key = String(folder.roomName || '');
+    if (!key) return;
+    folderCountsByRoomName.set(key, (folderCountsByRoomName.get(key) || 0) + 1);
+  });
+
+  const memberCountsByRoomId = new Map();
+  activeMembers.forEach((member) => {
+    const key = String(member.roomId || '');
+    if (!key) return;
+    memberCountsByRoomId.set(key, (memberCountsByRoomId.get(key) || 0) + 1);
+  });
+
+  const billingByRoomId = new Map();
+  billingItems.forEach((item) => {
+    if (item.roomId) billingByRoomId.set(String(item.roomId), item);
+  });
+
+  const roomsWithUsage = rooms
+    .map((room) => {
+      const billing = billingByRoomId.get(String(room.roomId || '')) || null;
+      const summary = summarizeBilling(billing || {});
+      const plan =
+        String(summary.billingMode || '').toLowerCase() === BILLING_MODE_SUBSCRIPTION
+          ? normalizeSubscriptionPlanCode(summary.subscription?.currentPlan)
+          : 'FREE';
+      return {
+        roomId: room.roomId || null,
+        roomName: room.roomName || '',
+        createdByName: room.createdByName || '',
+        createdBy: room.createdBy || '',
+        usageBytes: Number(summary.usageBytes || 0),
+        usageLabel: formatBytes(summary.usageBytes || 0),
+        folderCount: folderCountsByRoomName.get(String(room.roomName || '')) || 0,
+        memberCount: memberCountsByRoomId.get(String(room.roomId || '')) || 0,
+        plan,
+        planLabel: developerPlanLabel(plan),
+        billingMode: summary.billingMode,
+        updatedAt: billing?.updatedAt || null,
+      };
+    })
+    .sort((a, b) => Number(b.usageBytes || 0) - Number(a.usageBytes || 0));
+
+  const planCounts = { FREE: 0, BASIC: 0, PLUS: 0, PRO: 0 };
+  roomsWithUsage.forEach((room) => {
+    const plan = normalizeSubscriptionPlanCode(room.plan);
+    planCounts[plan] = (planCounts[plan] || 0) + 1;
+  });
+  const paidTotal = planCounts.BASIC + planCounts.PLUS + planCounts.PRO;
+  const planBreakdown = ['BASIC', 'PLUS', 'PRO'].map((plan) => ({
+    plan,
+    label: developerPlanLabel(plan),
+    count: planCounts[plan] || 0,
+    percent: percentOf(planCounts[plan] || 0, paidTotal),
+    percentOfAllRooms: percentOf(planCounts[plan] || 0, roomsWithUsage.length),
+  }));
+
+  return json(200, {
+    generatedAt: new Date().toISOString(),
+    totals: {
+      users: users.length,
+      rooms: rooms.length,
+      folders: folders.length,
+      activeRoomMembers: activeMembers.length,
+      admins: adminMembers.length,
+      folderMembers: folderMembers.length,
+      paidRooms: paidTotal,
+      freeRooms: planCounts.FREE || 0,
+      usageBytes: roomsWithUsage.reduce((sum, room) => sum + Number(room.usageBytes || 0), 0),
+    },
+    planBreakdown,
+    rooms: roomsWithUsage,
+  });
 }
 
 async function switchActiveRoom(event, user, ctx) {
@@ -3974,6 +4156,7 @@ exports.handler = async (event) => {
     if (method === 'POST' && path === '/rooms/switch') return finish(await switchActiveRoom(event, user, ctx));
 
     if (method === 'POST' && path === '/invites/accept') return finish(await acceptInvite(event, user, ctx));
+    if (method === 'GET' && path === '/developer/summary') return finish(await developerSummary(user));
 
     if (isRoomCreate) return finish(await createRoom(event, user, ctx));
 

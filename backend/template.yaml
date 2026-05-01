@@ -22,6 +22,8 @@ Globals:
         STRIPE_SUB_PRICE_1GB: !Ref StripeSubPrice1gb
         STRIPE_SUB_PRICE_5GB: !Ref StripeSubPrice5gb
         STRIPE_SUB_PRICE_10GB: !Ref StripeSubPrice10gb
+        DEVELOPER_USER_KEYS: !Ref DeveloperUserKeys
+        DEVELOPER_USERNAMES: !Ref DeveloperUsernames
 
 Parameters:
   ApiThrottleRateLimit:
@@ -106,6 +108,14 @@ Parameters:
     Type: String
     Default: ""
     Description: Stripe Price ID for subscription 10GB plan (price_*)
+  DeveloperUserKeys:
+    Type: String
+    Default: "27843ac8-f001-7099-e676-c1478e6107df"
+    Description: Comma-separated Cognito sub values allowed to open developer summary
+  DeveloperUsernames:
+    Type: String
+    Default: ""
+    Description: Comma-separated Cognito usernames/emails allowed to open developer summary
 
 Resources:
   UserPool:
@@ -490,6 +500,12 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /invites/accept
             Method: POST
+        DeveloperSummary:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /developer/summary
+            Method: GET
 
   BackfillCodesFunction:
     Type: AWS::Serverless::Function

@@ -32,6 +32,7 @@ const state = {
   uploadBlocked: false,
   billing: null,
   ownerUserKey: null,
+  isDeveloper: false,
   lastInviteToken: null,
   lastFolderInviteTokens: {},
   adminFolderId: '',
@@ -140,6 +141,7 @@ function clearAuth() {
   state.idToken = null;
   state.userKey = null;
   state.userName = null;
+  state.isDeveloper = false;
 }
 
 function resetRoomContext() {
@@ -335,6 +337,10 @@ const els = {
   themeModal: document.querySelector('#theme-modal'),
   themeCloseBtn: document.querySelector('#theme-close-btn'),
   openThemeBtn: document.querySelector('#open-theme-btn'),
+  developerDashboardBtn: document.querySelector('#developer-dashboard-btn'),
+  developerModal: document.querySelector('#developer-modal'),
+  developerCloseBtn: document.querySelector('#developer-close-btn'),
+  developerSummary: document.querySelector('#developer-summary'),
   helpModal: document.querySelector('#help-modal'),
   helpCloseBtn: document.querySelector('#help-close-btn'),
   menuBtn: document.querySelector('#menu-btn'),
@@ -467,6 +473,12 @@ function closeThemeModal() {
 function closeHelpModal() {
   if (els.helpModal) {
     els.helpModal.classList.add('hidden');
+  }
+}
+
+function closeDeveloperModal() {
+  if (els.developerModal) {
+    els.developerModal.classList.add('hidden');
   }
 }
 
@@ -674,11 +686,104 @@ function showAuthSetup() {
   closeFolderCreateModal();
   closeFolderPasswordModal();
   closeThemeModal();
+  closeDeveloperModal();
 }
 
 function openHelpModal() {
   if (!els.helpModal) return;
   els.helpModal.classList.remove('hidden');
+}
+
+function renderDeveloperSummary(data) {
+  if (!els.developerSummary) return;
+  const totals = data?.totals || {};
+  const rooms = Array.isArray(data?.rooms) ? data.rooms : [];
+  const plans = Array.isArray(data?.planBreakdown) ? data.planBreakdown : [];
+
+  els.developerSummary.innerHTML = '';
+  const metrics = el('div', { class: 'developer-metrics' });
+  [
+    ['全ユーザー', totals.users || 0],
+    ['管理者', totals.admins || 0],
+    ['お部屋メンバー', totals.activeRoomMembers || 0],
+    ['フォルダメンバー', totals.folderMembers || 0],
+    ['お部屋', totals.rooms || 0],
+    ['フォルダ', totals.folders || 0],
+    ['総容量', formatBytes(totals.usageBytes || 0)],
+  ].forEach(([label, value]) => {
+    const item = el('div', { class: 'developer-metric' });
+    item.appendChild(el('span', {}, label));
+    item.appendChild(el('strong', {}, value));
+    metrics.appendChild(item);
+  });
+  els.developerSummary.appendChild(metrics);
+
+  const planBox = el('div', { class: 'developer-section' });
+  planBox.appendChild(el('h4', {}, '有料プラン内訳'));
+  if (!plans.length) {
+    planBox.appendChild(el('p', { class: 'muted' }, '有料プランのお部屋はまだありません。'));
+  } else {
+    const list = el('div', { class: 'developer-plan-list' });
+    plans.forEach((plan) => {
+      const row = el('div', { class: 'developer-plan-row' });
+      row.appendChild(el('span', {}, plan.label || plan.plan));
+      row.appendChild(el('strong', {}, `${plan.count || 0}件 / 有料内 ${plan.percent || 0}% / 全体 ${plan.percentOfAllRooms || 0}%`));
+      list.appendChild(row);
+    });
+    planBox.appendChild(list);
+  }
+  els.developerSummary.appendChild(planBox);
+
+  const roomBox = el('div', { class: 'developer-section' });
+  roomBox.appendChild(el('h4', {}, 'お部屋と容量'));
+  const tableWrap = el('div', { class: 'developer-table-wrap' });
+  const table = el('table', { class: 'developer-table' });
+  const thead = el('thead');
+  const headRow = el('tr');
+  ['お部屋', '容量', 'フォルダ', 'メンバー', 'プラン', '作成者'].forEach((label) => {
+    headRow.appendChild(el('th', {}, label));
+  });
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+  const tbody = el('tbody');
+  rooms.forEach((room) => {
+    const row = el('tr');
+    row.appendChild(el('td', {}, room.roomName || '-'));
+    row.appendChild(el('td', {}, room.usageLabel || formatBytes(room.usageBytes || 0)));
+    row.appendChild(el('td', {}, room.folderCount || 0));
+    row.appendChild(el('td', {}, room.memberCount || 0));
+    row.appendChild(el('td', {}, room.planLabel || room.plan || 'FREE'));
+    row.appendChild(el('td', {}, room.createdByName || room.createdBy || '-'));
+    tbody.appendChild(row);
+  });
+  if (!rooms.length) {
+    const row = el('tr');
+    const cell = el('td', { colspan: '6', class: 'muted' }, 'お部屋がありません。');
+    row.appendChild(cell);
+    tbody.appendChild(row);
+  }
+  table.appendChild(tbody);
+  tableWrap.appendChild(table);
+  roomBox.appendChild(tableWrap);
+  if (data?.generatedAt) {
+    roomBox.appendChild(el('p', { class: 'muted developer-generated-at' }, `更新: ${formatJstDateTime(data.generatedAt)}`));
+  }
+  els.developerSummary.appendChild(roomBox);
+}
+
+async function openDeveloperDashboard() {
+  if (!state.isDeveloper || !els.developerModal || !els.developerSummary) return;
+  closeMenu();
+  els.developerSummary.innerHTML = '';
+  els.developerSummary.appendChild(el('p', { class: 'muted' }, '読み込み中...'));
+  els.developerModal.classList.remove('hidden');
+  try {
+    const data = await api('/developer/summary', { method: 'GET' });
+    renderDeveloperSummary(data);
+  } catch (error) {
+    els.developerSummary.innerHTML = '';
+    els.developerSummary.appendChild(el('p', { class: 'muted' }, `取得失敗: ${asMessage(error)}`));
+  }
 }
 
 function openRoomCreateModal() {
@@ -836,6 +941,9 @@ function setMenuActionVisibility(showActions, options = {}) {
   if (els.openThemeBtn) {
     els.openThemeBtn.classList.toggle('hidden', !showActions);
   }
+  if (els.developerDashboardBtn) {
+    els.developerDashboardBtn.classList.toggle('hidden', !state.isDeveloper);
+  }
 }
 
 function showError(message) {
@@ -848,6 +956,20 @@ function clearError() {
   if (!els.errorBox) return;
   els.errorBox.textContent = '';
   els.errorBox.classList.add('hidden');
+}
+
+function formatJstDateTime(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return new Intl.DateTimeFormat('ja-JP', {
+    timeZone: 'Asia/Tokyo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
 }
 
 function formatBytes(bytes) {
@@ -1117,6 +1239,7 @@ async function saveDisplayName(displayName) {
 
 async function ensureDisplayName() {
   const me = await fetchMe();
+  state.isDeveloper = Boolean(me.isDeveloper);
   if (me.displayName) {
     state.userName = me.displayName;
     return;
@@ -1559,6 +1682,7 @@ function showRoomSetup() {
   closeFolderCreateModal();
   closeFolderPasswordModal();
   closeThemeModal();
+  closeDeveloperModal();
 }
 
 function renderMyRooms(items, activeRoomId) {
@@ -2893,6 +3017,20 @@ if (els.helpModal) {
   };
 }
 
+if (els.developerCloseBtn) {
+  els.developerCloseBtn.onclick = () => {
+    closeDeveloperModal();
+  };
+}
+
+if (els.developerModal) {
+  els.developerModal.onclick = (e) => {
+    if (e && e.target === els.developerModal) {
+      closeDeveloperModal();
+    }
+  };
+}
+
 if (els.photoPreviewCloseBtn) {
   els.photoPreviewCloseBtn.onclick = () => {
     closePhotoPreviewModal();
@@ -3043,6 +3181,12 @@ if (els.openThemeBtn) {
     closeMenu();
     openThemeModal();
   }, 'テーマ変更');
+}
+
+if (els.developerDashboardBtn) {
+  els.developerDashboardBtn.onclick = safeAction(async () => {
+    await openDeveloperDashboard();
+  }, '開発者ダッシュボード');
 }
 
 if (els.helpMenuBtn) {

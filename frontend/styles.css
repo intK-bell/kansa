@@ -593,6 +593,96 @@ button:disabled {
   width: 100%;
 }
 
+.developer-card {
+  width: min(980px, calc(100vw - 28px));
+  max-height: min(82vh, 760px);
+  overflow: auto;
+}
+
+.developer-summary {
+  display: grid;
+  gap: 14px;
+}
+
+.developer-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.developer-metric {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--card-soft);
+}
+
+.developer-metric span,
+.developer-generated-at {
+  font-size: 12px;
+}
+
+.developer-metric strong {
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.developer-section {
+  display: grid;
+  gap: 8px;
+}
+
+.developer-section h4 {
+  margin: 0;
+}
+
+.developer-plan-list {
+  display: grid;
+  gap: 6px;
+}
+
+.developer-plan-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--card-soft);
+}
+
+.developer-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.developer-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+  font-size: 13px;
+}
+
+.developer-table th,
+.developer-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.developer-table th {
+  background: var(--card-soft);
+  font-weight: 700;
+}
+
+.developer-table tr:last-child td {
+  border-bottom: 0;
+}
+
 .row {
   display: flex;
   gap: 8px;
