@@ -66,6 +66,14 @@ Parameters:
     Type: String
     Default: http://127.0.0.1:5173
     Description: Alternate local development logout URL
+  CognitoDevCallbackUrl:
+    Type: String
+    Default: https://dev.d3vej31wy18srw.amplifyapp.com
+    Description: Amplify dev callback URL
+  CognitoDevLogoutUrl:
+    Type: String
+    Default: https://dev.d3vej31wy18srw.amplifyapp.com
+    Description: Amplify dev logout URL
   AlertEmail:
     Type: String
     Default: aokigyoumukikaku@gmail.com
@@ -160,10 +168,12 @@ Resources:
         - !Ref CognitoCallbackUrl
         - !Ref CognitoLocalCallbackUrl
         - !Ref CognitoLocalCallbackUrlAlt
+        - !Ref CognitoDevCallbackUrl
       LogoutURLs:
         - !Ref CognitoLogoutUrl
         - !Ref CognitoLocalLogoutUrl
         - !Ref CognitoLocalLogoutUrlAlt
+        - !Ref CognitoDevLogoutUrl
       ExplicitAuthFlows:
         - ALLOW_REFRESH_TOKEN_AUTH
         - ALLOW_USER_SRP_AUTH

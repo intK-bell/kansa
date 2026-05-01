@@ -740,7 +740,7 @@ function renderDeveloperSummary(data) {
   const table = el('table', { class: 'developer-table' });
   const thead = el('thead');
   const headRow = el('tr');
-  ['お部屋', '容量', 'フォルダ', 'メンバー', 'プラン', '作成者'].forEach((label) => {
+  ['お部屋', '容量', 'フォルダ', 'お部屋メンバー', 'フォルダメンバー', 'メンバー（合計）', 'プラン', '作成者'].forEach((label) => {
     headRow.appendChild(el('th', {}, label));
   });
   thead.appendChild(headRow);
@@ -751,6 +751,8 @@ function renderDeveloperSummary(data) {
     row.appendChild(el('td', {}, room.roomName || '-'));
     row.appendChild(el('td', {}, room.usageLabel || formatBytes(room.usageBytes || 0)));
     row.appendChild(el('td', {}, room.folderCount || 0));
+    row.appendChild(el('td', {}, room.roomMemberCount || 0));
+    row.appendChild(el('td', {}, room.folderMemberCount || 0));
     row.appendChild(el('td', {}, room.memberCount || 0));
     row.appendChild(el('td', {}, room.planLabel || room.plan || 'FREE'));
     row.appendChild(el('td', {}, room.createdByName || room.createdBy || '-'));
@@ -758,7 +760,7 @@ function renderDeveloperSummary(data) {
   });
   if (!rooms.length) {
     const row = el('tr');
-    const cell = el('td', { colspan: '6', class: 'muted' }, 'お部屋がありません。');
+    const cell = el('td', { colspan: '8', class: 'muted' }, 'お部屋がありません。');
     row.appendChild(cell);
     tbody.appendChild(row);
   }

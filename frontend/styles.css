@@ -662,7 +662,7 @@ button:disabled {
 .developer-table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 720px;
+  min-width: 880px;
   font-size: 13px;
 }
 

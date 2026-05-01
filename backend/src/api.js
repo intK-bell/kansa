@@ -1609,10 +1609,15 @@ async function developerSummary(user) {
   });
 
   const memberCountsByRoomId = new Map();
+  const folderMemberCountsByRoomId = new Map();
   activeMembers.forEach((member) => {
     const key = String(member.roomId || '');
     if (!key) return;
     memberCountsByRoomId.set(key, (memberCountsByRoomId.get(key) || 0) + 1);
+    const scope = normalizeFolderScope(member.folderScope || member.folder_scope || '');
+    if (scope === 'invited' || normalizeFolderIds(member.folderIds || member.folder_ids).length > 0) {
+      folderMemberCountsByRoomId.set(key, (folderMemberCountsByRoomId.get(key) || 0) + 1);
+    }
   });
 
   const billingByRoomId = new Map();
@@ -1636,6 +1641,12 @@ async function developerSummary(user) {
         usageBytes: Number(summary.usageBytes || 0),
         usageLabel: formatBytes(summary.usageBytes || 0),
         folderCount: folderCountsByRoomName.get(String(room.roomName || '')) || 0,
+        roomMemberCount: Math.max(
+          0,
+          (memberCountsByRoomId.get(String(room.roomId || '')) || 0) -
+            (folderMemberCountsByRoomId.get(String(room.roomId || '')) || 0)
+        ),
+        folderMemberCount: folderMemberCountsByRoomId.get(String(room.roomId || '')) || 0,
         memberCount: memberCountsByRoomId.get(String(room.roomId || '')) || 0,
         plan,
         planLabel: developerPlanLabel(plan),
