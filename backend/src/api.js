@@ -29,6 +29,7 @@ const fontkit = require('@pdf-lib/fontkit');
 
 const { stripeRequest } = require('./stripe-rest');
 const { buildExportPresentation, resolveExportSlideLayout, PALETTE, PPT_WATERMARK_PATH } = require('./ppt-layout');
+const { createExportI18n, languageFromHeaders } = require('./export-i18n');
 
 const {
   BILLING_MODE_PREPAID,
@@ -128,11 +129,11 @@ function formatJstCompactTimestamp(date = new Date()) {
   return `${get('year')}${get('month')}${get('day')}${get('hour')}${get('minute')}`;
 }
 
-function formatJstDisplayDateTime(value) {
-  if (!value) return '日時不明';
+function formatJstDisplayDateTime(value, i18n = createExportI18n('ja')) {
+  if (!value) return i18n.t('日時不明');
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '日時不明';
-  const parts = new Intl.DateTimeFormat('ja-JP', {
+  if (Number.isNaN(date.getTime())) return i18n.t('日時不明');
+  const parts = new Intl.DateTimeFormat(i18n.locale, {
     timeZone: 'Asia/Tokyo',
     year: 'numeric',
     month: 'numeric',
@@ -188,10 +189,10 @@ function exportLabel(format) {
   return 'high-ppt';
 }
 
-function exportFormatDescription(format) {
-  if (format === 'pptx_light') return '軽量PPT';
+function exportFormatDescription(format, i18n = createExportI18n('ja')) {
+  if (format === 'pptx_light') return i18n.t('軽量PPT');
   if (format === 'pdf') return 'PDF';
-  return '高画質PPT';
+  return i18n.t('高画質PPT');
 }
 
 function pptUnit(value) {
@@ -522,7 +523,16 @@ function wrapPdfText(text, maxWidth, size, jpFont, latinFont) {
 }
 
 async function buildExportPdf(options) {
-  const { folder, photos, isFreePlanExport, resolveImageAsset, resolveCommentLines, buildFooterText } = options;
+  const {
+    folder,
+    photos,
+    isFreePlanExport,
+    resolveImageAsset,
+    resolveCommentLines,
+    buildFooterText,
+    i18n: inputI18n,
+  } = options;
+  const i18n = inputI18n || createExportI18n('ja');
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
   const jpFont = await pdfDoc.embedFont(await loadPdfFontBytes(), { subset: false });
@@ -547,7 +557,7 @@ async function buildExportPdf(options) {
       borderColor: hexToRgbColor('BFD2B7'),
       borderWidth: 1,
     });
-    page.drawText('監査レポート', {
+    page.drawText(i18n.t('監査レポート'), {
       x: pptUnit(0.82),
       y: PDF_PAGE_HEIGHT - pptUnit(0.58),
       size: 10,
@@ -621,7 +631,7 @@ async function buildExportPdf(options) {
       borderColor: hexToRgbColor(PALETTE.line),
       borderWidth: 1,
     });
-    page.drawText('コメント', {
+    page.drawText(i18n.t('コメント'), {
       x: pptUnit(layout.comments.x + 0.2),
       y: PDF_PAGE_HEIGHT - pptUnit(layout.comments.y + 0.28),
       size: 11,
@@ -630,7 +640,7 @@ async function buildExportPdf(options) {
     });
 
     const wrappedCommentLines = wrapPdfText(
-      commentLines.length ? commentLines.join('\n\n') : 'コメントなし',
+      commentLines.length ? commentLines.join('\n\n') : i18n.t('コメントなし'),
       pptUnit(layout.comments.w - 0.4),
       10,
       jpFont,
@@ -3825,6 +3835,7 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
   if (!canAccessFolder(folder, user, authz)) return json(403, { message: 'forbidden' });
   const pw = verifyFolderPassword(folder, event);
   if (!pw.ok) return json(403, { message: 'invalid folder password' });
+  const i18n = createExportI18n(languageFromHeaders(event.headers || {}));
   const billing = await getBillingMeta(ddb, { tableName: TABLE_NAME, roomId: room.roomId });
   const isFreePlanExport = isFreePlanBilling(billing);
 
@@ -3856,7 +3867,7 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
   const usageBytes = Number(billing?.usageBytes || 0);
   const capacityBytes = Number(billing?.freeBytes || 0);
   const currentPlan = normalizeSubscriptionPlanCode(billing?.currentPlan || billing?.subscription?.currentPlan || 'FREE');
-  const footerSummary = `形式: ${exportFormatDescription(format)} / プラン: ${currentPlan} / 使用量: ${formatBytes(usageBytes)} / 上限: ${formatBytes(capacityBytes)} / 出力: ${formatJstDisplayDateTime(exportAt.toISOString())}`;
+  const footerSummary = `${i18n.t('形式')}: ${exportFormatDescription(format, i18n)} / ${i18n.t('プラン')}: ${currentPlan} / ${i18n.t('使用量')}: ${formatBytes(usageBytes)} / ${i18n.t('上限')}: ${formatBytes(capacityBytes)} / ${i18n.t('出力')}: ${formatJstDisplayDateTime(exportAt.toISOString(), i18n)}`;
 
   const resolveCommentLines = async (photo) => {
     const commentsRes = await ddb.send(
@@ -3873,7 +3884,7 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
     const commentNameMap = await loadDisplayNameMap(comments.map((c) => c.createdBy));
     return comments.map((c, idx) => {
       const createdByName = commentNameMap[c.createdBy] || c.createdByName || 'unknown';
-      const stampedBy = `${formatJstDisplayDateTime(c.createdAt)} ${createdByName}`;
+      const stampedBy = `${formatJstDisplayDateTime(c.createdAt, i18n)} ${createdByName}`;
       return `${idx + 1}. ${c.text}\n${stampedBy}`;
     });
   };
@@ -3899,6 +3910,7 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
       resolveImageAsset: async (photo) => await loadExportImageAsset(photo, 'pptx_light'),
       resolveCommentLines,
       buildFooterText,
+      i18n,
     });
   } else {
     const pptx = await buildExportPresentation({
@@ -3908,6 +3920,7 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
       resolveImage: resolvePptImage,
       resolveCommentLines,
       buildFooterText,
+      i18n,
     });
     exportBuffer = await pptx.write({ outputType: 'nodebuffer' });
   }

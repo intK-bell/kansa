@@ -207,6 +207,7 @@ Resources:
           - x-user-key
           - x-user-name
           - x-folder-password
+          - x-kansa-language
         AllowMethods:
           - GET
           - POST

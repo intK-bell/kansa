@@ -20,6 +20,15 @@ const COGNITO_CLIENT_ID =
   window.localStorage.getItem('kansa_cognito_client_id') || APP_CONFIG.cognitoClientId || '';
 const COGNITO_REDIRECT_URI =
   APP_CONFIG.cognitoRedirectUri || window.localStorage.getItem('kansa_cognito_redirect_uri') || window.location.origin;
+const I18N = window.KANSA_I18N || null;
+const t = (key) => (I18N && typeof I18N.t === 'function' ? I18N.t(key) : key);
+const tf = (key, values = {}) =>
+  I18N && typeof I18N.format === 'function'
+    ? I18N.format(key, values)
+    : String(key).replace(/\{([a-zA-Z0-9_]+)\}/g, (match, name) =>
+        Object.prototype.hasOwnProperty.call(values, name) ? String(values[name]) : match
+      );
+const appLocale = I18N?.language || 'ja-JP';
 
 const state = {
   userKey: null,
@@ -209,7 +218,7 @@ function base64UrlEncode(bytes) {
 
 async function startLogin() {
   if (!hasCognitoConfig()) {
-    throw new Error('Cognito設定が不足しています。config.jsを確認してください。');
+    throw new Error(t('Cognito設定が不足しています。config.jsを確認してください。'));
   }
   const stateVal = randomString(32);
   localStorage.setItem('kansa_oauth_state', stateVal);
@@ -235,7 +244,7 @@ async function startLogin() {
 
 async function startSignup() {
   if (!hasCognitoConfig()) {
-    throw new Error('Cognito設定が不足しています。config.jsを確認してください。');
+    throw new Error(t('Cognito設定が不足しています。config.jsを確認してください。'));
   }
   const stateVal = randomString(32);
   localStorage.setItem('kansa_oauth_state', stateVal);
@@ -292,11 +301,11 @@ async function completeLoginFromCallback() {
   );
   if (!tokenRes.ok) {
     const text = await tokenRes.text();
-    throw new Error(`Cognitoトークン取得失敗: ${text || tokenRes.status}`);
+    throw new Error(tf('Cognitoトークン取得失敗: {message}', { message: text || tokenRes.status }));
   }
   const tokenJson = await tokenRes.json();
   if (!tokenJson.id_token) {
-    throw new Error('Cognitoトークンが取得できませんでした。');
+    throw new Error(t('Cognitoトークンが取得できませんでした。'));
   }
   localStorage.setItem('kansa_id_token', tokenJson.id_token);
   localStorage.removeItem('kansa_oauth_state');
@@ -494,8 +503,8 @@ function closeExportOptionsModal() {
   }
 }
 
-function openExportLoadingModal(message = 'ダウンロードを開始しています...') {
-  if (els.exportLoadingTitle) els.exportLoadingTitle.textContent = '出力中';
+function openExportLoadingModal(message = t('ダウンロードを開始しています...')) {
+  if (els.exportLoadingTitle) els.exportLoadingTitle.textContent = t('出力中');
   if (els.exportLoadingText) els.exportLoadingText.textContent = message;
   if (els.exportLoadingBar) {
     els.exportLoadingBar.style.width = '0%';
@@ -531,9 +540,11 @@ function updateExportLoadingProgress(loaded, total) {
   }
   if (els.exportLoadingText) {
     if (total > 0) {
-      els.exportLoadingText.textContent = `PDFをダウンロード中... ${Math.round((loaded / total) * 100)}%`;
+      els.exportLoadingText.textContent = tf('PDFをダウンロード中... {percent}%', {
+        percent: Math.round((loaded / total) * 100),
+      });
     } else {
-      els.exportLoadingText.textContent = `PDFをダウンロード中... ${Math.round(loaded / 1024)}KB`;
+      els.exportLoadingText.textContent = tf('PDFをダウンロード中... {kb}KB', { kb: Math.round(loaded / 1024) });
     }
   }
 }
@@ -566,7 +577,7 @@ function markExportLoadingDownloadReady() {
     els.exportLoadingBar.style.width = '60%';
   }
   if (els.exportLoadingText) {
-    els.exportLoadingText.textContent = 'PDFのダウンロードを開始しています...';
+    els.exportLoadingText.textContent = t('PDFのダウンロードを開始しています...');
   }
 }
 
@@ -588,8 +599,10 @@ function showExportReadyActions({ formatLabel, downloadUrl, fileName = '', objec
     fileName,
     objectUrl,
   };
-  if (els.exportLoadingTitle) els.exportLoadingTitle.textContent = '生成完了';
-  if (els.exportLoadingText) els.exportLoadingText.textContent = `${formatLabel} の生成が完了しました。操作を選んでください。`;
+  if (els.exportLoadingTitle) els.exportLoadingTitle.textContent = t('生成完了');
+  if (els.exportLoadingText) {
+    els.exportLoadingText.textContent = tf('{formatLabel} の生成が完了しました。操作を選んでください。', { formatLabel });
+  }
   if (els.exportLoadingBar) els.exportLoadingBar.style.width = '100%';
   if (els.exportLoadingActions) els.exportLoadingActions.classList.remove('hidden');
   if (els.exportLoadingCloseBtn) els.exportLoadingCloseBtn.classList.remove('hidden');
@@ -619,8 +632,12 @@ function openExportInNewTab() {
 async function copyExportLink() {
   if (!exportResult?.downloadUrl) return;
   await navigator.clipboard.writeText(exportResult.downloadUrl);
-  if (els.exportLoadingText) els.exportLoadingText.textContent = `${exportResult.formatLabel} のリンクをコピーしました。`;
-  showToast('リンクをコピーしました。');
+  if (els.exportLoadingText) {
+    els.exportLoadingText.textContent = tf('{formatLabel} のリンクをコピーしました。', {
+      formatLabel: exportResult.formatLabel,
+    });
+  }
+  showToast(t('リンクをコピーしました。'));
 }
 
 function triggerBlobDownload(blob, fileName) {
@@ -659,7 +676,7 @@ function closePhotoPreviewModal() {
     els.photoPreviewImage.removeAttribute('src');
   }
   if (els.photoPreviewTitle) {
-    els.photoPreviewTitle.textContent = '写真全体表示';
+    els.photoPreviewTitle.textContent = t('写真全体表示');
   }
 }
 
@@ -668,9 +685,9 @@ function openPhotoPreview(photo) {
   const imageUrl = photo?.viewUrl || photo?.previewUrl || '';
   if (!imageUrl) return;
   els.photoPreviewImage.src = imageUrl;
-  els.photoPreviewImage.alt = photo?.fileName || photo?.originalName || photo?.photoId || '写真プレビュー';
+  els.photoPreviewImage.alt = photo?.fileName || photo?.originalName || photo?.photoId || t('写真プレビュー');
   if (els.photoPreviewTitle) {
-    els.photoPreviewTitle.textContent = photo?.fileName || photo?.originalName || photo?.photoCode || '写真全体表示';
+    els.photoPreviewTitle.textContent = photo?.fileName || photo?.originalName || photo?.photoCode || t('写真全体表示');
   }
   els.photoPreviewModal.classList.remove('hidden');
 }
@@ -703,13 +720,13 @@ function renderDeveloperSummary(data) {
   els.developerSummary.innerHTML = '';
   const metrics = el('div', { class: 'developer-metrics' });
   [
-    ['全ユーザー', totals.users || 0],
-    ['管理者', totals.admins || 0],
-    ['お部屋メンバー', totals.activeRoomMembers || 0],
-    ['フォルダメンバー', totals.folderMembers || 0],
-    ['お部屋', totals.rooms || 0],
-    ['フォルダ', totals.folders || 0],
-    ['総容量', formatBytes(totals.usageBytes || 0)],
+    [t('全ユーザー'), totals.users || 0],
+    [t('管理者'), totals.admins || 0],
+    [t('お部屋メンバー'), totals.activeRoomMembers || 0],
+    [t('フォルダメンバー'), totals.folderMembers || 0],
+    [t('お部屋'), totals.rooms || 0],
+    [t('フォルダ'), totals.folders || 0],
+    [t('総容量'), formatBytes(totals.usageBytes || 0)],
   ].forEach(([label, value]) => {
     const item = el('div', { class: 'developer-metric' });
     item.appendChild(el('span', {}, label));
@@ -719,15 +736,25 @@ function renderDeveloperSummary(data) {
   els.developerSummary.appendChild(metrics);
 
   const planBox = el('div', { class: 'developer-section' });
-  planBox.appendChild(el('h4', {}, '有料プラン内訳'));
+  planBox.appendChild(el('h4', {}, t('有料プラン内訳')));
   if (!plans.length) {
-    planBox.appendChild(el('p', { class: 'muted' }, '有料プランのお部屋はまだありません。'));
+    planBox.appendChild(el('p', { class: 'muted' }, t('有料プランのお部屋はまだありません。')));
   } else {
     const list = el('div', { class: 'developer-plan-list' });
     plans.forEach((plan) => {
       const row = el('div', { class: 'developer-plan-row' });
       row.appendChild(el('span', {}, plan.label || plan.plan));
-      row.appendChild(el('strong', {}, `${plan.count || 0}件 / 有料内 ${plan.percent || 0}% / 全体 ${plan.percentOfAllRooms || 0}%`));
+      row.appendChild(
+        el(
+          'strong',
+          {},
+          tf('{count}件 / 有料内 {paidPercent}% / 全体 {totalPercent}%', {
+            count: plan.count || 0,
+            paidPercent: plan.percent || 0,
+            totalPercent: plan.percentOfAllRooms || 0,
+          })
+        )
+      );
       list.appendChild(row);
     });
     planBox.appendChild(list);
@@ -735,13 +762,13 @@ function renderDeveloperSummary(data) {
   els.developerSummary.appendChild(planBox);
 
   const roomBox = el('div', { class: 'developer-section' });
-  roomBox.appendChild(el('h4', {}, 'お部屋と容量'));
+  roomBox.appendChild(el('h4', {}, t('お部屋と容量')));
   const tableWrap = el('div', { class: 'developer-table-wrap' });
   const table = el('table', { class: 'developer-table' });
   const thead = el('thead');
   const headRow = el('tr');
   ['お部屋', '容量', 'フォルダ', 'お部屋メンバー', 'フォルダメンバー', 'メンバー（合計）', 'プラン', '作成者'].forEach((label) => {
-    headRow.appendChild(el('th', {}, label));
+    headRow.appendChild(el('th', {}, t(label)));
   });
   thead.appendChild(headRow);
   table.appendChild(thead);
@@ -760,7 +787,7 @@ function renderDeveloperSummary(data) {
   });
   if (!rooms.length) {
     const row = el('tr');
-    const cell = el('td', { colspan: '8', class: 'muted' }, 'お部屋がありません。');
+    const cell = el('td', { colspan: '8', class: 'muted' }, t('お部屋がありません。'));
     row.appendChild(cell);
     tbody.appendChild(row);
   }
@@ -768,7 +795,9 @@ function renderDeveloperSummary(data) {
   tableWrap.appendChild(table);
   roomBox.appendChild(tableWrap);
   if (data?.generatedAt) {
-    roomBox.appendChild(el('p', { class: 'muted developer-generated-at' }, `更新: ${formatJstDateTime(data.generatedAt)}`));
+    roomBox.appendChild(
+      el('p', { class: 'muted developer-generated-at' }, tf('更新: {datetime}', { datetime: formatJstDateTime(data.generatedAt) }))
+    );
   }
   els.developerSummary.appendChild(roomBox);
 }
@@ -777,14 +806,14 @@ async function openDeveloperDashboard() {
   if (!state.isDeveloper || !els.developerModal || !els.developerSummary) return;
   closeMenu();
   els.developerSummary.innerHTML = '';
-  els.developerSummary.appendChild(el('p', { class: 'muted' }, '読み込み中...'));
+  els.developerSummary.appendChild(el('p', { class: 'muted' }, t('読み込み中...')));
   els.developerModal.classList.remove('hidden');
   try {
     const data = await api('/developer/summary', { method: 'GET' });
     renderDeveloperSummary(data);
   } catch (error) {
     els.developerSummary.innerHTML = '';
-    els.developerSummary.appendChild(el('p', { class: 'muted' }, `取得失敗: ${asMessage(error)}`));
+    els.developerSummary.appendChild(el('p', { class: 'muted' }, tf('取得失敗: {message}', { message: asMessage(error) })));
   }
 }
 
@@ -825,7 +854,7 @@ function openThemeModal() {
 function openFolderPasswordModal() {
   if (!els.folderPasswordModal) return;
   if (!state.selectedFolder) {
-    window.alert('先にフォルダを選択してください。');
+    window.alert(t('先にフォルダを選択してください。'));
     return;
   }
   if (els.folderPasswordTargetName) {
@@ -846,21 +875,21 @@ function openExportOptionsModal() {
 
 function renderCurrentRoomHeader() {
   if (els.currentRoomName) {
-    els.currentRoomName.textContent = state.roomName || '未選択';
+    els.currentRoomName.textContent = state.roomName || t('未選択');
   }
 }
 
 async function requestFolderExport(format) {
   if (!state.selectedFolder) {
-    window.alert('先にフォルダを選択してください。');
+    window.alert(t('先にフォルダを選択してください。'));
     return;
   }
-  const formatLabel = format === 'pdf' ? 'PDF' : format === 'pptx_light' ? '軽量PPT' : '高画質PPT';
-  const confirmed = window.confirm(`${formatLabel}で出力します。よろしいですか？`);
+  const formatLabel = format === 'pdf' ? 'PDF' : format === 'pptx_light' ? t('軽量PPT') : t('高画質PPT');
+  const confirmed = window.confirm(tf('{formatLabel}で出力します。よろしいですか？', { formatLabel }));
   if (!confirmed) return;
   const isPdf = format === 'pdf';
-  const formatLabelText = format === 'pdf' ? 'PDF' : format === 'pptx_light' ? '軽量PPT' : '高画質PPT';
-  openExportLoadingModal(`${formatLabelText} を生成しています...`);
+  const formatLabelText = format === 'pdf' ? 'PDF' : format === 'pptx_light' ? t('軽量PPT') : t('高画質PPT');
+  openExportLoadingModal(tf('{formatLabel} を生成しています...', { formatLabel: formatLabelText }));
   startExportLoadingProgress();
   try {
     const folderId = state.selectedFolder.folderId;
@@ -873,7 +902,7 @@ async function requestFolderExport(format) {
       markExportLoadingDownloadReady();
       try {
         const pdfRes = await fetch(res.downloadUrl);
-        if (!pdfRes.ok) throw new Error(`PDFダウンロード失敗(${pdfRes.status})`);
+        if (!pdfRes.ok) throw new Error(tf('PDFダウンロード失敗({status})', { status: pdfRes.status }));
         const fileName = downloadFileNameFromResponse(pdfRes);
         const total = Number(pdfRes.headers.get('content-length') || 0);
         if (!pdfRes.body || typeof pdfRes.body.getReader !== 'function') {
@@ -1005,24 +1034,30 @@ function currentFolderLimit() {
 function folderUsageSummary() {
   const count = Array.isArray(state.folders) ? state.folders.length : 0;
   const limit = currentFolderLimit();
-  return limit === null ? `フォルダ ${count} / 無制限` : `フォルダ ${count} / ${limit}`;
+  return limit === null
+    ? tf('フォルダ {count} / 無制限', { count })
+    : tf('フォルダ {count} / {limit}', { count, limit });
 }
 
 function freePlanGuideText() {
   const limit = currentFolderLimit();
   return limit === null
-    ? '1GB〜10GBプラン: フォルダ無制限 / 3年保存 / PPT透かしなし'
-    : 'フリープラン: フォルダ2個 / 30日保存 / PPT透かしあり';
+    ? t('1GB〜10GBプラン: フォルダ無制限 / 3年保存 / PPT透かしなし')
+    : t('フリープラン: フォルダ2個 / 30日保存 / PPT透かしあり');
 }
 
 function freePlanRequirementDialogText(constraints = {}) {
-  const lines = ['フリープランへの切り替えは、以下を満たす必要があります。', '・容量が512MB未満', '・フォルダの数が2つ以下'];
+  const lines = [
+    t('フリープランへの切り替えは、以下を満たす必要があります。'),
+    t('・容量が512MB未満'),
+    t('・フォルダの数が2つ以下'),
+  ];
   const unmet = Array.isArray(constraints.unmet) ? constraints.unmet : [];
   if (unmet.includes('usageBytes')) {
-    lines.push(`・現在の容量: ${formatBytes(Number(constraints.usageBytes || 0))}`);
+    lines.push(tf('・現在の容量: {size}', { size: formatBytes(Number(constraints.usageBytes || 0)) }));
   }
   if (unmet.includes('folderCount')) {
-    lines.push(`・現在のフォルダ数: ${Number(constraints.folderCount || 0)}`);
+    lines.push(tf('・現在のフォルダ数: {count}', { count: Number(constraints.folderCount || 0) }));
   }
   return lines.join('\n');
 }
@@ -1034,7 +1069,10 @@ function renderPhotoArchiveNote() {
     els.photoArchiveNote.textContent = '';
     return;
   }
-  els.photoArchiveNote.textContent = `${archived.archivedCount}件の写真は${archived.archiveDays || 30}日保存後にアーカイブされ、現在は非表示です。アーカイブ済みデータも容量に含まれます。有料プランにすると再表示されます。`;
+  els.photoArchiveNote.textContent = tf(
+    '{count}件の写真は{days}日保存後にアーカイブされ、現在は非表示です。アーカイブ済みデータも容量に含まれます。有料プランにすると再表示されます。',
+    { count: archived.archivedCount, days: archived.archiveDays || 30 }
+  );
 }
 
 function storagePromptKey() {
@@ -1076,10 +1114,10 @@ function renderTopStorageGraph() {
   els.billingGraphTopUsed.style.width = `${stats.usedRatio}%`;
   els.billingGraphTopRemaining.style.width = `${stats.remainRatio}%`;
   if (els.billingGraphTopUsedLabel) {
-    els.billingGraphTopUsedLabel.textContent = `使用量 ${formatBytes(stats.usageBytes)}`;
+    els.billingGraphTopUsedLabel.textContent = tf('使用量 {size}', { size: formatBytes(stats.usageBytes) });
   }
   if (els.billingGraphTopRemainLabel) {
-    els.billingGraphTopRemainLabel.textContent = `残り ${formatBytes(stats.freeRemainBytes)}`;
+    els.billingGraphTopRemainLabel.textContent = tf('残り {size}', { size: formatBytes(stats.freeRemainBytes) });
   }
   if (els.billingGraphTopExtraLabel) {
     els.billingGraphTopExtraLabel.textContent = folderUsageSummary();
@@ -1103,13 +1141,13 @@ function renderBillingBar() {
   const plan = String(b?.subscription?.currentPlan || 'FREE').toUpperCase();
 
   const parts = [];
-  parts.push(`プラン:${planToDisplayLabel(plan)}`);
+  parts.push(tf('プラン:{plan}', { plan: planToDisplayLabel(plan) }));
   if (state.ownerUserKey && state.userKey) {
-    parts.push(state.ownerUserKey === state.userKey ? '作成者' : '参加者');
+    parts.push(state.ownerUserKey === state.userKey ? t('作成者') : t('参加者'));
   }
-  if (blocked) parts.push('アップロード停止中（残量不足）');
-  if (!blocked && plan === 'FREE' && freeRemainBytes > 0) parts.push('無料枠で利用中');
-  if (state.isAdmin) parts.push('管理者');
+  if (blocked) parts.push(t('アップロード停止中（残量不足）'));
+  if (!blocked && plan === 'FREE' && freeRemainBytes > 0) parts.push(t('無料枠で利用中'));
+  if (state.isAdmin) parts.push(t('管理者'));
 
   renderTopStorageGraph();
   els.billingBar.textContent = parts.join(' / ');
@@ -1138,10 +1176,10 @@ function renderStorageGraph() {
   els.billingGraphUsed.style.width = `${stats.usedRatio}%`;
   els.billingGraphRemaining.style.width = `${stats.remainRatio}%`;
   if (els.billingGraphUsedLabel) {
-    els.billingGraphUsedLabel.textContent = `使用量 ${formatBytes(stats.usageBytes)}`;
+    els.billingGraphUsedLabel.textContent = tf('使用量 {size}', { size: formatBytes(stats.usageBytes) });
   }
   if (els.billingGraphRemainLabel) {
-    els.billingGraphRemainLabel.textContent = `残り ${formatBytes(stats.freeRemainBytes)}`;
+    els.billingGraphRemainLabel.textContent = tf('残り {size}', { size: formatBytes(stats.freeRemainBytes) });
   }
   els.billingGraph.classList.remove('hidden');
 }
@@ -1151,19 +1189,19 @@ function syncSubscriptionPlanButtons() {
   const currentPlan = String(state.billing?.subscription?.currentPlan || 'FREE').toUpperCase();
   const isFreeCurrent = mode !== 'subscription' || currentPlan === 'FREE';
   if (els.subscribeFreeBtn) {
-    els.subscribeFreeBtn.textContent = isFreeCurrent ? 'フリープランに戻る（現在のプラン）' : 'フリープランに戻る';
+    els.subscribeFreeBtn.textContent = isFreeCurrent ? t('フリープランに戻る（現在のプラン）') : t('フリープランに戻る');
     els.subscribeFreeBtn.disabled = isFreeCurrent;
     els.subscribeFreeBtn.setAttribute('aria-pressed', isFreeCurrent ? 'true' : 'false');
   }
   const planButtons = [
-    { plan: 'BASIC', button: els.subscribeBasicBtn, label: '1GBプラン (¥980/月)' },
-    { plan: 'PLUS', button: els.subscribePlusBtn, label: '5GBプラン (¥1,980/月)' },
-    { plan: 'PRO', button: els.subscribeProBtn, label: '10GBプラン (¥2,980/月)' },
+    { plan: 'BASIC', button: els.subscribeBasicBtn, label: t('1GBプラン (¥980/月)') },
+    { plan: 'PLUS', button: els.subscribePlusBtn, label: t('5GBプラン (¥1,980/月)') },
+    { plan: 'PRO', button: els.subscribeProBtn, label: t('10GBプラン (¥2,980/月)') },
   ];
   planButtons.forEach(({ plan, button, label }) => {
     if (!button) return;
     const isCurrent = mode === 'subscription' && currentPlan === plan;
-    button.textContent = isCurrent ? `${label}（現在のプラン）` : label;
+    button.textContent = isCurrent ? tf('{label}（現在のプラン）', { label }) : label;
     button.disabled = isCurrent;
     button.setAttribute('aria-pressed', isCurrent ? 'true' : 'false');
   });
@@ -1183,9 +1221,10 @@ function maybePromptLowStorage() {
   if (localStorage.getItem(key) === '1') return;
   if (els.lowStorageMessage) {
     const plan = String(state.billing?.subscription?.currentPlan || 'FREE').toUpperCase();
-    els.lowStorageMessage.textContent = `容量を追加しますか？（現在の残り: ${formatBytes(
-      stats.freeRemainBytes
-    )} / 現在プラン: ${planToDisplayLabel(plan)}）`;
+    els.lowStorageMessage.textContent = tf('容量を追加しますか？（現在の残り: {remain} / 現在プラン: {plan}）', {
+      remain: formatBytes(stats.freeRemainBytes),
+      plan: planToDisplayLabel(plan),
+    });
   }
   els.lowStorageModal.classList.remove('hidden');
   localStorage.setItem(key, '1');
@@ -1248,16 +1287,16 @@ async function ensureDisplayName() {
   }
 
   while (true) {
-    const next = window.prompt('表示名を入力してください。メニューからいつでも変更可能です。');
+    const next = window.prompt(t('表示名を入力してください。メニューからいつでも変更可能です。'));
     if (next === null) continue;
     const displayName = next.trim();
     if (!displayName) {
-      window.alert('表示名は必須です。');
+      window.alert(t('表示名は必須です。'));
       continue;
     }
     await saveDisplayName(displayName);
     state.userName = displayName;
-    showToast('表示名を設定しました。');
+    showToast(t('表示名を設定しました。'));
     return;
   }
 }
@@ -1267,7 +1306,7 @@ function setUploadLoading(isLoading) {
   if (els.uploadBtn) {
     els.uploadBtn.disabled = isLoading;
     els.uploadBtn.classList.toggle('is-loading', isLoading);
-    els.uploadBtn.textContent = isLoading ? 'アップロード中...' : 'アップロード';
+    els.uploadBtn.textContent = isLoading ? t('アップロード中...') : t('アップロード');
   }
   if (els.photoFiles) {
     els.photoFiles.disabled = isLoading;
@@ -1349,12 +1388,12 @@ function validateUploadDrafts() {
     const photoName = String(draft.photoName || '').trim();
     const initialComment = String(draft.initialComment || '').trim();
     if (!photoName) {
-      errors.push(`${index + 1}行目: 写真名は必須です。`);
+      errors.push(tf('{row}行目: 写真名は必須です。', { row: index + 1 }));
     } else if (photoName.length > 20) {
-      errors.push(`${index + 1}行目: 写真名は20文字以内にしてください。`);
+      errors.push(tf('{row}行目: 写真名は20文字以内にしてください。', { row: index + 1 }));
     }
     if (initialComment.length > 50) {
-      errors.push(`${index + 1}行目: 初回コメントは50文字以内にしてください。`);
+      errors.push(tf('{row}行目: 初回コメントは50文字以内にしてください。', { row: index + 1 }));
     }
   });
   return errors;
@@ -1373,7 +1412,9 @@ function renderUploadDrafts() {
     return;
   }
 
-  els.uploadMetaStatus.textContent = `${state.uploadDrafts.length}件の写真をアップロード対象に追加しています。`;
+  els.uploadMetaStatus.textContent = tf('{count}件の写真をアップロード対象に追加しています。', {
+    count: state.uploadDrafts.length,
+  });
   state.uploadDrafts.forEach((draft, index) => {
     const row = el('div', { class: 'upload-draft-row', 'data-draft-id': draft.localId });
     const head = el('div', { class: 'upload-draft-head' });
@@ -1382,7 +1423,7 @@ function renderUploadDrafts() {
     headActions.appendChild(el('span', { class: 'muted' }, `${formatBytes(draft.file.size || 0)}`));
     const removeBtn = el(
       'button',
-      { class: 'icon-btn danger upload-draft-remove', type: 'button', title: 'この写真を除外' },
+      { class: 'icon-btn danger upload-draft-remove', type: 'button', title: t('この写真を除外') },
       '✕'
     );
     removeBtn.addEventListener('click', () => {
@@ -1410,7 +1451,7 @@ function renderUploadDrafts() {
     });
     thumb.tabIndex = 0;
     thumb.setAttribute('role', 'button');
-    thumb.setAttribute('aria-label', `${draft.originalName || `draft-${index + 1}`} を全体表示`);
+    thumb.setAttribute('aria-label', tf('{name} を全体表示', { name: draft.originalName || `draft-${index + 1}` }));
     thumb.addEventListener('error', () => {
       thumb.classList.add('hidden');
     });
@@ -1419,13 +1460,13 @@ function renderUploadDrafts() {
     const grid = el('div', { class: 'upload-draft-grid' });
 
     const nameField = el('label', { class: 'upload-draft-field' });
-    nameField.appendChild(el('span', { class: 'upload-draft-label' }, '写真名'));
+    nameField.appendChild(el('span', { class: 'upload-draft-label' }, t('写真名')));
     const nameInput = el('input', {
       class: 'js-upload-draft-name',
       type: 'text',
       maxlength: '20',
       value: draft.photoName,
-      placeholder: '写真名',
+      placeholder: t('写真名'),
     });
     const syncName = (event) => {
       draft.photoName = String(event.target.value || '').slice(0, 20);
@@ -1436,12 +1477,12 @@ function renderUploadDrafts() {
     grid.appendChild(nameField);
 
     const commentField = el('label', { class: 'upload-draft-field' });
-    commentField.appendChild(el('span', { class: 'upload-draft-label' }, '初回コメント'));
+    commentField.appendChild(el('span', { class: 'upload-draft-label' }, t('初回コメント')));
     const commentInput = el('textarea', {
       class: 'js-upload-draft-comment',
       rows: '2',
       maxlength: '50',
-      placeholder: '初回コメント（任意）',
+      placeholder: t('初回コメント（任意）'),
     });
     commentInput.value = draft.initialComment || '';
     const syncComment = (event) => {
@@ -1462,10 +1503,10 @@ function applyBulkComment() {
   syncUploadDraftsFromDom();
   const nextComment = String(state.uploadDrafts[0]?.initialComment || '').slice(0, 50);
   if (!nextComment) {
-    window.alert('1つ目のコメントを先に入力してください。');
+    window.alert(t('1つ目のコメントを先に入力してください。'));
     return;
   }
-  if (!window.confirm('1つ目のコメントを全件に反映してよかですか？既存入力は上書きされます。')) return;
+  if (!window.confirm(t('1つ目のコメントを全件に反映してよかですか？既存入力は上書きされます。'))) return;
   state.uploadDrafts.forEach((draft) => {
     draft.initialComment = nextComment;
   });
@@ -1477,10 +1518,10 @@ function applySequencedPhotoNames() {
   syncUploadDraftsFromDom();
   const baseName = String(state.uploadDrafts[0]?.photoName || '').trim();
   if (!baseName) {
-    window.alert('1行目の写真名を先に入力してください。');
+    window.alert(t('1行目の写真名を先に入力してください。'));
     return;
   }
-  if (!window.confirm('1つ目の写真名を連番で反映してよかですか？既存入力は上書きされます。')) return;
+  if (!window.confirm(t('1つ目の写真名を連番で反映してよかですか？既存入力は上書きされます。'))) return;
   const suffixLength = 4;
   const baseForSequence = baseName.slice(0, Math.max(0, 20 - suffixLength));
   state.uploadDrafts.forEach((draft, index) => {
@@ -1491,7 +1532,7 @@ function applySequencedPhotoNames() {
 
 function cancelUploadDrafts() {
   if (!state.uploadDrafts.length) return;
-  if (!window.confirm('選択した写真と入力内容を破棄してよかですか？')) return;
+  if (!window.confirm(t('選択した写真と入力内容を破棄してよかですか？'))) return;
   clearUploadDrafts();
 }
 
@@ -1507,7 +1548,7 @@ function safeAction(fn, label) {
       clearError();
       await fn(...args);
     } catch (error) {
-      showError(`${label}失敗: ${asMessage(error)}`);
+      showError(tf('{label}失敗: {message}', { label: t(label || '処理'), message: asMessage(error) }));
       console.error(error);
     }
   };
@@ -1531,9 +1572,9 @@ function planToProductLabel(plan) {
 function planToDisplayLabel(plan) {
   const v = String(plan || '').trim().toUpperCase();
   const product = planToProductLabel(v);
-  if (product) return `${product}プラン`;
-  if (v === 'FREE') return '無料プラン';
-  return v || '不明';
+  if (product) return tf('{product}プラン', { product });
+  if (v === 'FREE') return t('無料プラン');
+  return v || t('不明');
 }
 
 function clearPurchaseParamsFromUrl() {
@@ -1579,7 +1620,7 @@ async function handleStripePurchaseReturn() {
       if (currentPlan === String(plan).toUpperCase()) {
         await loadTeamMe();
         await loadAdminPanel();
-        showToast(`プランを${label}へ更新しました。`);
+        showToast(tf('プランを{label}へ更新しました。', { label }));
         clearPurchaseParamsFromUrl();
         return;
       }
@@ -1591,7 +1632,7 @@ async function handleStripePurchaseReturn() {
 
   // Timed out. Don't loop on refresh.
   clearPurchaseParamsFromUrl();
-  showToast('決済反映に少し時間がかかっとるばい。しばらくしてプラン表示ば確認してね。');
+  showToast(t('決済反映に少し時間がかかっとるばい。しばらくしてプラン表示ば確認してね。'));
 }
 
 function preserveCurrentView(photoId) {
@@ -1608,7 +1649,7 @@ async function initUser() {
   if (els.globalMenuWrap) els.globalMenuWrap.classList.add('hidden');
   if (!hasCognitoConfig()) {
     showAuthSetup();
-    showError('Cognito設定が不足しています。config.jsにdomain/clientId/regionを設定してください。');
+    showError(t('Cognito設定が不足しています。config.jsにdomain/clientId/regionを設定してください。'));
     return;
   }
 
@@ -1640,10 +1681,10 @@ async function initUser() {
         url.searchParams.delete('invite');
         window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
         showApp();
-        showToast('お部屋に参加しました。');
+        showToast(t('お部屋に参加しました。'));
         return;
       } catch (error) {
-        showError(`招待URLの処理に失敗しました: ${asMessage(error)}`);
+        showError(tf('招待URLの処理に失敗しました: {message}', { message: asMessage(error) }));
         // The token may be expired/invalid; avoid retry loops.
         localStorage.removeItem('kansa_pending_invite');
         // Fall through to normal room discovery/setup.
@@ -1693,17 +1734,17 @@ function renderMyRooms(items, activeRoomId) {
   // Hide "left" rooms; they require a new invite to re-join anyway.
   const rooms = (items || []).filter((r) => r && r.roomId && r.roomName && r.memberStatus !== 'left');
   if (!rooms.length) {
-    els.myRoomsList.textContent = '入室可能なお部屋がありません';
+    els.myRoomsList.textContent = t('入室可能なお部屋がありません');
     return;
   }
   els.myRoomsList.innerHTML = '';
   rooms.forEach((r) => {
     const row = el('div', { class: 'room-row' });
     const ms = String(r.memberStatus || 'active').toLowerCase();
-    const suffix = r.roomId === activeRoomId ? '（参加中）' : ms === 'disabled' ? '（停止中）' : '';
-    const ownerLabel = String(r.role || 'member').toLowerCase() === 'admin' ? '作成者: 自分' : '作成者: 別ユーザ';
+    const suffix = r.roomId === activeRoomId ? t('（参加中）') : ms === 'disabled' ? t('（停止中）') : '';
+    const ownerLabel = String(r.role || 'member').toLowerCase() === 'admin' ? t('作成者: 自分') : t('作成者: 別ユーザ');
     const label = el('div', { style: 'flex:1;' }, `${r.roomName}${suffix} / ${ownerLabel}`);
-    const btnLabel = r.roomId === activeRoomId ? '入室中' : ms === 'disabled' ? '停止中' : 'この部屋へ';
+    const btnLabel = r.roomId === activeRoomId ? t('入室中') : ms === 'disabled' ? t('停止中') : t('この部屋へ');
     const btn = el('button', { type: 'button' }, btnLabel);
     btn.disabled = r.roomId === activeRoomId || ms === 'disabled';
     btn.onclick = safeAction(async () => {
@@ -1720,7 +1761,7 @@ function renderRoomSelect() {
   els.currentRoomSelect.innerHTML = '';
 
   if (!state.availableRooms.length) {
-    const empty = el('option', { value: '' }, 'お部屋がありません');
+    const empty = el('option', { value: '' }, t('お部屋がありません'));
     els.currentRoomSelect.appendChild(empty);
     els.currentRoomSelect.value = '';
     els.currentRoomSelect.disabled = true;
@@ -1731,7 +1772,7 @@ function renderRoomSelect() {
     const option = el('option', { value: room.roomId }, room.roomName);
     if (String(room.memberStatus || '').toLowerCase() === 'disabled') {
       option.disabled = true;
-      option.textContent = `${room.roomName}（停止中）`;
+      option.textContent = tf('{roomName}（停止中）', { roomName: room.roomName });
     }
     els.currentRoomSelect.appendChild(option);
   });
@@ -1747,7 +1788,7 @@ function renderRoomSelect() {
 async function loadMyRooms() {
   if (!state.idToken) return;
   if (els.myRoomsList) {
-    els.myRoomsList.textContent = '読み込み中...';
+    els.myRoomsList.textContent = t('読み込み中...');
   }
   const res = await api('/rooms/mine', { method: 'GET' });
   state.availableRooms = (res.items || []).filter((room) => room && room.roomId && room.roomName && room.memberStatus !== 'left');
@@ -1783,12 +1824,14 @@ async function showOwnerDeleteGuard(ownedRoom) {
     (state.roomName && String(state.roomName) === String(ownedRoom?.roomName || ''));
 
   if (isCurrentOwnedRoom) {
-    window.alert('作成者は先に「このお部屋を削除（全データ）」を実行してください。');
+    window.alert(t('作成者は先に「このお部屋を削除（全データ）」を実行してください。'));
     return;
   }
 
   const ok = window.confirm(
-    `作成者は先に「お部屋を削除（全データ）」を実行してください。\n「${ownedRoom?.roomName || '自分の部屋'}」へ移動しますか？`
+    tf('作成者は先に「お部屋を削除（全データ）」を実行してください。\n「{roomName}」へ移動しますか？', {
+      roomName: ownedRoom?.roomName || t('自分の部屋'),
+    })
   );
   if (!ok) return;
 
@@ -1797,7 +1840,7 @@ async function showOwnerDeleteGuard(ownedRoom) {
   resetRoomContext();
   state.roomName = ownedRoom.roomName;
   showApp();
-  showToast(`「${ownedRoom.roomName}」へ移動しました。`);
+  showToast(tf('「{roomName}」へ移動しました。', { roomName: ownedRoom.roomName }));
 }
 
 function showApp() {
@@ -1822,12 +1865,14 @@ function showApp() {
 function headers(method = 'GET') {
   const upper = String(method || 'GET').toUpperCase();
   const authHeader = state.idToken ? { Authorization: `Bearer ${state.idToken}` } : {};
+  const languageHeader = I18N?.language ? { 'x-kansa-language': I18N.language } : {};
   // Room headers are deprecated. Room is inferred from membership (/team/me, invite accept).
   const roomHeaders = {};
-  if (upper === 'GET') return { ...authHeader, ...roomHeaders };
+  if (upper === 'GET') return { ...authHeader, ...languageHeader, ...roomHeaders };
   const safeUserName = encodeURIComponent(state.userName || 'unknown');
   return {
     ...authHeader,
+    ...languageHeader,
     'content-type': 'application/json',
     'x-user-key': state.userKey,
     'x-user-name': safeUserName,
@@ -1854,7 +1899,7 @@ async function api(path, options = {}) {
       },
     });
   } catch (error) {
-    throw new Error(`ネットワークエラー: ${asMessage(error)}`);
+    throw new Error(tf('ネットワークエラー: {message}', { message: asMessage(error) }));
   }
 
   if (!res.ok) {
@@ -1894,7 +1939,11 @@ async function loadTeamMe() {
     state.ownerUserKey = data.ownerUserKey || null;
   } catch (error) {
     // Keep the UI usable, but don't hide the failure.
-    showError(`チーム情報取得失敗: ${asMessage(error)}（バックエンド/フロントのデプロイ差分やキャッシュの可能性）`);
+    showError(
+      tf('チーム情報取得失敗: {message}（バックエンド/フロントのデプロイ差分やキャッシュの可能性）', {
+        message: asMessage(error),
+      })
+    );
     state.teamRole = null;
     state.roomId = null;
     state.isAdmin = false;
@@ -1920,7 +1969,7 @@ async function loadAdminPanel() {
     if (els.memberList) {
       els.memberList.innerHTML = '';
       if (!items.length) {
-        els.memberList.appendChild(el('div', { class: 'muted' }, 'メンバーがおらんばい'));
+        els.memberList.appendChild(el('div', { class: 'muted' }, t('メンバーがおらんばい')));
       } else {
         items.forEach((m) => {
           const row = el('div', { class: 'member-row' });
@@ -1928,23 +1977,23 @@ async function loadAdminPanel() {
           const left = el(
             'div',
             {},
-            `${name} / ${m.role} / ${m.status}${m.folderScope ? ` / 閲覧:${m.folderScope}` : ''}`
+            `${name} / ${m.role} / ${m.status}${m.folderScope ? ` / ${t('閲覧')}:${m.folderScope}` : ''}`
           );
           row.appendChild(left);
 
           const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
           if (m.folderScope === 'invited') {
-            actions.appendChild(el('span', { class: 'muted' }, 'フォルダ招待'));
+            actions.appendChild(el('span', { class: 'muted' }, t('フォルダ招待')));
           } else {
             const scopeSelect = el('select', { style: 'min-width:120px;' });
-            scopeSelect.appendChild(el('option', { value: 'own' }, '自分のフォルダのみ'));
-            scopeSelect.appendChild(el('option', { value: 'all' }, '全フォルダ表示'));
+            scopeSelect.appendChild(el('option', { value: 'own' }, t('自分のフォルダのみ')));
+            scopeSelect.appendChild(el('option', { value: 'all' }, t('全フォルダ表示')));
             scopeSelect.value = m.role === 'admin' ? 'all' : m.folderScope || 'all';
             scopeSelect.disabled = m.role === 'admin' || m.userKey === state.ownerUserKey;
             scopeSelect.onchange = safeAction(async () => {
               const next = scopeSelect.value;
               const prev = m.folderScope || 'all';
-              const ok = window.confirm(`メンバー「${name}」の閲覧権限を変更してよかですか？`);
+              const ok = window.confirm(tf('メンバー「{name}」の閲覧権限を変更してよかですか？', { name }));
               if (!ok) {
                 scopeSelect.value = prev;
                 return;
@@ -1953,7 +2002,7 @@ async function loadAdminPanel() {
                 method: 'PUT',
                 body: JSON.stringify({ folderScope: next }),
               });
-              window.alert('閲覧権限を更新しました。');
+              window.alert(t('閲覧権限を更新しました。'));
               await loadAdminPanel();
             }, '権限更新');
             actions.appendChild(scopeSelect);
@@ -1961,15 +2010,15 @@ async function loadAdminPanel() {
 
           // Remove member (kick) with confirm.
           if (m.role !== 'admin' && m.userKey !== state.ownerUserKey) {
-            const removeBtn = el('button', { type: 'button', class: 'danger' }, '削除');
+            const removeBtn = el('button', { type: 'button', class: 'danger' }, t('削除'));
             removeBtn.onclick = safeAction(async () => {
-              const ok = window.confirm(`メンバー「${name}」をお部屋から削除してよかですか？（本人は入れんごとなります）`);
+              const ok = window.confirm(tf('メンバー「{name}」をお部屋から削除してよかですか？（本人は入れんごとなります）', { name }));
               if (!ok) return;
               await api(`/team/members/${encodeURIComponent(m.userKey)}`, {
                 method: 'PUT',
                 body: JSON.stringify({ status: 'left' }),
               });
-              window.alert('メンバーを削除しました。');
+              window.alert(t('メンバーを削除しました。'));
               await loadAdminPanel();
             }, 'メンバー削除');
             actions.appendChild(removeBtn);
@@ -1982,7 +2031,7 @@ async function loadAdminPanel() {
   } catch (error) {
     if (els.memberList) {
       els.memberList.innerHTML = '';
-      els.memberList.appendChild(el('div', { class: 'muted' }, `メンバー取得失敗: ${asMessage(error)}`));
+      els.memberList.appendChild(el('div', { class: 'muted' }, tf('メンバー取得失敗: {message}', { message: asMessage(error) })));
     }
   }
 
@@ -1994,17 +2043,17 @@ async function loadAdminPanel() {
       els.folderAdminList.innerHTML = '';
       if (!folders.length) {
         state.adminFolderId = '';
-        els.folderAdminList.appendChild(el('div', { class: 'muted' }, 'フォルダがなかです'));
+        els.folderAdminList.appendChild(el('div', { class: 'muted' }, t('フォルダがなかです')));
       } else {
         if (state.adminFolderId && !folders.some((f) => f.folderId === state.adminFolderId)) {
           state.adminFolderId = '';
         }
         const pickerRow = el('div', { class: 'row folder-admin-picker' });
         const folderSelect = el('select');
-        folderSelect.appendChild(el('option', { value: '' }, 'フォルダを選択してください'));
+        folderSelect.appendChild(el('option', { value: '' }, t('フォルダを選択してください')));
         folders.forEach((f) => {
           const locked = Boolean(f.hasPassword);
-          const label = `${f.folderCode ? `${f.folderCode} ` : ''}${f.title || f.folderId}${locked ? ' [鍵]' : ''}`;
+          const label = `${f.folderCode ? `${f.folderCode} ` : ''}${f.title || f.folderId}${locked ? ` [${t('鍵')}]` : ''}`;
           folderSelect.appendChild(el('option', { value: f.folderId }, label));
         });
         folderSelect.value = state.adminFolderId || '';
@@ -2013,43 +2062,45 @@ async function loadAdminPanel() {
           await loadAdminPanel();
         }, '管理フォルダ選択');
         pickerRow.appendChild(folderSelect);
-        pickerRow.appendChild(el('span', { class: 'muted' }, `${folders.length}件`));
+        pickerRow.appendChild(el('span', { class: 'muted' }, tf('{count}件', { count: folders.length })));
         els.folderAdminList.appendChild(pickerRow);
 
         const f = folders.find((item) => item.folderId === state.adminFolderId);
         if (!f) {
-          els.folderAdminList.appendChild(el('div', { class: 'muted folder-admin-empty' }, 'フォルダを選択してください'));
+          els.folderAdminList.appendChild(el('div', { class: 'muted folder-admin-empty' }, t('フォルダを選択してください')));
         } else {
           const wrap = el('div', { class: 'folder-admin-block' });
           const header = el('div', { class: 'folder-admin-header' });
           const left = el(
             'div',
             {},
-            `${f.folderCode || ''} ${f.title || f.folderId}（作成:${f.createdByName || f.createdBy} / 容量:${formatBytes(
-              Number(f.usageBytes || 0)
-            )}）`
+            tf('{folder}（作成:{creator} / 容量:{size}）', {
+              folder: `${f.folderCode || ''} ${f.title || f.folderId}`,
+              creator: f.createdByName || f.createdBy,
+              size: formatBytes(Number(f.usageBytes || 0)),
+            })
           );
           header.appendChild(left);
           wrap.appendChild(header);
 
           const inviteRow = el('div', { class: 'row folder-admin-actions' });
           const folderInviteInput = el('input', {
-            placeholder: 'フォルダ招待URL',
+            placeholder: t('フォルダ招待URL'),
             readonly: 'readonly',
           });
           const folderInviteCell = el('div', { class: 'invite-url-cell' });
-          const copyFolderInviteBtn = el('button', { type: 'button' }, 'コピー');
+          const copyFolderInviteBtn = el('button', { type: 'button' }, t('コピー'));
           copyFolderInviteBtn.onclick = safeAction(async () => {
             await copyInviteUrlFromInput(folderInviteInput);
           }, 'フォルダ招待URLコピー');
-          const createFolderInviteBtn = el('button', { type: 'button' }, '招待URL発行（7日）');
+          const createFolderInviteBtn = el('button', { type: 'button' }, t('招待URL発行（7日）'));
           createFolderInviteBtn.onclick = safeAction(async () => {
             const res = await api('/invites/create', {
               method: 'POST',
               body: JSON.stringify({ folderId: f.folderId }),
             });
             const token = res.token;
-            if (!token) throw new Error('招待トークンが取得できませんでした。');
+            if (!token) throw new Error(t('招待トークンが取得できませんでした。'));
             state.lastFolderInviteTokens[f.folderId] = token;
             const base = window.location.origin + window.location.pathname;
             const url = `${base}?invite=${encodeURIComponent(token)}`;
@@ -2058,20 +2109,20 @@ async function loadAdminPanel() {
           }, 'フォルダ招待URL発行');
           inviteRow.appendChild(createFolderInviteBtn);
 
-          const revokeFolderInviteBtn = el('button', { type: 'button', class: 'danger hidden' }, '招待URL失効');
+          const revokeFolderInviteBtn = el('button', { type: 'button', class: 'danger hidden' }, t('招待URL失効'));
           revokeFolderInviteBtn.onclick = safeAction(async () => {
             const token = state.lastFolderInviteTokens[f.folderId];
             if (!token) {
-              showError('失効する招待URLがなかです（先に発行してください）');
+              showError(t('失効する招待URLがなかです（先に発行してください）'));
               return;
             }
-            const ok = window.confirm(`フォルダ「${f.title || f.folderId}」の招待URLを失効してよかですか？`);
+            const ok = window.confirm(tf('フォルダ「{folder}」の招待URLを失効してよかですか？', { folder: f.title || f.folderId }));
             if (!ok) return;
             await api('/invites/revoke', { method: 'POST', body: JSON.stringify({ token }) });
             delete state.lastFolderInviteTokens[f.folderId];
             folderInviteInput.value = '';
             revokeFolderInviteBtn.classList.add('hidden');
-            showToast('フォルダ招待URLを失効しました。');
+            showToast(t('フォルダ招待URLを失効しました。'));
           }, 'フォルダ招待URL失効');
           inviteRow.appendChild(revokeFolderInviteBtn);
           folderInviteCell.appendChild(folderInviteInput);
@@ -2079,21 +2130,21 @@ async function loadAdminPanel() {
           inviteRow.appendChild(folderInviteCell);
           wrap.appendChild(inviteRow);
 
-          const membersBox = el('div', { class: 'muted folder-admin-members' }, 'メンバー読み込み中...');
+          const membersBox = el('div', { class: 'muted folder-admin-members' }, t('メンバー読み込み中...'));
           wrap.appendChild(membersBox);
 
           const passwordRow = el('div', { class: 'row folder-admin-actions folder-admin-password' });
           const passwordInput = el('input', {
-            placeholder: 'フォルダパスワード（空で解除）',
+            placeholder: t('フォルダパスワード（空で解除）'),
             type: 'password',
           });
-          const passwordBtn = el('button', { type: 'button' }, '設定/解除');
+          const passwordBtn = el('button', { type: 'button' }, t('設定/解除'));
           passwordBtn.onclick = safeAction(async () => {
             const next = String(passwordInput.value || '').trim();
             const ok = window.confirm(
               next
-                ? `フォルダ「${f.title || f.folderId}」のパスワードを設定してよかですか？`
-                : `フォルダ「${f.title || f.folderId}」のパスワードを解除してよかですか？`
+                ? tf('フォルダ「{folder}」のパスワードを設定してよかですか？', { folder: f.title || f.folderId })
+                : tf('フォルダ「{folder}」のパスワードを解除してよかですか？', { folder: f.title || f.folderId })
             );
             if (!ok) return;
             await api(`/folders/${f.folderId}/password`, {
@@ -2104,7 +2155,7 @@ async function loadAdminPanel() {
             if (next) state.folderPasswordById[f.folderId] = next;
             else delete state.folderPasswordById[f.folderId];
             passwordInput.value = '';
-            window.alert(next ? 'フォルダのパスワードを設定しました。' : 'フォルダのパスワードを解除しました。');
+            window.alert(next ? t('フォルダのパスワードを設定しました。') : t('フォルダのパスワードを解除しました。'));
             await loadFolders();
             await loadAdminPanel();
           }, 'フォルダパスワード設定');
@@ -2113,13 +2164,13 @@ async function loadAdminPanel() {
           wrap.appendChild(passwordRow);
 
           const deleteRow = el('div', { class: 'row folder-admin-actions' });
-          const delBtn = el('button', { type: 'button', class: 'danger' }, '削除');
+          const delBtn = el('button', { type: 'button', class: 'danger' }, t('削除'));
           delBtn.onclick = safeAction(async () => {
-            const ok = window.confirm(`フォルダ「${f.title || f.folderId}」を削除してよかですか？（写真とコメントも消えます）`);
+            const ok = window.confirm(tf('フォルダ「{folder}」を削除してよかですか？（写真とコメントも消えます）', { folder: f.title || f.folderId }));
             if (!ok) return;
             await api(`/folders/${f.folderId}`, { method: 'DELETE' });
             state.adminFolderId = '';
-            window.alert('フォルダを削除しました。');
+            window.alert(t('フォルダを削除しました。'));
             await loadFolders();
             await loadTeamMe();
             await loadAdminPanel();
@@ -2133,16 +2184,16 @@ async function loadAdminPanel() {
               const items = members.items || [];
               membersBox.innerHTML = '';
               if (!items.length) {
-                membersBox.appendChild(el('div', { class: 'muted' }, 'メンバーがおらんばい'));
+                membersBox.appendChild(el('div', { class: 'muted' }, t('メンバーがおらんばい')));
                 return;
               }
               const reasonLabel = {
-                admin: '管理者',
-                all: '全フォルダ',
-                owner: '作成者',
-                invited: 'フォルダ招待',
+                admin: t('管理者'),
+                all: t('全フォルダ'),
+                owner: t('作成者'),
+                invited: t('フォルダ招待'),
               };
-              membersBox.appendChild(el('div', { class: 'muted' }, 'メンバー'));
+              membersBox.appendChild(el('div', { class: 'muted' }, t('メンバー')));
               items.forEach((m) => {
                 const name = m.displayName || m.userKey;
                 const row = el('div', { class: 'member-row folder-admin-member-row' });
@@ -2150,20 +2201,20 @@ async function loadAdminPanel() {
                   el(
                     'div',
                     {},
-                    `${name}（${reasonLabel[m.accessReason] || m.accessReason || m.folderScope || '権限'} / ${m.status || 'active'}）`
+                    `${name}（${reasonLabel[m.accessReason] || m.accessReason || m.folderScope || t('権限')} / ${m.status || 'active'}）`
                   )
                 );
                 const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
                 if (m.accessReason === 'invited' && m.folderScope === 'invited') {
-                  const removeBtn = el('button', { type: 'button', class: 'danger' }, 'このフォルダから外す');
+                  const removeBtn = el('button', { type: 'button', class: 'danger' }, t('このフォルダから外す'));
                   removeBtn.onclick = safeAction(async () => {
-                    const ok = window.confirm(`メンバー「${name}」をこのフォルダから外してよかですか？`);
+                    const ok = window.confirm(tf('メンバー「{name}」をこのフォルダから外してよかですか？', { name }));
                     if (!ok) return;
                     await api(
                       `/folders/${encodeURIComponent(f.folderId)}/members/${encodeURIComponent(m.userKey)}`,
                       { method: 'DELETE' }
                     );
-                    window.alert('フォルダメンバーを外しました。');
+                    window.alert(t('フォルダメンバーを外しました。'));
                     await loadAdminPanel();
                   }, 'フォルダメンバー解除');
                   actions.appendChild(removeBtn);
@@ -2173,7 +2224,7 @@ async function loadAdminPanel() {
               });
             })
             .catch((error) => {
-              membersBox.textContent = `メンバー取得失敗: ${asMessage(error)}`;
+              membersBox.textContent = tf('メンバー取得失敗: {message}', { message: asMessage(error) });
             });
         }
       }
@@ -2181,7 +2232,7 @@ async function loadAdminPanel() {
   } catch (error) {
     if (els.folderAdminList) {
       els.folderAdminList.innerHTML = '';
-      els.folderAdminList.appendChild(el('div', { class: 'muted' }, `フォルダ取得失敗: ${asMessage(error)}`));
+      els.folderAdminList.appendChild(el('div', { class: 'muted' }, tf('フォルダ取得失敗: {message}', { message: asMessage(error) })));
     }
   }
 
@@ -2192,15 +2243,19 @@ async function loadAdminPanel() {
     const folderSummary = folderUsageSummary();
     const capacityLabel =
       String(b?.billingMode || 'prepaid').toLowerCase() === 'subscription'
-        ? `プラン容量 ${formatBytes(stats.capacityBytes)}`
-        : `無料 ${formatBytes(b.freeBytes)}`;
-    els.billingStatus.textContent = `使用量 ${formatBytes(b.usageBytes)} / ${capacityLabel}（残り ${formatBytes(
-      stats.freeRemainBytes
-    )}） / ${folderSummary} / プラン ${planToDisplayLabel(plan)}`;
+        ? tf('プラン容量 {size}', { size: formatBytes(stats.capacityBytes) })
+        : tf('無料 {size}', { size: formatBytes(b.freeBytes) });
+    els.billingStatus.textContent = tf('使用量 {used} / {capacity}（残り {remain}） / {folderSummary} / プラン {plan}', {
+      used: formatBytes(b.usageBytes),
+      capacity: capacityLabel,
+      remain: formatBytes(stats.freeRemainBytes),
+      folderSummary,
+      plan: planToDisplayLabel(plan),
+    });
     if (els.billingPlanGuide) els.billingPlanGuide.textContent = freePlanGuideText();
     if (els.billingArchiveNote) {
       els.billingArchiveNote.textContent =
-        '※ 30日保存後はアーカイブへ移動し、アーカイブは容量に含まれます。\n※ フリープランへ戻す際の容量判定にはアーカイブ済みデータも含みます。';
+        t('※ 30日保存後はアーカイブへ移動し、アーカイブは容量に含まれます。\n※ フリープランへ戻す際の容量判定にはアーカイブ済みデータも含みます。');
     }
     renderStorageGraph();
     maybePromptLowStorage();
@@ -2222,23 +2277,23 @@ async function setInviteUrlText(url, targetInput = els.inviteUrl) {
 async function copyInviteUrl(url, showFallbackPrompt = false) {
   const text = String(url || '').trim();
   if (!text) {
-    showError('コピーする招待URLがなかです（先に発行してください）');
+    showError(t('コピーする招待URLがなかです（先に発行してください）'));
     return;
   }
   try {
     if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
       await navigator.clipboard.writeText(text);
-      showToast('招待URLをコピーしました。');
+      showToast(t('招待URLをコピーしました。'));
       return;
     }
   } catch (_) {
     // Ignore and fall back.
   }
   if (showFallbackPrompt) {
-    window.prompt('招待URL（コピーしてください）', text);
+    window.prompt(t('招待URL（コピーしてください）'), text);
     return;
   }
-  showError('ブラウザがコピー操作を許可しませんでした。URL欄からコピーしてください。');
+  showError(t('ブラウザがコピー操作を許可しませんでした。URL欄からコピーしてください。'));
 }
 
 async function copyInviteUrlFromInput(targetInput) {
@@ -2255,7 +2310,7 @@ if (els.createInviteBtn) {
   els.createInviteBtn.onclick = safeAction(async () => {
     const res = await api('/invites/create', { method: 'POST', body: JSON.stringify({}) });
     const token = res.token;
-    if (!token) throw new Error('招待トークンが取得できませんでした。');
+    if (!token) throw new Error(t('招待トークンが取得できませんでした。'));
     state.lastInviteToken = token;
     if (els.revokeInviteBtn) els.revokeInviteBtn.classList.remove('hidden');
     const base = window.location.origin + window.location.pathname;
@@ -2267,16 +2322,16 @@ if (els.createInviteBtn) {
 if (els.revokeInviteBtn) {
   els.revokeInviteBtn.onclick = safeAction(async () => {
     if (!state.lastInviteToken) {
-      showError('失効する招待URLがなかです（先に発行してください）');
+      showError(t('失効する招待URLがなかです（先に発行してください）'));
       return;
     }
-    const ok = window.confirm('この招待URLを失効してよかですか？');
+    const ok = window.confirm(t('この招待URLを失効してよかですか？'));
     if (!ok) return;
     await api('/invites/revoke', { method: 'POST', body: JSON.stringify({ token: state.lastInviteToken }) });
     state.lastInviteToken = null;
     if (els.inviteUrl) els.inviteUrl.value = '';
     els.revokeInviteBtn.classList.add('hidden');
-    showToast('招待URLを失効しました。');
+    showToast(t('招待URLを失効しました。'));
   }, '招待URL失効');
 }
 
@@ -2291,9 +2346,9 @@ async function loadFolders() {
     renderFolders();
     const message = error?.message || 'unknown';
     if (message.includes('Failed to fetch') || message.includes('Type error')) {
-      showError('フォルダ取得失敗: ネットワーク/CORSエラーの可能性があります');
+      showError(t('フォルダ取得失敗: ネットワーク/CORSエラーの可能性があります'));
     } else {
-      showError(`フォルダ取得失敗: ${message}`);
+      showError(tf('フォルダ取得失敗: {message}', { message }));
     }
   }
 }
@@ -2342,7 +2397,7 @@ function renderFolders() {
   if (!state.folders.length) {
     const empty = document.createElement('option');
     empty.value = '';
-    empty.textContent = 'まだフォルダがなかです';
+    empty.textContent = t('まだフォルダがなかです');
     els.currentFolderSelect.appendChild(empty);
     els.currentFolderSelect.value = '';
     els.currentFolderSelect.disabled = true;
@@ -2353,7 +2408,7 @@ function renderFolders() {
 
   const head = document.createElement('option');
   head.value = '';
-  head.textContent = 'フォルダを選択してください';
+  head.textContent = t('フォルダを選択してください');
   els.currentFolderSelect.appendChild(head);
 
   state.folders.forEach((folder) => {
@@ -2361,7 +2416,9 @@ function renderFolders() {
     option.value = folder.folderId;
     const unread = state.folderUnreadMap[folder.folderId];
     const locked = Boolean(folder.hasPassword);
-    option.textContent = `${folder.folderCode || 'F---'} ${folder.title}${locked ? ' [鍵]' : ''}${unread ? ' ●新着' : ''}`;
+    option.textContent = `${folder.folderCode || 'F---'} ${folder.title}${locked ? ` [${t('鍵')}]` : ''}${
+      unread ? ` ${t('●新着')}` : ''
+    }`;
     els.currentFolderSelect.appendChild(option);
   });
 
@@ -2377,14 +2434,14 @@ async function selectFolder(folder) {
   clearUploadDrafts();
   const folderId = folder.folderId;
   if (folder.hasPassword && !state.folderPasswordById[folder.folderId]) {
-    const entered = window.prompt('このフォルダは鍵付きです。パスワードを入力してください。', '');
+    const entered = window.prompt(t('このフォルダは鍵付きです。パスワードを入力してください。'), '');
     if (entered === null) {
       renderFolders();
       return;
     }
     const pw = String(entered || '').trim();
     if (!pw) {
-      showError('フォルダパスワードが必要です。');
+      showError(t('フォルダパスワードが必要です。'));
       renderFolders();
       return;
     }
@@ -2393,7 +2450,7 @@ async function selectFolder(folder) {
   state.selectedFolder = folder;
   renderFolders();
   els.folderDetail.classList.remove('hidden');
-  els.folderDetailTitle.textContent = `フォルダ: ${folder.folderCode || 'F---'} ${folder.title}`;
+  els.folderDetailTitle.textContent = tf('フォルダ: {folder}', { folder: `${folder.folderCode || 'F---'} ${folder.title}` });
   try {
     await loadPhotos();
   } catch (error) {
@@ -2405,7 +2462,7 @@ async function selectFolder(folder) {
       els.folderDetail.classList.add('hidden');
       renderPhotoArchiveNote();
       renderFolders();
-      showError('フォルダパスワードが違います。');
+      showError(t('フォルダパスワードが違います。'));
       return;
     }
     throw error;
@@ -2533,10 +2590,10 @@ async function uploadFiles() {
             body: file,
           });
         } catch (error) {
-          throw new Error(`画像アップロード通信エラー: ${asMessage(error)}`);
+          throw new Error(tf('画像アップロード通信エラー: {message}', { message: asMessage(error) }));
         }
         if (!putRes.ok) {
-          throw new Error(`画像アップロード失敗(${putRes.status})`);
+          throw new Error(tf('画像アップロード失敗({status})', { status: putRes.status }));
         }
 
         const resized = await resizeToJpeg(file, 2048, 0.82);
@@ -2549,10 +2606,10 @@ async function uploadFiles() {
               body: resized,
             });
           } catch (error) {
-            throw new Error(`リサイズ画像アップロード通信エラー: ${asMessage(error)}`);
+            throw new Error(tf('リサイズ画像アップロード通信エラー: {message}', { message: asMessage(error) }));
           }
           if (!previewRes.ok) {
-            throw new Error(`リサイズ画像アップロード失敗(${previewRes.status})`);
+            throw new Error(tf('リサイズ画像アップロード失敗({status})', { status: previewRes.status }));
           }
         }
 
@@ -2583,28 +2640,32 @@ async function uploadFiles() {
       await loadPhotos();
       await scrollToPhotoList();
       if (duplicateCount > 0) {
-        showToast(`${uploadedCount}/${totalFiles}件アップロード完了。${duplicateCount}件は重複のためスキップしました。`);
+        showToast(tf('{uploaded}/{total}件アップロード完了。{duplicate}件は重複のためスキップしました。', {
+          uploaded: uploadedCount,
+          total: totalFiles,
+          duplicate: duplicateCount,
+        }));
       } else {
-        showToast(`${uploadedCount}/${totalFiles}件アップロード完了。`);
+        showToast(tf('{uploaded}/{total}件アップロード完了。', { uploaded: uploadedCount, total: totalFiles }));
       }
     }
     if (duplicateCount > 0) {
       if (totalFiles === 1) {
-        showError('同じ写真は同じフォルダにアップロードできません（重複を検知しました）。');
+        showError(t('同じ写真は同じフォルダにアップロードできません（重複を検知しました）。'));
         return;
       }
       if (duplicateCount === totalFiles) {
-        showError('すべて重複なのでアップロードができません。');
+        showError(t('すべて重複なのでアップロードができません。'));
         return;
       }
-      if (uploadedCount === 0) showToast(`${duplicateCount}件は重複のためスキップしました。`);
+      if (uploadedCount === 0) showToast(tf('{duplicate}件は重複のためスキップしました。', { duplicate: duplicateCount }));
     }
   } catch (error) {
     const message = asMessage(error);
     if (message.includes('APIエラー(402)')) {
       await loadTeamMe();
       if (els.uploadBtn) els.uploadBtn.disabled = Boolean(state.uploadBlocked);
-      showError('アップロード停止中です（残量不足）。管理者が容量チケットを追加するか、写真を削除してください。');
+      showError(t('アップロード停止中です（残量不足）。管理者が容量チケットを追加するか、写真を削除してください。'));
       return;
     }
     throw error;
@@ -2624,7 +2685,7 @@ function canDelete(item) {
 
 function formatDateTime(value) {
   if (!value) return '-';
-  return new Date(value).toLocaleString('ja-JP');
+  return new Date(value).toLocaleString(appLocale);
 }
 
 async function renderPhotos() {
@@ -2633,8 +2694,8 @@ async function renderPhotos() {
     const archived = state.selectedFolderArchive || null;
     const emptyText =
       archived && Number(archived.archivedCount || 0) > 0 && archived.archiveMode === 'hidden'
-        ? '表示中の写真はなかです。30日を過ぎた写真はアーカイブされとるばい。'
-        : '写真はまだなかです。';
+        ? t('表示中の写真はなかです。30日を過ぎた写真はアーカイブされとるばい。')
+        : t('写真はまだなかです。');
     els.photoList.appendChild(el('div', { class: 'muted' }, emptyText));
     return;
   }
@@ -2657,7 +2718,7 @@ async function renderPhotos() {
     };
     img.tabIndex = 0;
     img.setAttribute('role', 'button');
-    img.setAttribute('aria-label', `${photo.fileName || photo.photoId} を全体表示`);
+    img.setAttribute('aria-label', tf('{name} を全体表示', { name: photo.fileName || photo.photoId }));
     card.appendChild(img);
 
     const codeRow = el('div');
@@ -2669,19 +2730,19 @@ async function renderPhotos() {
     titleRow.appendChild(photoTitle);
     card.appendChild(titleRow);
 
-    card.appendChild(el('div', { class: 'muted' }, `投稿: ${photo.createdByName}`));
+    card.appendChild(el('div', { class: 'muted' }, tf('投稿: {name}', { name: photo.createdByName })));
 
     const photoEditWrap = el('div', { class: 'inline-edit js-photo-edit-wrap hidden' });
     if (canDelete(photo)) {
       const actions = el('div', { class: 'comment-actions' });
       const editPhotoBtn = el(
         'button',
-        { class: 'icon-btn js-edit-photo', type: 'button', title: '写真名修正' },
-        '✎ 写真名'
+        { class: 'icon-btn js-edit-photo', type: 'button', title: t('写真名修正') },
+        `✎ ${t('写真名')}`
       );
       const delBtn = el(
         'button',
-        { class: 'icon-btn danger js-del-photo', type: 'button', title: '写真削除' },
+        { class: 'icon-btn danger js-del-photo', type: 'button', title: t('写真削除') },
         '🗑'
       );
       actions.appendChild(editPhotoBtn);
@@ -2698,19 +2759,19 @@ async function renderPhotos() {
     const accordion = el('details', { class: 'comments-accordion' });
     const summary = el('summary', { class: 'comments-summary' });
     summary.appendChild(el('span', { class: 'accordion-marker', 'aria-hidden': 'true' }, '▶'));
-    const commentLabel = el('span', {}, 'コメント');
+    const commentLabel = el('span', {}, t('コメント'));
     summary.appendChild(commentLabel);
-    if (unread) summary.appendChild(el('span', { class: 'unread-badge' }, '未読'));
+    if (unread) summary.appendChild(el('span', { class: 'unread-badge' }, t('未読')));
     accordion.appendChild(summary);
 
     const commentWrap = el('div', { class: 'comments' });
-    commentWrap.appendChild(el('div', { class: 'muted' }, '開いたら読み込みます'));
+    commentWrap.appendChild(el('div', { class: 'muted' }, t('開いたら読み込みます')));
     let commentsLoaded = false;
 
     const renderLoadedComments = (comments) => {
       commentWrap.innerHTML = '';
       comments.forEach((comment) => {
-        const stamp = comment.updatedAt ? '修正' : '投稿';
+        const stamp = comment.updatedAt ? t('修正') : t('投稿');
         const stampAt = comment.updatedAt || comment.createdAt;
 
         const row = el('div', { class: 'comment' });
@@ -2723,16 +2784,16 @@ async function renderPhotos() {
 
         if (canDelete(comment)) {
           const actions = el('div', { class: 'comment-actions' });
-          const editBtn = el('button', { class: 'icon-btn', type: 'button', title: 'コメント修正' }, '✎');
-          const deleteBtn = el('button', { class: 'icon-btn danger', type: 'button', title: 'コメント削除' }, '🗑');
+          const editBtn = el('button', { class: 'icon-btn', type: 'button', title: t('コメント修正') }, '✎');
+          const deleteBtn = el('button', { class: 'icon-btn danger', type: 'button', title: t('コメント削除') }, '🗑');
 
           editBtn.onclick = async () => {
             if (row.querySelector('.js-comment-editor')) return;
             const editor = el('div', { class: 'inline-edit js-comment-editor' });
             const ta = el('textarea', { class: 'js-edit-text', rows: '3', style: 'flex:1' });
             ta.value = comment.text || '';
-            const saveBtn = el('button', { class: 'js-save-edit', type: 'button' }, '保存');
-            const cancelBtn = el('button', { class: 'js-cancel-edit danger', type: 'button' }, '取消');
+            const saveBtn = el('button', { class: 'js-save-edit', type: 'button' }, t('保存'));
+            const cancelBtn = el('button', { class: 'js-cancel-edit danger', type: 'button' }, t('取消'));
             editor.appendChild(ta);
             editor.appendChild(saveBtn);
             editor.appendChild(cancelBtn);
@@ -2755,7 +2816,7 @@ async function renderPhotos() {
           };
 
           deleteBtn.onclick = async () => {
-            if (!window.confirm('このコメントを削除してよかですか？')) return;
+            if (!window.confirm(t('このコメントを削除してよかですか？'))) return;
             await api(`/photos/${photo.photoId}/comments/${comment.commentId}`, { method: 'DELETE' });
             await loadPhotos();
           };
@@ -2773,11 +2834,11 @@ async function renderPhotos() {
     const addRow = el('div', { class: 'row', style: 'margin-top:8px;' });
     const textArea = el('textarea', {
       class: 'js-comment-text',
-      placeholder: 'コメント',
+      placeholder: t('コメント'),
       rows: '2',
       style: 'flex:1',
     });
-    const addBtn = el('button', { class: 'js-add-comment', type: 'button' }, '追加');
+    const addBtn = el('button', { class: 'js-add-comment', type: 'button' }, t('追加'));
     addRow.appendChild(textArea);
     addRow.appendChild(addBtn);
     accordion.appendChild(addRow);
@@ -2790,10 +2851,10 @@ async function renderPhotos() {
         state.openAccordions.add(photo.photoId);
         if (!commentsLoaded) {
           commentWrap.innerHTML = '';
-          commentWrap.appendChild(el('div', { class: 'muted' }, '読み込み中...'));
+          commentWrap.appendChild(el('div', { class: 'muted' }, t('読み込み中...')));
           const comments = await loadComments(photo.photoId);
           commentsLoaded = true;
-          commentLabel.textContent = `コメント (${comments.length})`;
+          commentLabel.textContent = tf('コメント ({count})', { count: comments.length });
           latestIncomingCommentAt = getLatestIncomingCommentAt(comments);
           renderLoadedComments(comments);
         }
@@ -2841,9 +2902,9 @@ async function renderPhotos() {
         photoEditWrap.innerHTML = '';
         const input = el('input', { class: 'js-photo-name-input' });
         input.value = photo.fileName || '';
-        const clearBtn = el('button', { class: 'icon-btn js-photo-name-clear', type: 'button', title: '入力を消去' }, '×');
-        const saveBtn = el('button', { class: 'js-photo-name-save', type: 'button' }, '保存');
-        const cancelBtn = el('button', { class: 'js-photo-name-cancel danger', type: 'button' }, '取消');
+        const clearBtn = el('button', { class: 'icon-btn js-photo-name-clear', type: 'button', title: t('入力を消去') }, '×');
+        const saveBtn = el('button', { class: 'js-photo-name-save', type: 'button' }, t('保存'));
+        const cancelBtn = el('button', { class: 'js-photo-name-cancel danger', type: 'button' }, t('取消'));
         photoEditWrap.appendChild(input);
         photoEditWrap.appendChild(clearBtn);
         photoEditWrap.appendChild(saveBtn);
@@ -2875,14 +2936,16 @@ async function renderPhotos() {
 
     if (delBtn) {
       delBtn.onclick = async () => {
-        if (!window.confirm('この写真を削除してよかですか？')) return;
+        if (!window.confirm(t('この写真を削除してよかですか？'))) return;
         await api(`/photos/${photo.photoId}`, { method: 'DELETE' });
         await loadPhotos();
       };
     }
 
     card.appendChild(accordion);
-    card.appendChild(el('div', { class: 'muted', style: 'margin-top: 6px;' }, unread ? '未読コメントがあります' : '未読コメントなし'));
+    card.appendChild(
+      el('div', { class: 'muted', style: 'margin-top: 6px;' }, unread ? t('未読コメントがあります') : t('未読コメントなし'))
+    );
     els.photoList.appendChild(card);
   }
 }
@@ -2902,14 +2965,14 @@ if (els.signupBtn) {
 if (els.resetUserBtn) {
   els.resetUserBtn.onclick = safeAction(async () => {
     const current = state.userName || '';
-    const next = window.prompt('新しい表示名を入力してください。', current);
+    const next = window.prompt(t('新しい表示名を入力してください。'), current);
     if (next === null) {
       closeMenu();
       return;
     }
     const displayName = next.trim();
     if (!displayName) {
-      window.alert('表示名は必須です。');
+      window.alert(t('表示名は必須です。'));
       closeMenu();
       return;
     }
@@ -2919,7 +2982,7 @@ if (els.resetUserBtn) {
       els.currentName.textContent = state.userName;
     }
     renderTopStorageGraph();
-    showToast('表示名を更新しました。');
+    showToast(t('表示名を更新しました。'));
     closeMenu();
   }, '名前変更');
 }
@@ -3125,15 +3188,15 @@ if (els.leaveRoomBtn) {
     try {
       const me = await api('/team/me', { method: 'GET' });
       if (me && me.isAdmin) {
-        window.alert('管理者は脱退できません。お部屋管理から「お部屋を削除（全データ）」を実行してください。');
+        window.alert(t('管理者は脱退できません。お部屋管理から「お部屋を削除（全データ）」を実行してください。'));
         closeMenu();
         return;
       }
     } catch (_) {
       // If /team/me fails, keep old behavior.
     }
-    window.alert('メンバーをやめると、このお部屋には招待URLなしでは再参加できません。');
-    const ok = window.confirm('本当にメンバーをやめますか？');
+    window.alert(t('メンバーをやめると、このお部屋には招待URLなしでは再参加できません。'));
+    const ok = window.confirm(t('本当にメンバーをやめますか？'));
     if (!ok) {
       closeMenu();
       return;
@@ -3208,31 +3271,31 @@ if (els.roomCreateSubmitBtn) {
   els.roomCreateSubmitBtn.onclick = safeAction(async () => {
     const roomName = String(els.roomCreateName?.value || '').trim();
     if (!roomName) {
-      window.alert('お部屋名を入力してください。');
+      window.alert(t('お部屋名を入力してください。'));
       return;
     }
     try {
       await createRoomAndEnter(roomName);
       closeRoomCreateModal();
-      window.alert(`お部屋：${roomName} が作成されました。`);
+      window.alert(tf('お部屋：{roomName} が作成されました。', { roomName }));
     } catch (error) {
       const message = asMessage(error);
       if (message.includes('409')) {
         if (message.includes('already has a room')) {
-          window.alert('すでに自分のお部屋を作成済みです（自分の部屋は1人1部屋）。');
+          window.alert(t('すでに自分のお部屋を作成済みです（自分の部屋は1人1部屋）。'));
         } else {
-          window.alert('同じ部屋名は作成できません。別の部屋名にしてください。');
+          window.alert(t('同じ部屋名は作成できません。別の部屋名にしてください。'));
         }
         return;
       }
-      window.alert(`お部屋作成失敗: ${message}`);
+      window.alert(tf('お部屋作成失敗: {message}', { message }));
     }
   }, 'お部屋作成');
 }
 
 async function createRoomAndEnter(roomName) {
   const value = String(roomName || '').trim();
-  if (!value) throw new Error('お部屋名を入力してください。');
+  if (!value) throw new Error(t('お部屋名を入力してください。'));
   await api('/rooms/create', {
     method: 'POST',
     body: JSON.stringify({ roomName: value }),
@@ -3248,22 +3311,22 @@ els.createRoomBtn.onclick = async () => {
   clearError();
   const roomName = (els.createRoomName.value || '').trim();
   if (!roomName) {
-    showError('お部屋名を入力してください。');
+    showError(t('お部屋名を入力してください。'));
     return;
   }
   try {
     await createRoomAndEnter(roomName);
-    window.alert(`お部屋：${roomName} が作成されました。`);
+    window.alert(tf('お部屋：{roomName} が作成されました。', { roomName }));
   } catch (error) {
     const message = asMessage(error);
     if (message.includes('409')) {
       if (message.includes('already has a room')) {
-        window.alert('すでに自分のお部屋を作成済みです（自分の部屋は1人1部屋）。');
+        window.alert(t('すでに自分のお部屋を作成済みです（自分の部屋は1人1部屋）。'));
       } else {
-        window.alert('同じ部屋名は作成できません。別の部屋名にしてください。');
+        window.alert(t('同じ部屋名は作成できません。別の部屋名にしてください。'));
       }
     } else {
-      showError(`お部屋作成失敗: ${message}`);
+      showError(tf('お部屋作成失敗: {message}', { message }));
     }
   }
 };
@@ -3281,7 +3344,7 @@ els.createFolderBtn.onclick = safeAction(async () => {
   } catch (error) {
     const body = parseApiErrorBody(error);
     if (body?.code === 'FREE_PLAN_FOLDER_LIMIT_EXCEEDED') {
-      window.alert(body.message || 'フリープランではフォルダは2つまでです。有料プランで無制限になります。');
+      window.alert(body.message || t('フリープランではフォルダは2つまでです。有料プランで無制限になります。'));
       return;
     }
     throw error;
@@ -3289,7 +3352,7 @@ els.createFolderBtn.onclick = safeAction(async () => {
   els.folderTitle.value = '';
   if (els.folderPassword) els.folderPassword.value = '';
   closeFolderCreateModal();
-  showToast(`フォルダ：${created.title} を作成しました。`);
+  showToast(tf('フォルダ：{title} を作成しました。', { title: created.title }));
   await loadFolders();
   await selectFolderById(created.folderId);
 }, 'フォルダ作成');
@@ -3326,7 +3389,7 @@ if (els.cancelUploadDraftsBtn) {
 
 els.exportBtn.onclick = safeAction(async () => {
   if (!state.selectedFolder) {
-    window.alert('先にフォルダを選択してください。');
+    window.alert(t('先にフォルダを選択してください。'));
     return;
   }
   closeMenu();
@@ -3361,7 +3424,7 @@ async function startSubscriptionCheckout(plan) {
     window.location.href = res.url;
     return;
   }
-  throw new Error('Stripe決済URLが取得できませんでした。');
+  throw new Error(t('Stripe決済URLが取得できませんでした。'));
 }
 
 if (els.subscribeBasicBtn) els.subscribeBasicBtn.onclick = safeAction(() => startSubscriptionCheckout('BASIC'), '購入');
@@ -3369,7 +3432,7 @@ if (els.subscribePlusBtn) els.subscribePlusBtn.onclick = safeAction(() => startS
 if (els.subscribeProBtn) els.subscribeProBtn.onclick = safeAction(() => startSubscriptionCheckout('PRO'), '購入');
 if (els.subscribeFreeBtn) {
   els.subscribeFreeBtn.onclick = safeAction(async () => {
-    const ok = window.confirm('フリープランへ戻してよかですか？');
+    const ok = window.confirm(t('フリープランへ戻してよかですか？'));
     if (!ok) return;
     try {
       await api('/team/subscription/change', { method: 'POST', body: JSON.stringify({ action: 'free' }) });
@@ -3384,7 +3447,7 @@ if (els.subscribeFreeBtn) {
     await loadTeamMe();
     await loadFolders();
     await loadAdminPanel();
-    window.alert('フリープランに戻りました。\n\n現在の上限は、容量512MB未満・フォルダ2個までです。');
+    window.alert(t('フリープランに戻りました。\n\n現在の上限は、容量512MB未満・フォルダ2個までです。'));
   }, 'フリープラン変更');
 }
 if (els.lowStorageChargeBtn) {
@@ -3405,13 +3468,13 @@ if (els.lowStorageChargeBtn) {
 if (els.deleteTeamBtn) {
   els.deleteTeamBtn.onclick = safeAction(async () => {
     const ok = window.confirm(
-      'このお部屋を削除すると、フォルダ/写真/コメント/課金情報が全て削除され、Stripeの定期課金も即時停止されます。よかですか？'
+      t('このお部屋を削除すると、フォルダ/写真/コメント/課金情報が全て削除され、Stripeの定期課金も即時停止されます。よかですか？')
     );
     if (!ok) return;
-    const ok2 = window.confirm('本当によかですか？（取り消せません）');
+    const ok2 = window.confirm(t('本当によかですか？（取り消せません）'));
     if (!ok2) return;
     await api('/team/delete', { method: 'POST' });
-    window.alert('お部屋を削除しました。');
+    window.alert(t('お部屋を削除しました。'));
     resetRoomContext();
     showRoomSetup();
   }, 'お部屋削除');
@@ -3426,22 +3489,22 @@ if (els.accountDeleteBtn) {
       closeMenu();
       return;
     }
-    const ok = window.confirm('アカウントを削除すると、このユーザーでは今後ログインできません。よかですか？');
+    const ok = window.confirm(t('アカウントを削除すると、このユーザーでは今後ログインできません。よかですか？'));
     if (!ok) return;
-    const ok2 = window.confirm('本当によかですか？（アカウント削除後は取り消せません）');
+    const ok2 = window.confirm(t('本当によかですか？（アカウント削除後は取り消せません）'));
     if (!ok2) return;
     try {
       await api('/account/delete', { method: 'POST', body: JSON.stringify({}) });
     } catch (error) {
       const msg = asMessage(error);
       if (msg.includes('room owner must delete team first')) {
-        window.alert('作成者は先に「お部屋を削除（全データ）」を実行してください。');
+        window.alert(t('作成者は先に「お部屋を削除（全データ）」を実行してください。'));
         closeMenu();
         return;
       }
       throw error;
     }
-    window.alert('アカウントを削除しました。');
+    window.alert(t('アカウントを削除しました。'));
     closeMenu();
     resetRoomContext();
     clearAuth();
@@ -3452,11 +3515,11 @@ if (els.accountDeleteBtn) {
 if (els.folderDeleteBtn) {
   els.folderDeleteBtn.onclick = safeAction(async () => {
     if (!state.selectedFolder) return;
-    const ok = window.confirm('このフォルダを削除すると、写真とコメントも消えます。よかですか？');
+    const ok = window.confirm(t('このフォルダを削除すると、写真とコメントも消えます。よかですか？'));
     if (!ok) return;
     const folderId = state.selectedFolder.folderId;
     await api(`/folders/${folderId}`, { method: 'DELETE', headers: { ...folderPasswordHeader(folderId) } });
-    window.alert('フォルダを削除しました。');
+    window.alert(t('フォルダを削除しました。'));
     state.selectedFolder = null;
     els.folderDetail.classList.add('hidden');
     await loadFolders();
@@ -3479,17 +3542,17 @@ if (els.setFolderPasswordBtn) {
     else delete state.folderPasswordById[folderId];
     if (els.folderPasswordSet) els.folderPasswordSet.value = '';
     closeFolderPasswordModal();
-    showToast('フォルダの鍵を更新しました。');
+    showToast(t('フォルダの鍵を更新しました。'));
     await loadFolders();
   }, '鍵設定');
 }
 
 window.addEventListener('unhandledrejection', (event) => {
-  showError(`予期しないエラー: ${asMessage(event.reason)}`);
+  showError(tf('予期しないエラー: {message}', { message: asMessage(event.reason) }));
 });
 
 window.addEventListener('error', (event) => {
-  showError(`実行エラー: ${asMessage(event.error || event.message)}`);
+  showError(tf('実行エラー: {message}', { message: asMessage(event.error || event.message) }));
 });
 
 window.addEventListener('resize', () => {
@@ -3557,7 +3620,7 @@ if (els.currentRoomSelect) {
       renderRoomSelect();
       return;
     }
-    const ok = window.confirm('現在のお部屋を切り替えます。よろしいですか？');
+    const ok = window.confirm(t('現在のお部屋を切り替えます。よろしいですか？'));
     if (!ok) {
       renderRoomSelect();
       return;
@@ -3575,5 +3638,5 @@ if (els.currentRoomSelect) {
 
 initUser().catch((error) => {
   console.error(error);
-  showError(`初期化失敗: ${asMessage(error)}`);
+  showError(tf('初期化失敗: {message}', { message: asMessage(error) }));
 });

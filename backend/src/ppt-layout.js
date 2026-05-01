@@ -1,5 +1,6 @@
 const path = require('node:path');
 const PptxGenJS = require('pptxgenjs');
+const { createExportI18n } = require('./export-i18n');
 
 const PPT_WATERMARK_PATH = path.resolve(__dirname, 'favicon.png');
 
@@ -54,13 +55,13 @@ function addFreePlanWatermarks(slide, imageBox) {
   }
 }
 
-function createPresentation() {
+function createPresentation(i18n = createExportI18n('ja')) {
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_WIDE';
-  pptx.author = 'Photo Hub for 監査';
-  pptx.company = 'Photo Hub for 監査';
+  pptx.author = i18n.t('Photo Hub for 監査');
+  pptx.company = i18n.t('Photo Hub for 監査');
   pptx.subject = 'Folder export';
-  pptx.lang = 'ja-JP';
+  pptx.lang = i18n.locale;
   return pptx;
 }
 
@@ -72,6 +73,7 @@ async function addExportPhotoSlide(pptx, options) {
     resolveImage,
     resolveCommentLines,
     footerText,
+    i18n = createExportI18n('ja'),
   } = options;
   const slide = pptx.addSlide();
   slide.background = { color: PALETTE.bg };
@@ -85,7 +87,7 @@ async function addExportPhotoSlide(pptx, options) {
     fill: { color: PALETTE.brandSoft },
     line: { color: 'BFD2B7', pt: 1 },
   });
-  slide.addText('監査レポート', {
+  slide.addText(i18n.t('監査レポート'), {
     x: 0.82,
     y: 0.45,
     w: 1.35,
@@ -150,7 +152,7 @@ async function addExportPhotoSlide(pptx, options) {
     fill: { color: PALETTE.card },
     line: { color: PALETTE.line, pt: 1 },
   });
-  slide.addText('コメント', {
+  slide.addText(i18n.t('コメント'), {
     x: layout.comments.x + 0.2,
     y: layout.comments.y + 0.16,
     w: 1.3,
@@ -162,7 +164,7 @@ async function addExportPhotoSlide(pptx, options) {
   });
 
   const lines = await resolveCommentLines(photo);
-  slide.addText(lines.length ? lines.join('\n\n') : 'コメントなし', {
+  slide.addText(lines.length ? lines.join('\n\n') : i18n.t('コメントなし'), {
     x: layout.comments.x + 0.2,
     y: layout.comments.y + 0.46,
     w: layout.comments.w - 0.4,
@@ -201,8 +203,10 @@ async function buildExportPresentation(options) {
     resolveImage,
     resolveCommentLines,
     buildFooterText,
+    i18n: inputI18n,
   } = options;
-  const pptx = createPresentation();
+  const i18n = inputI18n || createExportI18n('ja');
+  const pptx = createPresentation(i18n);
   for (let index = 0; index < photos.length; index += 1) {
     const photo = photos[index];
     await addExportPhotoSlide(pptx, {
@@ -212,6 +216,7 @@ async function buildExportPresentation(options) {
       resolveImage,
       resolveCommentLines,
       footerText: typeof buildFooterText === 'function' ? buildFooterText(photo, index, photos.length) : '',
+      i18n,
     });
   }
   return pptx;

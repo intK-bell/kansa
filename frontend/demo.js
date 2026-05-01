@@ -22,6 +22,25 @@ const COGNITO_CLIENT_ID =
   window.localStorage.getItem('kansa_cognito_client_id') || APP_CONFIG.cognitoClientId || '';
 const COGNITO_REDIRECT_URI =
   APP_CONFIG.cognitoRedirectUri || window.localStorage.getItem('kansa_cognito_redirect_uri') || window.location.origin;
+const I18N = window.KANSA_I18N || null;
+const t = (key) => (I18N && typeof I18N.t === 'function' ? I18N.t(key) : key);
+const tf = (key, values = {}) =>
+  I18N && typeof I18N.format === 'function'
+    ? I18N.format(key, values)
+    : String(key).replace(/\{([a-zA-Z0-9_]+)\}/g, (match, name) =>
+        Object.prototype.hasOwnProperty.call(values, name) ? String(values[name]) : match
+      );
+const appLocale = I18N?.language || 'ja-JP';
+
+if (I18N && !window.__KANSA_DEMO_DIALOG_I18N__) {
+  window.__KANSA_DEMO_DIALOG_I18N__ = true;
+  const nativeAlert = window.alert.bind(window);
+  const nativeConfirm = window.confirm.bind(window);
+  const nativePrompt = window.prompt.bind(window);
+  window.alert = (message) => nativeAlert(t(String(message)));
+  window.confirm = (message) => nativeConfirm(t(String(message)));
+  window.prompt = (message, defaultValue) => nativePrompt(t(String(message)), defaultValue);
+}
 
 const state = {
   userKey: null,
@@ -852,7 +871,7 @@ function setMenuActionVisibility(showActions, options = {}) {
 
 function showError(message) {
   if (!els.errorBox) return;
-  els.errorBox.textContent = message;
+  els.errorBox.textContent = t(String(message || ''));
   els.errorBox.classList.remove('hidden');
 }
 
@@ -1108,7 +1127,7 @@ function initTheme() {
 
 function showToast(message) {
   if (!els.toast) return;
-  els.toast.textContent = message;
+  els.toast.textContent = t(String(message || ''));
   els.toast.classList.remove('hidden');
   window.clearTimeout(showToast.timerId);
   showToast.timerId = window.setTimeout(() => {
@@ -1394,7 +1413,7 @@ function safeAction(fn, label) {
       clearError();
       await fn(...args);
     } catch (error) {
-      showError(`${label}失敗: ${asMessage(error)}`);
+      showError(tf('{label}失敗: {message}', { label: t(label || '処理'), message: asMessage(error) }));
       console.error(error);
     }
   };
@@ -1708,12 +1727,14 @@ function showApp() {
 function headers(method = 'GET') {
   const upper = String(method || 'GET').toUpperCase();
   const authHeader = state.idToken ? { Authorization: `Bearer ${state.idToken}` } : {};
+  const languageHeader = I18N?.language ? { 'x-kansa-language': I18N.language } : {};
   // Room headers are deprecated. Room is inferred from membership (/team/me, invite accept).
   const roomHeaders = {};
-  if (upper === 'GET') return { ...authHeader, ...roomHeaders };
+  if (upper === 'GET') return { ...authHeader, ...languageHeader, ...roomHeaders };
   const safeUserName = encodeURIComponent(state.userName || 'unknown');
   return {
     ...authHeader,
+    ...languageHeader,
     'content-type': 'application/json',
     'x-user-key': state.userKey,
     'x-user-name': safeUserName,
@@ -2510,7 +2531,7 @@ function canDelete(item) {
 
 function formatDateTime(value) {
   if (!value) return '-';
-  return new Date(value).toLocaleString('ja-JP');
+  return new Date(value).toLocaleString(appLocale);
 }
 
 async function renderPhotos() {
@@ -3819,7 +3840,7 @@ api = async function (path, options = {}) {
     const folder = {
       folderId: `folder-demo-${demoStore.folderCounter}`,
       folderCode: `F-${String(demoStore.folderCounter).padStart(3, '0')}`,
-      title: String(body.title || '').trim() || `新規フォルダ${demoStore.folderCounter}`,
+      title: String(body.title || '').trim() || `${t('新規フォルダ')}${demoStore.folderCounter}`,
       createdBy: DEMO_USER_KEY,
       createdByName: demoStore.me.displayName,
       hasPassword: Boolean(body.folderPassword),
@@ -3861,9 +3882,9 @@ api = async function (path, options = {}) {
     const photo = createDemoPhoto({
       photoId: body.photoId || `photo-demo-${demoStore.photoCounter}`,
       photoCode: `P-${String(demoStore.photoCounter).padStart(3, '0')}`,
-      fileName: String(body.fileName || `新規写真${demoStore.photoCounter}`).trim(),
-      originalName: String(body.fileName || `新規写真${demoStore.photoCounter}`).trim(),
-      viewUrl: demoSvg(String(body.fileName || '新規写真'), '#7baf6a', '#dff0d8'),
+      fileName: String(body.fileName || `${t('新規写真')}${demoStore.photoCounter}`).trim(),
+      originalName: String(body.fileName || `${t('新規写真')}${demoStore.photoCounter}`).trim(),
+      viewUrl: demoSvg(String(body.fileName || t('新規写真')), '#7baf6a', '#dff0d8'),
       sizeBytes: 6 * 1024 * 1024,
       comments: body.initialComment
         ? [
@@ -4028,7 +4049,11 @@ startSubscriptionCheckout = async function (plan) {
   await loadTeamMe();
   await loadFolders();
   await loadAdminPanel();
-  window.alert(`デモでは ${planToDisplayLabel(activeRoom.subscriptionPlan)} に切り替えた状態を表示します。`);
+  window.alert(
+    tf('デモでは {plan} に切り替えた状態を表示します。', {
+      plan: planToDisplayLabel(activeRoom.subscriptionPlan),
+    })
+  );
 };
 
 initUser = async function () {

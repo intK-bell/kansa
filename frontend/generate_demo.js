@@ -3,6 +3,7 @@ const fs = require('fs');
 const { PDFDocument, StandardFonts, rgb } = require('../backend/src/node_modules/pdf-lib');
 const fontkit = require('../backend/src/node_modules/@pdf-lib/fontkit');
 const { buildExportPresentation, resolveExportSlideLayout, PALETTE } = require('../backend/src/ppt-layout');
+const { createExportI18n, normalizeLanguage } = require('../backend/src/export-i18n');
 
 const PDF_PAGE_WIDTH = 960;
 const PDF_PAGE_HEIGHT = 540;
@@ -97,7 +98,7 @@ function toneSet(seedText) {
   return presets[hash % presets.length];
 }
 
-function drawDemoImagePlaceholder(page, photo, box, jpFont, latinFont) {
+function drawDemoImagePlaceholder(page, photo, box, jpFont, latinFont, i18n) {
   const [toneA, toneB] = toneSet(photo.fileName || photo.photoCode || photo.photoId);
   const x = pptUnit(box.x);
   const y = PDF_PAGE_HEIGHT - pptUnit(box.y + box.h);
@@ -109,7 +110,7 @@ function drawDemoImagePlaceholder(page, photo, box, jpFont, latinFont) {
   page.drawRectangle({ x: x + 26, y: y + h - 50, width: 180, height: 16, color: rgb(1, 1, 1), opacity: 0.34 });
   page.drawRectangle({ x: x + 26, y: y + h - 76, width: 128, height: 10, color: rgb(1, 1, 1), opacity: 0.26 });
   page.drawRectangle({ x: x + 26, y: y + 26, width: w - 52, height: 74, color: rgb(1, 1, 1), opacity: 0.14 });
-  drawMixedPdfText(page, photo.fileName || photo.photoCode || 'デモ画像', {
+  drawMixedPdfText(page, photo.fileName || photo.photoCode || i18n.t('デモ画像'), {
     x: x + 28,
     y: y + 48,
     size: 20,
@@ -120,15 +121,16 @@ function drawDemoImagePlaceholder(page, photo, box, jpFont, latinFont) {
 }
 
 async function buildDemoPdf(options) {
-  const { folder, photos, currentPlan, usageBytes, capacityBytes } = options;
+  const { folder, photos, currentPlan, usageBytes, capacityBytes, i18n: inputI18n } = options;
+  const i18n = inputI18n || createExportI18n('ja');
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
   const jpFont = await pdfDoc.embedFont(fs.readFileSync(PDF_FONT_PATH), { subset: false });
   const latinFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const exportAt = new Date();
-  const footerSummary = `形式: PDF / プラン: ${currentPlan} / 使用量: ${Math.round(usageBytes / (1024 * 1024))}MB / 上限: ${Math.round(
+  const footerSummary = `${i18n.t('形式')}: PDF / ${i18n.t('プラン')}: ${currentPlan} / ${i18n.t('使用量')}: ${Math.round(usageBytes / (1024 * 1024))}MB / ${i18n.t('上限')}: ${Math.round(
     capacityBytes / (1024 * 1024)
-  )}MB / 出力: ${formatJstDisplayDateTime(exportAt.toISOString())}`;
+  )}MB / ${i18n.t('出力')}: ${formatJstDisplayDateTime(exportAt.toISOString(), i18n)}`;
 
   for (let index = 0; index < photos.length; index += 1) {
     const photo = photos[index];
@@ -136,7 +138,7 @@ async function buildDemoPdf(options) {
     const layout = resolveExportSlideLayout({ width: 640, height: 480 });
     const comments = Array.isArray(photo.comments) ? photo.comments : [];
     const commentLines = comments.map((comment, lineIndex) => {
-      const stampedBy = `${formatJstDisplayDateTime(comment.createdAt)} ${comment.createdByName || comment.createdBy || 'unknown'}`;
+      const stampedBy = `${formatJstDisplayDateTime(comment.createdAt, i18n)} ${comment.createdByName || comment.createdBy || 'unknown'}`;
       return `${lineIndex + 1}. ${comment.text}\n${stampedBy}`;
     });
 
@@ -150,7 +152,7 @@ async function buildDemoPdf(options) {
       borderColor: hexToRgbColor('BFD2B7'),
       borderWidth: 1,
     });
-    page.drawText('監査レポート', {
+    page.drawText(i18n.t('監査レポート'), {
       x: pptUnit(0.82),
       y: PDF_PAGE_HEIGHT - pptUnit(0.58),
       size: 10,
@@ -183,7 +185,7 @@ async function buildDemoPdf(options) {
       borderColor: hexToRgbColor(PALETTE.line),
       borderWidth: 1,
     });
-    drawDemoImagePlaceholder(page, photo, layout.image, jpFont, latinFont);
+    drawDemoImagePlaceholder(page, photo, layout.image, jpFont, latinFont, i18n);
 
     page.drawRectangle({
       x: pptUnit(layout.comments.x),
@@ -194,7 +196,7 @@ async function buildDemoPdf(options) {
       borderColor: hexToRgbColor(PALETTE.line),
       borderWidth: 1,
     });
-    page.drawText('コメント', {
+    page.drawText(i18n.t('コメント'), {
       x: pptUnit(layout.comments.x + 0.2),
       y: PDF_PAGE_HEIGHT - pptUnit(layout.comments.y + 0.28),
       size: 11,
@@ -202,7 +204,7 @@ async function buildDemoPdf(options) {
       color: hexToRgbColor(PALETTE.brandText),
     });
     const wrappedCommentLines = wrapPdfText(
-      commentLines.length ? commentLines.join('\n\n') : 'コメントなし',
+      commentLines.length ? commentLines.join('\n\n') : i18n.t('コメントなし'),
       pptUnit(layout.comments.w - 0.4),
       10,
       jpFont,
@@ -248,11 +250,11 @@ function formatJstCompactTimestamp(date = new Date()) {
   return `${get('year')}${get('month')}${get('day')}${get('hour')}${get('minute')}`;
 }
 
-function formatJstDisplayDateTime(value) {
-  if (!value) return '日時不明';
+function formatJstDisplayDateTime(value, i18n = createExportI18n('ja')) {
+  if (!value) return i18n.t('日時不明');
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '日時不明';
-  const parts = new Intl.DateTimeFormat('ja-JP', {
+  if (Number.isNaN(date.getTime())) return i18n.t('日時不明');
+  const parts = new Intl.DateTimeFormat(i18n.locale, {
     timeZone: 'Asia/Tokyo',
     year: 'numeric',
     month: 'numeric',
@@ -293,6 +295,7 @@ function parseArgs(argv) {
     if (arg === '--folder') result.folderId = argv[i + 1];
     if (arg === '--out') result.out = argv[i + 1];
     if (arg === '--format') result.format = argv[i + 1];
+    if (arg === '--language') result.language = argv[i + 1];
   }
   return result;
 }
@@ -300,6 +303,8 @@ function parseArgs(argv) {
 async function main() {
   const { createDemoStore, DEMO_PLAN_BYTES } = await import(path.resolve(__dirname, './demo-seed.mjs'));
   const args = parseArgs(process.argv.slice(2));
+  const language = normalizeLanguage(args.language || process.env.KANSA_LANGUAGE || 'ja');
+  const i18n = createExportI18n(language);
   const store = createDemoStore();
   const roomId = args.roomId || store.activeRoomId || store.rooms[0]?.roomId;
   const room = store.rooms.find((item) => item.roomId === roomId);
@@ -327,6 +332,7 @@ async function main() {
       currentPlan,
       usageBytes: room.billing?.usageBytes || 0,
       capacityBytes: DEMO_PLAN_BYTES[currentPlan] || DEMO_PLAN_BYTES.FREE,
+      i18n,
     });
     fs.writeFileSync(outPath, pdfBuffer);
   } else {
@@ -341,12 +347,13 @@ async function main() {
       resolveCommentLines: async (photo) => {
         const comments = Array.isArray(photo.comments) ? photo.comments : [];
         return comments.map((comment, index) => {
-          const stampedBy = `${formatJstDisplayDateTime(comment.createdAt)} ${comment.createdByName || comment.createdBy || 'unknown'}`;
+          const stampedBy = `${formatJstDisplayDateTime(comment.createdAt, i18n)} ${comment.createdByName || comment.createdBy || 'unknown'}`;
           return `${index + 1}. ${comment.text}\n${stampedBy}`;
         });
       },
       buildFooterText: (_photo, index, total) =>
-        `プラン: ${currentPlan} / 使用量: ${Math.round((room.billing?.usageBytes || 0) / (1024 * 1024))}MB / 上限: ${Math.round((DEMO_PLAN_BYTES[currentPlan] || DEMO_PLAN_BYTES.FREE) / (1024 * 1024))}MB / ${index + 1}/${total}`,
+        `${i18n.t('プラン')}: ${currentPlan} / ${i18n.t('使用量')}: ${Math.round((room.billing?.usageBytes || 0) / (1024 * 1024))}MB / ${i18n.t('上限')}: ${Math.round((DEMO_PLAN_BYTES[currentPlan] || DEMO_PLAN_BYTES.FREE) / (1024 * 1024))}MB / ${index + 1}/${total}`,
+      i18n,
     });
     await pptx.writeFile({ fileName: outPath });
   }
