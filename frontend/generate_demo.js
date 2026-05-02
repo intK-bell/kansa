@@ -318,12 +318,13 @@ async function main() {
   const exportAt = new Date();
   const exportStamp = formatJstCompactTimestamp(exportAt);
   const format = String(args.format || 'pptx_high').toLowerCase();
+  const languageSuffix = language === 'ja' ? '' : `-${language.toLowerCase()}`;
   const defaultOut =
     format === 'pdf'
-      ? path.resolve(__dirname, './demo-assets/demo-export-sample.pdf')
+      ? path.resolve(__dirname, `./demo-assets/demo-export-sample${languageSuffix}.pdf`)
       : format === 'pptx_light'
-        ? path.resolve(__dirname, './demo-assets/demo-export-light-sample.pptx')
-        : path.resolve(__dirname, './demo-assets/demo-export-high-sample.pptx');
+        ? path.resolve(__dirname, `./demo-assets/demo-export-light-sample${languageSuffix}.pptx`)
+        : path.resolve(__dirname, `./demo-assets/demo-export-high-sample${languageSuffix}.pptx`);
   const outPath = args.out ? path.resolve(process.cwd(), args.out) : defaultOut;
   if (format === 'pdf') {
     const pdfBuffer = await buildDemoPdf({

@@ -21,70 +21,70 @@
   <body>
     <main class="container">
       <div class="page-header">
-        <h1>Photo Hub for 監査</h1>
+        <h1 data-i18n="Photo Hub for 監査">Photo Hub for 監査</h1>
         <div class="menu-wrap hidden" id="global-menu-wrap">
           <button id="menu-btn" class="menu-btn" type="button" aria-label="menu">☰</button>
           <div id="menu-panel" class="menu-panel hidden">
             <details class="menu-group" data-menu-group>
-              <summary class="menu-group-summary">お部屋</summary>
+              <summary class="menu-group-summary" data-i18n="お部屋">お部屋</summary>
               <div class="menu-group-items">
-                <button id="team-admin-btn" type="button" class="hidden">管理</button>
-                <button id="create-room-menu-btn" type="button">作成</button>
-                <button id="leave-room-btn" type="button" class="danger">脱退</button>
+                <button id="team-admin-btn" type="button" class="hidden" data-i18n="管理">管理</button>
+                <button id="create-room-menu-btn" type="button" data-i18n="作成">作成</button>
+                <button id="leave-room-btn" type="button" class="danger" data-i18n="脱退">脱退</button>
               </div>
             </details>
             <details class="menu-group" data-menu-group>
-              <summary class="menu-group-summary">フォルダ</summary>
+              <summary class="menu-group-summary" data-i18n="フォルダ">フォルダ</summary>
               <div class="menu-group-items">
-                <button id="open-folder-create-btn" type="button">作成</button>
-                <button id="open-folder-password-btn" type="button" class="hidden">パスワード</button>
-                <button id="export-btn" type="button">出力</button>
+                <button id="open-folder-create-btn" type="button" data-i18n="作成">作成</button>
+                <button id="open-folder-password-btn" type="button" class="hidden" data-i18n="パスワード">パスワード</button>
+                <button id="export-btn" type="button" data-i18n="出力">出力</button>
               </div>
             </details>
             <details class="menu-group" data-menu-group>
-              <summary class="menu-group-summary">アカウント</summary>
+              <summary class="menu-group-summary" data-i18n="アカウント">アカウント</summary>
               <div class="menu-group-items">
-                <button id="open-theme-btn" type="button">テーマ</button>
-                <button id="reset-user-btn" type="button">名前変更</button>
-                <button id="account-delete-btn" type="button" class="danger">削除</button>
+                <button id="open-theme-btn" type="button" data-i18n="テーマ">テーマ</button>
+                <button id="reset-user-btn" type="button" data-i18n="名前変更">名前変更</button>
+                <button id="account-delete-btn" type="button" class="danger" data-i18n="削除">削除</button>
               </div>
             </details>
-            <button id="logout-btn" type="button" class="danger">ログアウト</button>
-            <button id="help-menu-btn" type="button">使い方・料金</button>
+            <button id="logout-btn" type="button" class="danger" data-i18n="ログアウト">ログアウト</button>
+            <button id="help-menu-btn" type="button" data-i18n="使い方・料金">使い方・料金</button>
           </div>
         </div>
       </div>
 
       <section id="user-setup" class="card hidden">
         <div class="row">
-          <button id="login-btn">ログイン</button>
-          <button id="signup-btn" type="button">新規登録</button>
+          <button id="login-btn" data-i18n="ログイン">ログイン</button>
+          <button id="signup-btn" type="button" data-i18n="新規登録">新規登録</button>
         </div>
         <p class="auth-footnote">
-          <span id="help-user-link" class="help-link">使い方を見る</span>
+          <span id="help-user-link" class="help-link" data-i18n="使い方を見る">使い方を見る</span>
           <br />
-          <a class="help-link auth-legal-link" href="./legal.html">特定商取引法に基づく表記・利用規約・プライバシーポリシー</a>
+          <a class="help-link auth-legal-link" href="./legal.html" data-i18n="特定商取引法に基づく表記・利用規約・プライバシーポリシー">特定商取引法に基づく表記・利用規約・プライバシーポリシー</a>
         </p>
       </section>
 
       <section id="room-setup" class="card hidden">
-        <h2>お部屋</h2>
-        <p class="muted">管理者はお部屋を作成、メンバーは招待URLから参加します。</p>
+        <h2 data-i18n="お部屋">お部屋</h2>
+        <p class="muted" data-i18n="管理者はお部屋を作成、メンバーは招待URLから参加します。">管理者はお部屋を作成、メンバーは招待URLから参加します。</p>
         <div class="room-grid">
           <div class="room-card">
-            <h3>新規作成</h3>
-            <input id="create-room-name" placeholder="お部屋名" />
-            <button id="create-room-btn">お部屋を作る</button>
+            <h3 data-i18n="新規作成">新規作成</h3>
+            <input id="create-room-name" placeholder="お部屋名" data-i18n-attr="placeholder:お部屋名" />
+            <button id="create-room-btn" data-i18n="お部屋を作る">お部屋を作る</button>
           </div>
         </div>
         <div class="room-grid" style="margin-top:14px;">
           <div class="room-card">
-            <h3>入室可能なお部屋</h3>
+            <h3 data-i18n="入室可能なお部屋">入室可能なお部屋</h3>
             <div class="row" style="margin-bottom:8px;">
-              <button id="refresh-my-rooms-btn" type="button">一覧更新</button>
+              <button id="refresh-my-rooms-btn" type="button" data-i18n="一覧更新">一覧更新</button>
             </div>
-            <div id="my-rooms-list" class="muted">読み込み中...</div>
-            <p class="muted" style="margin-top:10px;">※ 「この部屋へ」で入室中のお部屋を切り替えられます。</p>
+            <div id="my-rooms-list" class="muted" data-i18n="読み込み中...">読み込み中...</div>
+            <p class="muted" style="margin-top:10px;" data-i18n="※ 「この部屋へ」で入室中のお部屋を切り替えられます。">※ 「この部屋へ」で入室中のお部屋を切り替えられます。</p>
           </div>
         </div>
       </section>
@@ -92,19 +92,19 @@
       <section id="app" class="hidden">
         <div class="app-header">
           <div id="app-header-summary" class="app-header-summary">
-            <p>利用者: <strong id="current-name"></strong></p>
-            <p id="current-room-static" class="app-header-static hidden">お部屋: <strong id="current-room-name"></strong></p>
+            <p><span data-i18n="利用者:">利用者:</span> <strong id="current-name"></strong></p>
+            <p id="current-room-static" class="app-header-static hidden"><span data-i18n="お部屋:">お部屋:</span> <strong id="current-room-name"></strong></p>
             <div class="app-header-controls">
               <label class="app-header-field">
-                <span>現在のお部屋</span>
+                <span data-i18n="現在のお部屋">現在のお部屋</span>
                 <select id="current-room-select">
-                  <option value="">お部屋を選択してください</option>
+                  <option value="" data-i18n="お部屋を選択してください">お部屋を選択してください</option>
                 </select>
               </label>
               <label class="app-header-field">
-                <span>現在のフォルダ</span>
+                <span data-i18n="現在のフォルダ">現在のフォルダ</span>
                 <select id="current-folder-select">
-                  <option value="">フォルダを選択してください</option>
+                  <option value="" data-i18n="フォルダを選択してください">フォルダを選択してください</option>
                 </select>
               </label>
             </div>
@@ -113,76 +113,76 @@
 
         <div class="toolbar">
           <p id="error-box" class="muted hidden" style="color:#b91c1c;"></p>
-          <div id="billing-graph-top" class="storage-graph hidden" aria-label="ストレージ使用量">
+          <div id="billing-graph-top" class="storage-graph hidden" aria-label="ストレージ使用量" data-i18n-attr="aria-label:ストレージ使用量">
             <div class="storage-graph-bar">
               <div id="billing-graph-top-used" class="storage-graph-used" style="width:0%;"></div>
               <div id="billing-graph-top-remaining" class="storage-graph-remaining" style="width:100%;"></div>
             </div>
             <div class="storage-graph-meta">
-              <span id="billing-graph-top-used-label">使用量 0MB</span>
-              <span id="billing-graph-top-remain-label">残り 0MB</span>
+              <span id="billing-graph-top-used-label" data-i18n="使用量 0MB">使用量 0MB</span>
+              <span id="billing-graph-top-remain-label" data-i18n="残り 0MB">残り 0MB</span>
             </div>
             <div id="billing-graph-top-submeta" class="storage-graph-submeta hidden">
-              <span id="billing-graph-top-extra-label">追加残り 0.00 GB・月 相当</span>
+              <span id="billing-graph-top-extra-label" data-i18n="追加残り 0.00 GB・月 相当">追加残り 0.00 GB・月 相当</span>
             </div>
           </div>
           <p id="billing-bar" class="billing-bar muted hidden"></p>
         </div>
 
         <section id="team-admin" class="admin-panel hidden">
-          <h2>お部屋管理（管理者）</h2>
+          <h2 data-i18n="お部屋管理（管理者）">お部屋管理（管理者）</h2>
           <div class="card admin-card">
-            <h3>お部屋</h3>
+            <h3 data-i18n="お部屋">お部屋</h3>
             <div class="row" style="margin-top:10px;">
-              <button id="create-invite-btn" type="button">招待URLを発行（7日）</button>
-              <button id="revoke-invite-btn" type="button" class="danger hidden">招待URLを失効</button>
+              <button id="create-invite-btn" type="button" data-i18n="招待URLを発行（7日）">招待URLを発行（7日）</button>
+              <button id="revoke-invite-btn" type="button" class="danger hidden" data-i18n="招待URLを失効">招待URLを失効</button>
               <div class="invite-url-cell">
-                <input id="invite-url" placeholder="招待URL" readonly />
-                <button id="copy-invite-url-btn" type="button">コピー</button>
+                <input id="invite-url" placeholder="招待URL" readonly data-i18n-attr="placeholder:招待URL" />
+                <button id="copy-invite-url-btn" type="button" data-i18n="コピー">コピー</button>
               </div>
             </div>
             <div id="member-list" style="margin-top:10px;"></div>
             <div class="row" style="margin-top:10px;">
-              <button id="delete-team-btn" type="button" class="danger">お部屋を削除（全データ）</button>
+              <button id="delete-team-btn" type="button" class="danger" data-i18n="お部屋を削除（全データ）">お部屋を削除（全データ）</button>
             </div>
-            <p class="muted" style="margin-top:10px;">
+            <p class="muted" style="margin-top:10px;" data-i18n="※ 削除は、アップロード画像に加え、サムネイル等の自動生成データも含みます。">
               ※ 削除は、アップロード画像に加え、サムネイル等の自動生成データも含みます。
             </p>
           </div>
 
           <div class="card admin-card">
-            <h3>フォルダ</h3>
+            <h3 data-i18n="フォルダ">フォルダ</h3>
             <div id="folder-admin-list" style="margin-top:10px;"></div>
           </div>
 
           <div class="card admin-card">
-            <h3>容量</h3>
+            <h3 data-i18n="容量">容量</h3>
             <p id="billing-status" class="muted"></p>
-            <div id="billing-graph" class="storage-graph hidden" aria-label="ストレージ使用量">
+            <div id="billing-graph" class="storage-graph hidden" aria-label="ストレージ使用量" data-i18n-attr="aria-label:ストレージ使用量">
               <div class="storage-graph-bar">
                 <div id="billing-graph-used" class="storage-graph-used" style="width:0%;"></div>
                 <div id="billing-graph-remaining" class="storage-graph-remaining" style="width:100%;"></div>
               </div>
               <div class="storage-graph-meta">
-                <span id="billing-graph-used-label">使用量 0MB</span>
-                <span id="billing-graph-remain-label">残り 0MB</span>
+                <span id="billing-graph-used-label" data-i18n="使用量 0MB">使用量 0MB</span>
+                <span id="billing-graph-remain-label" data-i18n="残り 0MB">残り 0MB</span>
               </div>
             </div>
             <div class="row">
-              <button id="subscribe-free" type="button">フリープランに戻る</button>
-              <button id="subscribe-basic" type="button">1GBプラン (¥980/月)</button>
-              <button id="subscribe-plus" type="button">5GBプラン (¥1,980/月)</button>
-              <button id="subscribe-pro" type="button">10GBプラン (¥2,980/月)</button>
+              <button id="subscribe-free" type="button" data-i18n="フリープランに戻る">フリープランに戻る</button>
+              <button id="subscribe-basic" type="button" data-i18n="1GBプラン (¥980/月)">1GBプラン (¥980/月)</button>
+              <button id="subscribe-plus" type="button" data-i18n="5GBプラン (¥1,980/月)">5GBプラン (¥1,980/月)</button>
+              <button id="subscribe-pro" type="button" data-i18n="10GBプラン (¥2,980/月)">10GBプラン (¥2,980/月)</button>
             </div>
             <p id="billing-plan-guide" class="muted" style="margin-top:8px;"></p>
-            <p class="muted" style="margin-top:8px;">
+            <p class="muted" style="margin-top:8px;" data-i18n="※ 本サービスの容量表示は2進単位です（1GB=1,024MB、5GB=5,120MB、10GB=10,240MB）。">
               ※ 本サービスの容量表示は2進単位です（1GB=1,024MB、5GB=5,120MB、10GB=10,240MB）。
             </p>
             <p id="billing-archive-note" class="muted" style="margin-top:4px;"></p>
           </div>
 
           <div class="team-admin-back-bar">
-            <button id="team-admin-back-btn" type="button" aria-label="部屋に戻る">部屋に戻る</button>
+            <button id="team-admin-back-btn" type="button" aria-label="部屋に戻る" data-i18n="部屋に戻る" data-i18n-attr="aria-label:部屋に戻る">部屋に戻る</button>
           </div>
         </section>
 
@@ -194,15 +194,15 @@
           </div>
           <div id="upload-meta-card" class="upload-meta-card hidden">
             <div class="upload-meta-actions">
-              <button id="apply-name-sequence-btn" type="button">1つ目の写真名を連番で反映</button>
-              <button id="apply-comment-bulk-btn" type="button">1つ目のコメントを全件に反映</button>
-              <button id="cancel-upload-drafts-btn" type="button" class="danger">キャンセル</button>
-              <button id="upload-btn">アップロード</button>
+              <button id="apply-name-sequence-btn" type="button" data-i18n="1つ目の写真名を連番で反映">1つ目の写真名を連番で反映</button>
+              <button id="apply-comment-bulk-btn" type="button" data-i18n="1つ目のコメントを全件に反映">1つ目のコメントを全件に反映</button>
+              <button id="cancel-upload-drafts-btn" type="button" class="danger" data-i18n="キャンセル">キャンセル</button>
+              <button id="upload-btn" data-i18n="アップロード">アップロード</button>
             </div>
             <p id="upload-meta-status" class="muted" style="margin:8px 0 0;"></p>
             <div id="upload-meta-list" class="upload-meta-list"></div>
             <div class="upload-submit-area">
-              <span id="upload-loading" class="upload-loading hidden">アップロード中...</span>
+              <span id="upload-loading" class="upload-loading hidden" data-i18n="アップロード中...">アップロード中...</span>
             </div>
           </div>
           <div id="photo-list" class="photo-grid"></div>
@@ -212,52 +212,52 @@
 
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
-    <div id="room-create-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="お部屋作成">
+    <div id="room-create-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="お部屋作成" data-i18n-attr="aria-label:お部屋作成">
       <div class="modal-card">
         <div class="modal-header">
-          <h3 style="margin:0;">お部屋作成</h3>
-          <button id="room-create-close-btn" type="button" class="danger">閉じる</button>
+          <h3 style="margin:0;" data-i18n="お部屋作成">お部屋作成</h3>
+          <button id="room-create-close-btn" type="button" class="danger" data-i18n="閉じる">閉じる</button>
         </div>
-        <p class="muted" style="margin:8px 0 10px;">※ 1人1部屋です。作成済みの場合は作成できません。</p>
+        <p class="muted" style="margin:8px 0 10px;" data-i18n="※ 1人1部屋です。作成済みの場合は作成できません。">※ 1人1部屋です。作成済みの場合は作成できません。</p>
         <div class="row" style="align-items:stretch;">
-          <input id="room-create-name" placeholder="お部屋名" />
-          <button id="room-create-submit-btn" type="button">作成して入室</button>
+          <input id="room-create-name" placeholder="お部屋名" data-i18n-attr="placeholder:お部屋名" />
+          <button id="room-create-submit-btn" type="button" data-i18n="作成して入室">作成して入室</button>
         </div>
       </div>
     </div>
 
-    <div id="folder-create-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="フォルダ作成">
+    <div id="folder-create-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="フォルダ作成" data-i18n-attr="aria-label:フォルダ作成">
       <div class="modal-card">
         <div class="modal-header">
-          <h3 style="margin:0;">フォルダ作成</h3>
-          <button id="folder-create-close-btn" type="button" class="danger">閉じる</button>
+          <h3 style="margin:0;" data-i18n="フォルダ作成">フォルダ作成</h3>
+          <button id="folder-create-close-btn" type="button" class="danger" data-i18n="閉じる">閉じる</button>
         </div>
         <div class="row" style="align-items:stretch;">
-          <input id="folder-title" placeholder="〇〇工場_yyyymmdd" />
-          <input id="folder-password" placeholder="フォルダパスワード（任意）" type="password" />
-          <button id="create-folder-btn">作成</button>
+          <input id="folder-title" placeholder="〇〇工場_yyyymmdd" data-i18n-attr="placeholder:〇〇工場_yyyymmdd" />
+          <input id="folder-password" placeholder="フォルダパスワード（任意）" type="password" data-i18n-attr="placeholder:フォルダパスワード（任意）" />
+          <button id="create-folder-btn" data-i18n="作成">作成</button>
         </div>
       </div>
     </div>
 
-    <div id="theme-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="テーマ">
+    <div id="theme-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="テーマ" data-i18n-attr="aria-label:テーマ">
       <div class="modal-card">
         <div class="modal-header">
-          <h3 style="margin:0;">テーマ</h3>
-          <button id="theme-close-btn" type="button" class="danger">閉じる</button>
+          <h3 style="margin:0;" data-i18n="テーマ">テーマ</h3>
+          <button id="theme-close-btn" type="button" class="danger" data-i18n="閉じる">閉じる</button>
         </div>
         <div class="modal-form-grid">
           <label>
-            <span class="menu-label">季節</span>
+            <span class="menu-label" data-i18n="季節">季節</span>
             <select id="season-select">
-              <option value="spring">春</option>
-              <option value="summer">夏</option>
-              <option value="autumn">秋</option>
-              <option value="winter">冬</option>
+              <option value="spring" data-i18n="春">春</option>
+              <option value="summer" data-i18n="夏">夏</option>
+              <option value="autumn" data-i18n="秋">秋</option>
+              <option value="winter" data-i18n="冬">冬</option>
             </select>
           </label>
           <label>
-            <span class="menu-label">ダークモード</span>
+            <span class="menu-label" data-i18n="ダークモード">ダークモード</span>
             <select id="theme-mode-select">
               <option value="light">OFF</option>
               <option value="dark">ON</option>
@@ -267,115 +267,115 @@
       </div>
     </div>
 
-    <div id="folder-password-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="フォルダパスワード">
+    <div id="folder-password-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="フォルダパスワード" data-i18n-attr="aria-label:フォルダパスワード">
       <div class="modal-card">
         <div class="modal-header">
-          <h3 style="margin:0;">フォルダパスワード</h3>
-          <button id="folder-password-close-btn" type="button" class="danger">閉じる</button>
+          <h3 style="margin:0;" data-i18n="フォルダパスワード">フォルダパスワード</h3>
+          <button id="folder-password-close-btn" type="button" class="danger" data-i18n="閉じる">閉じる</button>
         </div>
         <p class="folder-password-target" aria-live="polite">
-          <span>対象フォルダ</span>
+          <span data-i18n="対象フォルダ">対象フォルダ</span>
           <strong id="folder-password-target-name">-</strong>
         </p>
-        <p class="muted" style="margin:8px 0 10px;">現在のフォルダに設定します。空で保存すると解除されます。</p>
+        <p class="muted" style="margin:8px 0 10px;" data-i18n="現在のフォルダに設定します。空で保存すると解除されます。">現在のフォルダに設定します。空で保存すると解除されます。</p>
         <div class="row" style="align-items:stretch;">
-          <input id="folder-password-set" placeholder="フォルダパスワード（空で解除）" type="password" />
-          <button id="set-folder-password-btn" type="button" class="hidden">鍵を設定/解除</button>
+          <input id="folder-password-set" placeholder="フォルダパスワード（空で解除）" type="password" data-i18n-attr="placeholder:フォルダパスワード（空で解除）" />
+          <button id="set-folder-password-btn" type="button" class="hidden" data-i18n="鍵を設定/解除">鍵を設定/解除</button>
         </div>
       </div>
     </div>
 
-    <div id="help-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="使い方・料金">
+    <div id="help-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="使い方・料金" data-i18n-attr="aria-label:使い方・料金">
       <div class="modal-card">
         <div class="modal-header">
-          <h3 style="margin:0;">使い方・料金</h3>
-          <button id="help-close-btn" type="button" class="danger">閉じる</button>
+          <h3 style="margin:0;" data-i18n="使い方・料金">使い方・料金</h3>
+          <button id="help-close-btn" type="button" class="danger" data-i18n="閉じる">閉じる</button>
         </div>
         <div class="help-content">
-          <h4><strong>使い方</strong></h4>
+          <h4><strong data-i18n="使い方">使い方</strong></h4>
           <ol class="help-list">
-            <li>新規登録後、ログイン（初回は表示名を設定）</li>
-            <li>ログイン後、お部屋を作成</li>
-            <li>フォルダ作成 → 写真アップロード → コメント追加 → 出力</li>
+            <li data-i18n="新規登録後、ログイン（初回は表示名を設定）">新規登録後、ログイン（初回は表示名を設定）</li>
+            <li data-i18n="ログイン後、お部屋を作成">ログイン後、お部屋を作成</li>
+            <li data-i18n="フォルダ作成 → 写真アップロード → コメント追加 → 出力">フォルダ作成 → 写真アップロード → コメント追加 → 出力</li>
           </ol>
-          <p><strong>マニュアル：</strong><a class="help-link" href="./manuals/kansa-manual.pdf" target="_blank" rel="noopener noreferrer">こちら</a></p>
+          <p><strong data-i18n="マニュアル：">マニュアル：</strong><a class="help-link" href="./manuals/kansa-manual.html" target="_blank" rel="noopener noreferrer" data-i18n="こちら">こちら</a></p>
 
-          <h4><strong>料金</strong></h4>
-          <p>ご利用料金は、当サービスにお預けいただくデータ量に応じて異なります。</p>
-          <p>無料枠を超えて利用を続ける場合、管理者がサブスクプランを選択します。</p>
-          <p>サブスクプラン（1か月）:</p>
+          <h4><strong data-i18n="料金">料金</strong></h4>
+          <p data-i18n="ご利用料金は、当サービスにお預けいただくデータ量に応じて異なります。">ご利用料金は、当サービスにお預けいただくデータ量に応じて異なります。</p>
+          <p data-i18n="無料枠を超えて利用を続ける場合、管理者がサブスクプランを選択します。">無料枠を超えて利用を続ける場合、管理者がサブスクプランを選択します。</p>
+          <p data-i18n="サブスクプラン（1か月）:">サブスクプラン（1か月）:</p>
           <ul class="help-list">
             <li>1GB: ¥980</li>
             <li>5GB: ¥1,980</li>
             <li>10GB: ¥2,980</li>
           </ul>
-          <p class="muted">※ 料金操作は管理者メニュー（お部屋管理）から実行します。</p>
+          <p class="muted" data-i18n="※ 料金操作は管理者メニュー（お部屋管理）から実行します。">※ 料金操作は管理者メニュー（お部屋管理）から実行します。</p>
         </div>
       </div>
     </div>
 
-    <div id="low-storage-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="容量不足のご案内">
+    <div id="low-storage-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="容量不足のご案内" data-i18n-attr="aria-label:容量不足のご案内">
       <div class="modal-card">
         <div class="modal-header">
-          <h3 style="margin:0;">容量不足のご案内</h3>
-          <button id="low-storage-close-btn" type="button" class="danger">閉じる</button>
+          <h3 style="margin:0;" data-i18n="容量不足のご案内">容量不足のご案内</h3>
+          <button id="low-storage-close-btn" type="button" class="danger" data-i18n="閉じる">閉じる</button>
         </div>
-        <p id="low-storage-message" class="muted" style="margin:8px 0 12px;">
+        <p id="low-storage-message" class="muted" style="margin:8px 0 12px;" data-i18n="容量を追加しますか？">
           容量を追加しますか？
         </p>
         <div class="row" style="justify-content:flex-end;">
-          <button id="low-storage-charge-btn" type="button">サブスクプランへ変更</button>
+          <button id="low-storage-charge-btn" type="button" data-i18n="サブスクプランへ変更">サブスクプランへ変更</button>
         </div>
       </div>
     </div>
-    <div id="export-options-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="出力形式の選択">
+    <div id="export-options-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="出力形式の選択" data-i18n-attr="aria-label:出力形式の選択">
       <div class="modal-card export-options-card">
         <div class="modal-header">
-          <h3 style="margin:0;">出力形式を選択</h3>
-          <button id="export-options-close-btn" type="button" class="danger">閉じる</button>
+          <h3 style="margin:0;" data-i18n="出力形式を選択">出力形式を選択</h3>
+          <button id="export-options-close-btn" type="button" class="danger" data-i18n="閉じる">閉じる</button>
         </div>
-        <p class="muted" style="margin:8px 0 12px;">PDF を最優先でおすすめします。</p>
+        <p class="muted" style="margin:8px 0 12px;" data-i18n="PDF を最優先でおすすめします。">PDF を最優先でおすすめします。</p>
         <div class="export-options-list">
           <button id="export-pdf-btn" type="button" class="export-option export-option-recommended">
             <strong>PDF</strong>
-            <span>最も安定して閲覧できます</span>
+            <span data-i18n="最も安定して閲覧できます">最も安定して閲覧できます</span>
           </button>
           <button id="export-light-btn" type="button" class="export-option">
-            <strong>軽量PPT</strong>
-            <span>できるだけ軽量化したPPTです。携帯では見れない場合があります</span>
+            <strong data-i18n="軽量PPT">軽量PPT</strong>
+            <span data-i18n="できるだけ軽量化したPPTです。携帯では見れない場合があります">できるだけ軽量化したPPTです。携帯では見れない場合があります</span>
           </button>
           <button id="export-high-btn" type="button" class="export-option">
-            <strong>高画質PPT</strong>
-            <span>高品質なPPTです。携帯では見れない場合があります</span>
+            <strong data-i18n="高画質PPT">高画質PPT</strong>
+            <span data-i18n="高品質なPPTです。携帯では見れない場合があります">高品質なPPTです。携帯では見れない場合があります</span>
           </button>
         </div>
       </div>
     </div>
-    <div id="export-loading-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="PDFダウンロード中">
+    <div id="export-loading-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="PDFダウンロード中" data-i18n-attr="aria-label:PDFダウンロード中">
       <div class="modal-card export-loading-card">
         <div class="modal-header">
-          <h3 id="export-loading-title" style="margin:0;">出力中</h3>
-          <button id="export-loading-close-btn" type="button" class="danger hidden">閉じる</button>
+          <h3 id="export-loading-title" style="margin:0;" data-i18n="出力中">出力中</h3>
+          <button id="export-loading-close-btn" type="button" class="danger hidden" data-i18n="閉じる">閉じる</button>
         </div>
-        <p id="export-loading-text" class="muted" style="margin:8px 0 12px;">ダウンロードを開始しています...</p>
+        <p id="export-loading-text" class="muted" style="margin:8px 0 12px;" data-i18n="ダウンロードを開始しています...">ダウンロードを開始しています...</p>
         <div class="export-progress">
           <div id="export-loading-bar" class="export-progress-bar" style="width:0%;"></div>
         </div>
         <div id="export-loading-actions" class="export-actions hidden">
-          <button id="export-download-btn" type="button">ダウンロードする</button>
-          <button id="export-open-tab-btn" type="button">別タブで開く</button>
-          <button id="export-copy-link-btn" type="button">リンクをコピー</button>
+          <button id="export-download-btn" type="button" data-i18n="ダウンロードする">ダウンロードする</button>
+          <button id="export-open-tab-btn" type="button" data-i18n="別タブで開く">別タブで開く</button>
+          <button id="export-copy-link-btn" type="button" data-i18n="リンクをコピー">リンクをコピー</button>
         </div>
       </div>
     </div>
-    <div id="photo-preview-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="写真全体表示">
+    <div id="photo-preview-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="写真全体表示" data-i18n-attr="aria-label:写真全体表示">
       <div class="modal-card photo-preview-card">
         <div class="modal-header">
-          <h3 id="photo-preview-title" style="margin:0;">写真全体表示</h3>
-          <button id="photo-preview-close-btn" type="button" class="danger">閉じる</button>
+          <h3 id="photo-preview-title" style="margin:0;" data-i18n="写真全体表示">写真全体表示</h3>
+          <button id="photo-preview-close-btn" type="button" class="danger" data-i18n="閉じる">閉じる</button>
         </div>
         <div class="photo-preview-body">
-          <img id="photo-preview-image" class="photo-preview-image" alt="写真プレビュー" />
+          <img id="photo-preview-image" class="photo-preview-image" alt="写真プレビュー" data-i18n-attr="alt:写真プレビュー" />
         </div>
       </div>
     </div>

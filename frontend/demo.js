@@ -739,7 +739,7 @@ function openThemeModal() {
 function openFolderPasswordModal() {
   if (!els.folderPasswordModal) return;
   if (!state.selectedFolder) {
-    window.alert('先にフォルダを選択してください。');
+    window.alert(t('先にフォルダを選択してください。'));
     return;
   }
   if (els.folderPasswordTargetName) {
@@ -760,31 +760,33 @@ function openExportOptionsModal() {
 
 function renderCurrentRoomHeader() {
   if (els.currentRoomName) {
-    els.currentRoomName.textContent = state.roomName || '未選択';
+    els.currentRoomName.textContent = state.roomName || t('未選択');
   }
 }
 
 function buildDemoExportUrl(format) {
+  const language = I18N?.language || 'ja';
+  const languageSuffix = language === 'ja' ? '' : `-${String(language).toLowerCase()}`;
   const fileName =
     format === 'pdf'
-      ? 'demo-export-sample.pdf'
+      ? `demo-export-sample${languageSuffix}.pdf`
       : format === 'pptx_light'
-        ? 'demo-export-light-sample.pptx'
-        : 'demo-export-high-sample.pptx';
+        ? `demo-export-light-sample${languageSuffix}.pptx`
+        : `demo-export-high-sample${languageSuffix}.pptx`;
   return new URL(`./demo-assets/${fileName}`, window.location.href).href;
 }
 
 async function requestFolderExport(format) {
   if (!state.selectedFolder) {
-    window.alert('先にフォルダを選択してください。');
+    window.alert(t('先にフォルダを選択してください。'));
     return;
   }
-  const formatLabel = format === 'pdf' ? 'PDF' : format === 'pptx_light' ? '軽量PPT' : '高画質PPT';
-  const confirmed = window.confirm(`${formatLabel}で出力します。よろしいですか？`);
+  const formatLabel = format === 'pdf' ? 'PDF' : format === 'pptx_light' ? t('軽量PPT') : t('高画質PPT');
+  const confirmed = window.confirm(tf('{formatLabel}で出力します。よろしいですか？', { formatLabel }));
   if (!confirmed) return;
   const isPdf = format === 'pdf';
-  const formatLabelText = format === 'pdf' ? 'PDF' : format === 'pptx_light' ? '軽量PPT' : '高画質PPT';
-  openExportLoadingModal(`${formatLabelText} を生成しています...`);
+  const formatLabelText = format === 'pdf' ? 'PDF' : format === 'pptx_light' ? t('軽量PPT') : t('高画質PPT');
+  openExportLoadingModal(tf('{formatLabel} を生成しています...', { formatLabel: formatLabelText }));
   startExportLoadingProgress();
   try {
     const folderId = state.selectedFolder.folderId;
@@ -1154,11 +1156,11 @@ async function ensureDisplayName() {
   }
 
   while (true) {
-    const next = window.prompt('表示名を入力してください。メニューからいつでも変更可能です。');
+    const next = window.prompt(t('表示名を入力してください。メニューからいつでも変更可能です。'));
     if (next === null) continue;
     const displayName = next.trim();
     if (!displayName) {
-      window.alert('表示名は必須です。');
+      window.alert(t('表示名は必須です。'));
       continue;
     }
     await saveDisplayName(displayName);
@@ -1368,10 +1370,10 @@ function applyBulkComment() {
   syncUploadDraftsFromDom();
   const nextComment = String(state.uploadDrafts[0]?.initialComment || '').slice(0, 50);
   if (!nextComment) {
-    window.alert('1つ目のコメントを先に入力してください。');
+    window.alert(t('1つ目のコメントを先に入力してください。'));
     return;
   }
-  if (!window.confirm('1つ目のコメントを全件に反映してよかですか？既存入力は上書きされます。')) return;
+  if (!window.confirm(t('1つ目のコメントを全件に反映してよかですか？既存入力は上書きされます。'))) return;
   state.uploadDrafts.forEach((draft) => {
     draft.initialComment = nextComment;
   });
@@ -1383,10 +1385,10 @@ function applySequencedPhotoNames() {
   syncUploadDraftsFromDom();
   const baseName = String(state.uploadDrafts[0]?.photoName || '').trim();
   if (!baseName) {
-    window.alert('1行目の写真名を先に入力してください。');
+    window.alert(t('1行目の写真名を先に入力してください。'));
     return;
   }
-  if (!window.confirm('1つ目の写真名を連番で反映してよかですか？既存入力は上書きされます。')) return;
+  if (!window.confirm(t('1つ目の写真名を連番で反映してよかですか？既存入力は上書きされます。'))) return;
   const suffixLength = 4;
   const baseForSequence = baseName.slice(0, Math.max(0, 20 - suffixLength));
   state.uploadDrafts.forEach((draft, index) => {
@@ -1397,7 +1399,7 @@ function applySequencedPhotoNames() {
 
 function cancelUploadDrafts() {
   if (!state.uploadDrafts.length) return;
-  if (!window.confirm('選択した写真と入力内容を破棄してよかですか？')) return;
+  if (!window.confirm(t('選択した写真と入力内容を破棄してよかですか？'))) return;
   clearUploadDrafts();
 }
 
@@ -1688,12 +1690,14 @@ async function showOwnerDeleteGuard(ownedRoom) {
     (state.roomName && String(state.roomName) === String(ownedRoom?.roomName || ''));
 
   if (isCurrentOwnedRoom) {
-    window.alert('作成者は先に「このお部屋を削除（全データ）」を実行してください。');
+    window.alert(t('作成者は先に「このお部屋を削除（全データ）」を実行してください。'));
     return;
   }
 
   const ok = window.confirm(
-    `作成者は先に「お部屋を削除（全データ）」を実行してください。\n「${ownedRoom?.roomName || '自分の部屋'}」へ移動しますか？`
+    tf('作成者は先に「お部屋を削除（全データ）」を実行してください。\n「{roomName}」へ移動しますか？', {
+      roomName: ownedRoom?.roomName || t('自分の部屋'),
+    })
   );
   if (!ok) return;
 
@@ -1702,7 +1706,7 @@ async function showOwnerDeleteGuard(ownedRoom) {
   resetRoomContext();
   state.roomName = ownedRoom.roomName;
   showApp();
-  showToast(`「${ownedRoom.roomName}」へ移動しました。`);
+  showToast(tf('「{roomName}」へ移動しました。', { roomName: ownedRoom.roomName }));
 }
 
 function showApp() {
@@ -1841,17 +1845,17 @@ async function loadAdminPanel() {
 
           const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
           if (m.folderScope === 'invited') {
-            actions.appendChild(el('span', { class: 'muted' }, 'フォルダ招待'));
+            actions.appendChild(el('span', { class: 'muted' }, t('フォルダ招待')));
           } else {
             const scopeSelect = el('select', { style: 'min-width:120px;' });
-            scopeSelect.appendChild(el('option', { value: 'own' }, '自分のフォルダのみ'));
-            scopeSelect.appendChild(el('option', { value: 'all' }, '全フォルダ表示'));
+            scopeSelect.appendChild(el('option', { value: 'own' }, t('自分のフォルダのみ')));
+            scopeSelect.appendChild(el('option', { value: 'all' }, t('全フォルダ表示')));
             scopeSelect.value = m.role === 'admin' ? 'all' : m.folderScope || 'all';
             scopeSelect.disabled = m.role === 'admin' || m.userKey === state.ownerUserKey;
             scopeSelect.onchange = safeAction(async () => {
               const next = scopeSelect.value;
               const prev = m.folderScope || 'all';
-              const ok = window.confirm(`メンバー「${name}」の閲覧権限を変更してよかですか？`);
+              const ok = window.confirm(tf('メンバー「{name}」の閲覧権限を変更してよかですか？', { name }));
               if (!ok) {
                 scopeSelect.value = prev;
                 return;
@@ -1860,7 +1864,7 @@ async function loadAdminPanel() {
                 method: 'PUT',
                 body: JSON.stringify({ folderScope: next }),
               });
-              window.alert('閲覧権限を更新しました。');
+              window.alert(t('閲覧権限を更新しました。'));
               await loadAdminPanel();
             }, '権限更新');
             actions.appendChild(scopeSelect);
@@ -1868,15 +1872,15 @@ async function loadAdminPanel() {
 
           // Remove member (kick) with confirm.
           if (m.role !== 'admin' && m.userKey !== state.ownerUserKey) {
-            const removeBtn = el('button', { type: 'button', class: 'danger' }, '削除');
+            const removeBtn = el('button', { type: 'button', class: 'danger' }, t('削除'));
             removeBtn.onclick = safeAction(async () => {
-              const ok = window.confirm(`メンバー「${name}」をお部屋から削除してよかですか？（本人は入れんごとなります）`);
+              const ok = window.confirm(tf('メンバー「{name}」をお部屋から削除してよかですか？（本人は入れんごとなります）', { name }));
               if (!ok) return;
               await api(`/team/members/${encodeURIComponent(m.userKey)}`, {
                 method: 'PUT',
                 body: JSON.stringify({ status: 'left' }),
               });
-              window.alert('メンバーを削除しました。');
+              window.alert(t('メンバーを削除しました。'));
               await loadAdminPanel();
             }, 'メンバー削除');
             actions.appendChild(removeBtn);
@@ -1889,7 +1893,7 @@ async function loadAdminPanel() {
   } catch (error) {
     if (els.memberList) {
       els.memberList.innerHTML = '';
-      els.memberList.appendChild(el('div', { class: 'muted' }, `メンバー取得失敗: ${asMessage(error)}`));
+      els.memberList.appendChild(el('div', { class: 'muted' }, tf('メンバー取得失敗: {message}', { message: asMessage(error) })));
     }
   }
 
@@ -1901,17 +1905,17 @@ async function loadAdminPanel() {
       els.folderAdminList.innerHTML = '';
       if (!folders.length) {
         state.adminFolderId = '';
-        els.folderAdminList.appendChild(el('div', { class: 'muted' }, 'フォルダがなかです'));
+        els.folderAdminList.appendChild(el('div', { class: 'muted' }, t('フォルダがなかです')));
       } else {
         if (state.adminFolderId && !folders.some((f) => f.folderId === state.adminFolderId)) {
           state.adminFolderId = '';
         }
         const pickerRow = el('div', { class: 'row folder-admin-picker' });
         const folderSelect = el('select');
-        folderSelect.appendChild(el('option', { value: '' }, 'フォルダを選択してください'));
+        folderSelect.appendChild(el('option', { value: '' }, t('フォルダを選択してください')));
         folders.forEach((f) => {
           const locked = Boolean(f.hasPassword);
-          const label = `${f.folderCode ? `${f.folderCode} ` : ''}${f.title || f.folderId}${locked ? ' [鍵]' : ''}`;
+          const label = `${f.folderCode ? `${f.folderCode} ` : ''}${f.title || f.folderId}${locked ? ` [${t('鍵')}]` : ''}`;
           folderSelect.appendChild(el('option', { value: f.folderId }, label));
         });
         folderSelect.value = state.adminFolderId || '';
@@ -1920,43 +1924,45 @@ async function loadAdminPanel() {
           await loadAdminPanel();
         }, '管理フォルダ選択');
         pickerRow.appendChild(folderSelect);
-        pickerRow.appendChild(el('span', { class: 'muted' }, `${folders.length}件`));
+        pickerRow.appendChild(el('span', { class: 'muted' }, tf('{count}件', { count: folders.length })));
         els.folderAdminList.appendChild(pickerRow);
 
         const f = folders.find((item) => item.folderId === state.adminFolderId);
         if (!f) {
-          els.folderAdminList.appendChild(el('div', { class: 'muted folder-admin-empty' }, 'フォルダを選択してください'));
+          els.folderAdminList.appendChild(el('div', { class: 'muted folder-admin-empty' }, t('フォルダを選択してください')));
         } else {
           const wrap = el('div', { class: 'folder-admin-block' });
           const header = el('div', { class: 'folder-admin-header' });
           const left = el(
             'div',
             {},
-            `${f.folderCode || ''} ${f.title || f.folderId}（作成:${f.createdByName || f.createdBy} / 容量:${formatBytes(
-              Number(f.usageBytes || 0)
-            )}）`
+            tf('{folder}（作成:{creator} / 容量:{size}）', {
+              folder: `${f.folderCode || ''} ${f.title || f.folderId}`,
+              creator: f.createdByName || f.createdBy,
+              size: formatBytes(Number(f.usageBytes || 0)),
+            })
           );
           header.appendChild(left);
           wrap.appendChild(header);
 
           const inviteRow = el('div', { class: 'row folder-admin-actions' });
           const folderInviteInput = el('input', {
-            placeholder: 'フォルダ招待URL',
+            placeholder: t('フォルダ招待URL'),
             readonly: 'readonly',
           });
           const folderInviteCell = el('div', { class: 'invite-url-cell' });
-          const copyFolderInviteBtn = el('button', { type: 'button' }, 'コピー');
+          const copyFolderInviteBtn = el('button', { type: 'button' }, t('コピー'));
           copyFolderInviteBtn.onclick = safeAction(async () => {
             await copyInviteUrlFromInput(folderInviteInput);
           }, 'フォルダ招待URLコピー');
-          const createFolderInviteBtn = el('button', { type: 'button' }, '招待URL発行（7日）');
+          const createFolderInviteBtn = el('button', { type: 'button' }, t('招待URL発行（7日）'));
           createFolderInviteBtn.onclick = safeAction(async () => {
             const res = await api('/invites/create', {
               method: 'POST',
               body: JSON.stringify({ folderId: f.folderId }),
             });
             const token = res.token;
-            if (!token) throw new Error('招待トークンが取得できませんでした。');
+            if (!token) throw new Error(t('招待トークンが取得できませんでした。'));
             state.lastFolderInviteTokens[f.folderId] = token;
             const base = window.location.origin + window.location.pathname;
             const url = `${base}?invite=${encodeURIComponent(token)}`;
@@ -1965,20 +1971,20 @@ async function loadAdminPanel() {
           }, 'フォルダ招待URL発行');
           inviteRow.appendChild(createFolderInviteBtn);
 
-          const revokeFolderInviteBtn = el('button', { type: 'button', class: 'danger hidden' }, '招待URL失効');
+          const revokeFolderInviteBtn = el('button', { type: 'button', class: 'danger hidden' }, t('招待URL失効'));
           revokeFolderInviteBtn.onclick = safeAction(async () => {
             const token = state.lastFolderInviteTokens[f.folderId];
             if (!token) {
-              showError('失効する招待URLがなかです（先に発行してください）');
+              showError(t('失効する招待URLがなかです（先に発行してください）'));
               return;
             }
-            const ok = window.confirm(`フォルダ「${f.title || f.folderId}」の招待URLを失効してよかですか？`);
+            const ok = window.confirm(tf('フォルダ「{folder}」の招待URLを失効してよかですか？', { folder: f.title || f.folderId }));
             if (!ok) return;
             await api('/invites/revoke', { method: 'POST', body: JSON.stringify({ token }) });
             delete state.lastFolderInviteTokens[f.folderId];
             folderInviteInput.value = '';
             revokeFolderInviteBtn.classList.add('hidden');
-            showToast('フォルダ招待URLを失効しました。');
+            showToast(t('フォルダ招待URLを失効しました。'));
           }, 'フォルダ招待URL失効');
           inviteRow.appendChild(revokeFolderInviteBtn);
           folderInviteCell.appendChild(folderInviteInput);
@@ -1986,21 +1992,21 @@ async function loadAdminPanel() {
           inviteRow.appendChild(folderInviteCell);
           wrap.appendChild(inviteRow);
 
-          const membersBox = el('div', { class: 'muted folder-admin-members' }, 'メンバー読み込み中...');
+          const membersBox = el('div', { class: 'muted folder-admin-members' }, t('メンバー読み込み中...'));
           wrap.appendChild(membersBox);
 
           const passwordRow = el('div', { class: 'row folder-admin-actions folder-admin-password' });
           const passwordInput = el('input', {
-            placeholder: 'フォルダパスワード（空で解除）',
+            placeholder: t('フォルダパスワード（空で解除）'),
             type: 'password',
           });
-          const passwordBtn = el('button', { type: 'button' }, '設定/解除');
+          const passwordBtn = el('button', { type: 'button' }, t('設定/解除'));
           passwordBtn.onclick = safeAction(async () => {
             const next = String(passwordInput.value || '').trim();
             const ok = window.confirm(
               next
-                ? `フォルダ「${f.title || f.folderId}」のパスワードを設定してよかですか？`
-                : `フォルダ「${f.title || f.folderId}」のパスワードを解除してよかですか？`
+                ? tf('フォルダ「{folder}」のパスワードを設定してよかですか？', { folder: f.title || f.folderId })
+                : tf('フォルダ「{folder}」のパスワードを解除してよかですか？', { folder: f.title || f.folderId })
             );
             if (!ok) return;
             await api(`/folders/${f.folderId}/password`, {
@@ -2011,7 +2017,7 @@ async function loadAdminPanel() {
             if (next) state.folderPasswordById[f.folderId] = next;
             else delete state.folderPasswordById[f.folderId];
             passwordInput.value = '';
-            window.alert(next ? 'フォルダのパスワードを設定しました。' : 'フォルダのパスワードを解除しました。');
+            window.alert(next ? t('フォルダのパスワードを設定しました。') : t('フォルダのパスワードを解除しました。'));
             await loadFolders();
             await loadAdminPanel();
           }, 'フォルダパスワード設定');
@@ -2020,13 +2026,13 @@ async function loadAdminPanel() {
           wrap.appendChild(passwordRow);
 
           const deleteRow = el('div', { class: 'row folder-admin-actions' });
-          const delBtn = el('button', { type: 'button', class: 'danger' }, '削除');
+          const delBtn = el('button', { type: 'button', class: 'danger' }, t('削除'));
           delBtn.onclick = safeAction(async () => {
-            const ok = window.confirm(`フォルダ「${f.title || f.folderId}」を削除してよかですか？（写真とコメントも消えます）`);
+            const ok = window.confirm(tf('フォルダ「{folder}」を削除してよかですか？（写真とコメントも消えます）', { folder: f.title || f.folderId }));
             if (!ok) return;
             await api(`/folders/${f.folderId}`, { method: 'DELETE' });
             state.adminFolderId = '';
-            window.alert('フォルダを削除しました。');
+            window.alert(t('フォルダを削除しました。'));
             await loadFolders();
             await loadTeamMe();
             await loadAdminPanel();
@@ -2040,16 +2046,16 @@ async function loadAdminPanel() {
               const items = members.items || [];
               membersBox.innerHTML = '';
               if (!items.length) {
-                membersBox.appendChild(el('div', { class: 'muted' }, 'メンバーがおらんばい'));
+                membersBox.appendChild(el('div', { class: 'muted' }, t('メンバーがおらんばい')));
                 return;
               }
               const reasonLabel = {
-                admin: '管理者',
-                all: '全フォルダ',
-                owner: '作成者',
-                invited: 'フォルダ招待',
+                admin: t('管理者'),
+                all: t('全フォルダ'),
+                owner: t('作成者'),
+                invited: t('フォルダ招待'),
               };
-              membersBox.appendChild(el('div', { class: 'muted' }, 'メンバー'));
+              membersBox.appendChild(el('div', { class: 'muted' }, t('メンバー')));
               items.forEach((m) => {
                 const name = m.displayName || m.userKey;
                 const row = el('div', { class: 'member-row folder-admin-member-row' });
@@ -2057,20 +2063,20 @@ async function loadAdminPanel() {
                   el(
                     'div',
                     {},
-                    `${name}（${reasonLabel[m.accessReason] || m.accessReason || m.folderScope || '権限'} / ${m.status || 'active'}）`
+                    `${name}（${reasonLabel[m.accessReason] || m.accessReason || m.folderScope || t('権限')} / ${m.status || 'active'}）`
                   )
                 );
                 const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
                 if (m.accessReason === 'invited' && m.folderScope === 'invited') {
-                  const removeBtn = el('button', { type: 'button', class: 'danger' }, 'このフォルダから外す');
+                  const removeBtn = el('button', { type: 'button', class: 'danger' }, t('このフォルダから外す'));
                   removeBtn.onclick = safeAction(async () => {
-                    const ok = window.confirm(`メンバー「${name}」をこのフォルダから外してよかですか？`);
+                    const ok = window.confirm(tf('メンバー「{name}」をこのフォルダから外してよかですか？', { name }));
                     if (!ok) return;
                     await api(
                       `/folders/${encodeURIComponent(f.folderId)}/members/${encodeURIComponent(m.userKey)}`,
                       { method: 'DELETE' }
                     );
-                    window.alert('フォルダメンバーを外しました。');
+                    window.alert(t('フォルダメンバーを外しました。'));
                     await loadAdminPanel();
                   }, 'フォルダメンバー解除');
                   actions.appendChild(removeBtn);
@@ -2142,7 +2148,7 @@ async function copyInviteUrl(url, showFallbackPrompt = false) {
     // Ignore and fall back.
   }
   if (showFallbackPrompt) {
-    window.prompt('招待URL（コピーしてください）', text);
+    window.prompt(t('招待URL（コピーしてください）'), text);
     return;
   }
   showError('ブラウザがコピー操作を許可しませんでした。URL欄からコピーしてください。');
@@ -2177,7 +2183,7 @@ if (els.revokeInviteBtn) {
       showError('失効する招待URLがなかです（先に発行してください）');
       return;
     }
-    const ok = window.confirm('この招待URLを失効してよかですか？');
+    const ok = window.confirm(t('この招待URLを失効してよかですか？'));
     if (!ok) return;
     await api('/invites/revoke', { method: 'POST', body: JSON.stringify({ token: state.lastInviteToken }) });
     state.lastInviteToken = null;
@@ -2284,7 +2290,7 @@ async function selectFolder(folder) {
   clearUploadDrafts();
   const folderId = folder.folderId;
   if (folder.hasPassword && !state.folderPasswordById[folder.folderId]) {
-    const entered = window.prompt('このフォルダは鍵付きです。パスワードを入力してください。', '');
+    const entered = window.prompt(t('このフォルダは鍵付きです。パスワードを入力してください。'), '');
     if (entered === null) {
       renderFolders();
       return;
@@ -2662,7 +2668,7 @@ async function renderPhotos() {
           };
 
           deleteBtn.onclick = async () => {
-            if (!window.confirm('このコメントを削除してよかですか？')) return;
+            if (!window.confirm(t('このコメントを削除してよかですか？'))) return;
             await api(`/photos/${photo.photoId}/comments/${comment.commentId}`, { method: 'DELETE' });
             await loadPhotos();
           };
@@ -2782,7 +2788,7 @@ async function renderPhotos() {
 
     if (delBtn) {
       delBtn.onclick = async () => {
-        if (!window.confirm('この写真を削除してよかですか？')) return;
+        if (!window.confirm(t('この写真を削除してよかですか？'))) return;
         await api(`/photos/${photo.photoId}`, { method: 'DELETE' });
         await loadPhotos();
       };
@@ -2809,14 +2815,14 @@ if (els.signupBtn) {
 if (els.resetUserBtn) {
   els.resetUserBtn.onclick = safeAction(async () => {
     const current = state.userName || '';
-    const next = window.prompt('新しい表示名を入力してください。', current);
+    const next = window.prompt(t('新しい表示名を入力してください。'), current);
     if (next === null) {
       closeMenu();
       return;
     }
     const displayName = next.trim();
     if (!displayName) {
-      window.alert('表示名は必須です。');
+      window.alert(t('表示名は必須です。'));
       closeMenu();
       return;
     }
@@ -3018,15 +3024,15 @@ if (els.leaveRoomBtn) {
     try {
       const me = await api('/team/me', { method: 'GET' });
       if (me && me.isAdmin) {
-        window.alert('管理者は脱退できません。お部屋管理から「お部屋を削除（全データ）」を実行してください。');
+        window.alert(t('管理者は脱退できません。お部屋管理から「お部屋を削除（全データ）」を実行してください。'));
         closeMenu();
         return;
       }
     } catch (_) {
       // If /team/me fails, keep old behavior.
     }
-    window.alert('メンバーをやめると、このお部屋には招待URLなしでは再参加できません。');
-    const ok = window.confirm('本当にメンバーをやめますか？');
+    window.alert(t('メンバーをやめると、このお部屋には招待URLなしでは再参加できません。'));
+    const ok = window.confirm(t('本当にメンバーをやめますか？'));
     if (!ok) {
       closeMenu();
       return;
@@ -3095,24 +3101,24 @@ if (els.roomCreateSubmitBtn) {
   els.roomCreateSubmitBtn.onclick = safeAction(async () => {
     const roomName = String(els.roomCreateName?.value || '').trim();
     if (!roomName) {
-      window.alert('お部屋名を入力してください。');
+      window.alert(t('お部屋名を入力してください。'));
       return;
     }
     try {
       await createRoomAndEnter(roomName);
       closeRoomCreateModal();
-      window.alert(`お部屋：${roomName} が作成されました。`);
+      window.alert(tf('お部屋：{roomName} が作成されました。', { roomName }));
     } catch (error) {
       const message = asMessage(error);
       if (message.includes('409')) {
         if (message.includes('already has a room')) {
-          window.alert('すでに自分のお部屋を作成済みです（自分の部屋は1人1部屋）。');
+          window.alert(t('すでに自分のお部屋を作成済みです（自分の部屋は1人1部屋）。'));
         } else {
-          window.alert('同じ部屋名は作成できません。別の部屋名にしてください。');
+          window.alert(t('同じ部屋名は作成できません。別の部屋名にしてください。'));
         }
         return;
       }
-      window.alert(`お部屋作成失敗: ${message}`);
+      window.alert(tf('お部屋作成失敗: {message}', { message }));
     }
   }, 'お部屋作成');
 }
@@ -3140,14 +3146,14 @@ els.createRoomBtn.onclick = async () => {
   }
   try {
     await createRoomAndEnter(roomName);
-    window.alert(`お部屋：${roomName} が作成されました。`);
+    window.alert(tf('お部屋：{roomName} が作成されました。', { roomName }));
   } catch (error) {
     const message = asMessage(error);
     if (message.includes('409')) {
       if (message.includes('already has a room')) {
-        window.alert('すでに自分のお部屋を作成済みです（自分の部屋は1人1部屋）。');
+        window.alert(t('すでに自分のお部屋を作成済みです（自分の部屋は1人1部屋）。'));
       } else {
-        window.alert('同じ部屋名は作成できません。別の部屋名にしてください。');
+        window.alert(t('同じ部屋名は作成できません。別の部屋名にしてください。'));
       }
     } else {
       showError(`お部屋作成失敗: ${message}`);
@@ -3168,7 +3174,7 @@ els.createFolderBtn.onclick = safeAction(async () => {
   } catch (error) {
     const body = parseApiErrorBody(error);
     if (body?.code === 'FREE_PLAN_FOLDER_LIMIT_EXCEEDED') {
-      window.alert(body.message || 'フリープランではフォルダは2つまでです。有料プランで無制限になります。');
+      window.alert(body.message || t('フリープランではフォルダは2つまでです。有料プランで無制限になります。'));
       return;
     }
     throw error;
@@ -3213,7 +3219,7 @@ if (els.cancelUploadDraftsBtn) {
 
 els.exportBtn.onclick = safeAction(async () => {
   if (!state.selectedFolder) {
-    window.alert('先にフォルダを選択してください。');
+    window.alert(t('先にフォルダを選択してください。'));
     return;
   }
   closeMenu();
@@ -3256,7 +3262,7 @@ if (els.subscribePlusBtn) els.subscribePlusBtn.onclick = safeAction(() => startS
 if (els.subscribeProBtn) els.subscribeProBtn.onclick = safeAction(() => startSubscriptionCheckout('PRO'), '購入');
 if (els.subscribeFreeBtn) {
   els.subscribeFreeBtn.onclick = safeAction(async () => {
-    const ok = window.confirm('フリープランへ戻してよかですか？');
+    const ok = window.confirm(t('フリープランへ戻してよかですか？'));
     if (!ok) return;
     try {
       await api('/team/subscription/change', { method: 'POST', body: JSON.stringify({ action: 'free' }) });
@@ -3271,7 +3277,7 @@ if (els.subscribeFreeBtn) {
     await loadTeamMe();
     await loadFolders();
     await loadAdminPanel();
-    window.alert('フリープランに戻りました。\n\n現在の上限は、容量512MB未満・フォルダ2個までです。');
+    window.alert(t('フリープランに戻りました。\n\n現在の上限は、容量512MB未満・フォルダ2個までです。'));
   }, 'フリープラン変更');
 }
 if (els.lowStorageChargeBtn) {
@@ -3292,13 +3298,13 @@ if (els.lowStorageChargeBtn) {
 if (els.deleteTeamBtn) {
   els.deleteTeamBtn.onclick = safeAction(async () => {
     const ok = window.confirm(
-      'このお部屋を削除すると、フォルダ/写真/コメント/課金情報が全て削除され、Stripeの定期課金も即時停止されます。よかですか？'
+      t('このお部屋を削除すると、フォルダ/写真/コメント/課金情報が全て削除され、Stripeの定期課金も即時停止されます。よかですか？')
     );
     if (!ok) return;
-    const ok2 = window.confirm('本当によかですか？（取り消せません）');
+    const ok2 = window.confirm(t('本当によかですか？（取り消せません）'));
     if (!ok2) return;
     await api('/team/delete', { method: 'POST' });
-    window.alert('お部屋を削除しました。');
+    window.alert(t('お部屋を削除しました。'));
     resetRoomContext();
     showRoomSetup();
   }, 'お部屋削除');
@@ -3313,22 +3319,22 @@ if (els.accountDeleteBtn) {
       closeMenu();
       return;
     }
-    const ok = window.confirm('アカウントを削除すると、このユーザーでは今後ログインできません。よかですか？');
+    const ok = window.confirm(t('アカウントを削除すると、このユーザーでは今後ログインできません。よかですか？'));
     if (!ok) return;
-    const ok2 = window.confirm('本当によかですか？（アカウント削除後は取り消せません）');
+    const ok2 = window.confirm(t('本当によかですか？（アカウント削除後は取り消せません）'));
     if (!ok2) return;
     try {
       await api('/account/delete', { method: 'POST', body: JSON.stringify({}) });
     } catch (error) {
       const msg = asMessage(error);
       if (msg.includes('room owner must delete team first')) {
-        window.alert('作成者は先に「お部屋を削除（全データ）」を実行してください。');
+        window.alert(t('作成者は先に「お部屋を削除（全データ）」を実行してください。'));
         closeMenu();
         return;
       }
       throw error;
     }
-    window.alert('アカウントを削除しました。');
+    window.alert(t('アカウントを削除しました。'));
     closeMenu();
     resetRoomContext();
     clearAuth();
@@ -3339,11 +3345,11 @@ if (els.accountDeleteBtn) {
 if (els.folderDeleteBtn) {
   els.folderDeleteBtn.onclick = safeAction(async () => {
     if (!state.selectedFolder) return;
-    const ok = window.confirm('このフォルダを削除すると、写真とコメントも消えます。よかですか？');
+    const ok = window.confirm(t('このフォルダを削除すると、写真とコメントも消えます。よかですか？'));
     if (!ok) return;
     const folderId = state.selectedFolder.folderId;
     await api(`/folders/${folderId}`, { method: 'DELETE', headers: { ...folderPasswordHeader(folderId) } });
-    window.alert('フォルダを削除しました。');
+    window.alert(t('フォルダを削除しました。'));
     state.selectedFolder = null;
     els.folderDetail.classList.add('hidden');
     await loadFolders();
@@ -3444,7 +3450,7 @@ if (els.currentRoomSelect) {
       renderRoomSelect();
       return;
     }
-    const ok = window.confirm('現在のお部屋を切り替えます。よろしいですか？');
+    const ok = window.confirm(t('現在のお部屋を切り替えます。よろしいですか？'));
     if (!ok) {
       renderRoomSelect();
       return;
@@ -3590,11 +3596,11 @@ function demoError(status, message, body = null) {
 }
 
 startLogin = async function () {
-  window.alert('デモではログイン不要です。このまま画面を触ってみてください。');
+  window.alert(t('デモではログイン不要です。このまま画面を触ってみてください。'));
 };
 
 startSignup = async function () {
-  window.alert('デモでは新規登録不要です。気になる動きだけそのまま試せます。');
+  window.alert(t('デモでは新規登録不要です。気になる動きだけそのまま試せます。'));
 };
 
 uploadFiles = async function () {
@@ -4088,19 +4094,19 @@ if (els.logoutBtn) {
 if (els.accountDeleteBtn) {
   els.accountDeleteBtn.onclick = () => {
     closeMenu();
-    window.alert('デモではアカウント削除は行いません。');
+    window.alert(t('デモではアカウント削除は行いません。'));
   };
 }
 
 if (els.loginBtn) {
   els.loginBtn.onclick = () => {
-    window.alert('デモではログイン不要です。');
+    window.alert(t('デモではログイン不要です。'));
   };
 }
 
 if (els.signupBtn) {
   els.signupBtn.onclick = () => {
-    window.alert('デモでは新規登録不要です。');
+    window.alert(t('デモでは新規登録不要です。'));
   };
 }
 

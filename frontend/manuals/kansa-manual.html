@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title data-i18n="Photo Hub for 監査 使い方マニュアル">Photo Hub for 監査 使い方マニュアル</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fb;
+      --panel: #ffffff;
+      --text: #1f2933;
+      --muted: #52616b;
+      --border: #d9dee7;
+      --header: #eef2f7;
+      --accent: #2563eb;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.6;
+    }
+
+    main {
+      width: min(960px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 40px 0 56px;
+    }
+
+    .manual-header,
+    section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 24px;
+    }
+
+    .manual-header {
+      margin-bottom: 24px;
+    }
+
+    section {
+      margin-bottom: 20px;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0 0 14px;
+      line-height: 1.3;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 6vw, 3rem);
+    }
+
+    h2 {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+      font-size: 1.35rem;
+    }
+
+    h3 {
+      margin-top: 20px;
+      font-size: 1.05rem;
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 1.4rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--border);
+      padding: 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--header);
+      font-weight: 700;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 1.25rem;
+      margin: 0 0 20px;
+    }
+
+    .meta {
+      color: var(--muted);
+      margin: 0;
+    }
+
+    @media (max-width: 640px) {
+      main {
+        width: min(100% - 20px, 960px);
+        padding: 20px 0 36px;
+      }
+
+      .manual-header,
+      section {
+        padding: 18px;
+      }
+
+      table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+      }
+
+      main {
+        width: 100%;
+        padding: 0;
+      }
+
+      .manual-header,
+      section {
+        border: 0;
+        border-radius: 0;
+        break-inside: avoid;
+      }
+    }
+  </style>
+  <script src="../i18n.js?v=20260502-1" defer></script>
+</head>
+<body>
+  <main>
+    <header class="manual-header">
+      <h1 data-i18n="Photo Hub for 監査">Photo Hub for 監査</h1>
+      <p class="subtitle" data-i18n="使い方マニュアル">使い方マニュアル</p>
+      <p class="meta">
+        <strong data-i18n="作成日：">作成日：</strong><span data-i18n="2026年4月19日">2026年4月19日</span><br />
+        <strong data-i18n="改訂日：">改訂日：</strong><span data-i18n="2026年4月30日">2026年4月30日</span>
+      </p>
+    </header>
+
+    <section>
+      <h2 data-i18n="はじめに">はじめに</h2>
+      <p data-i18n="多くの企業の現場では監査や検品業務において、多くの手間と時間がかかっています。本アプリはこれらを効率化します。">多くの企業の現場では監査や検品業務において、多くの手間と時間がかかっています。本アプリはこれらを効率化します。</p>
+      <ul>
+        <li data-i18n="ユーザー登録が必要">ユーザー登録が必要</li>
+        <li data-i18n="管理者・お部屋メンバー・フォルダメンバーに分類">管理者・お部屋メンバー・フォルダメンバーに分類</li>
+        <li data-i18n="3階層構造（お部屋・フォルダ・写真）">3階層構造（お部屋・フォルダ・写真）</li>
+        <li data-i18n="PowerPoint出力可能">PowerPoint出力可能</li>
+        <li data-i18n="権限管理あり">権限管理あり</li>
+        <li data-i18n="フリー／有料プラン">フリー／有料プラン</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 data-i18n="1. ユーザー登録">1. ユーザー登録</h2>
+      <h3 data-i18n="1-1 新規登録">1-1 新規登録</h3>
+      <p data-i18n="新規ユーザーは登録を行います。">新規ユーザーは登録を行います。</p>
+
+      <h3 data-i18n="1-2 ログイン">1-2 ログイン</h3>
+      <p data-i18n="認証後利用可能。">認証後利用可能。</p>
+
+      <h3 data-i18n="1-3 初回設定">1-3 初回設定</h3>
+      <p data-i18n="表示名を設定。">表示名を設定。</p>
+    </section>
+
+    <section>
+      <h2 data-i18n="2. ユーザー分類">2. ユーザー分類</h2>
+      <p data-i18n="ユーザーは管理者とメンバーに分類されます。">ユーザーは管理者とメンバーに分類されます。</p>
+    </section>
+
+    <section>
+      <h2 data-i18n="3. お部屋">3. お部屋</h2>
+      <ul>
+        <li data-i18n="1ユーザー1部屋">1ユーザー1部屋</li>
+        <li data-i18n="URLで参加">URLで参加</li>
+        <li data-i18n="7日間有効">7日間有効</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 data-i18n="4. フォルダ">4. フォルダ</h2>
+      <ul>
+        <li data-i18n="フリー：2つ">フリー：2つ</li>
+        <li data-i18n="有料：無制限">有料：無制限</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 data-i18n="5. 写真">5. 写真</h2>
+      <ul>
+        <li data-i18n="カメラ / ライブラリ / ファイル">カメラ / ライブラリ / ファイル</li>
+        <li data-i18n="単体 / 一括">単体 / 一括</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 data-i18n="6. コメント">6. コメント</h2>
+      <ul>
+        <li data-i18n="全員閲覧可能">全員閲覧可能</li>
+        <li data-i18n="管理者は全編集可能">管理者は全編集可能</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 data-i18n="7. 出力">7. 出力</h2>
+      <ul>
+        <li data-i18n="PowerPoint出力">PowerPoint出力</li>
+        <li data-i18n="フリー：透かしあり">フリー：透かしあり</li>
+        <li data-i18n="有料：透かしなし">有料：透かしなし</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 data-i18n="8. 権限管理">8. 権限管理</h2>
+      <ul>
+        <li data-i18n="全閲覧 / 自分のみ">全閲覧 / 自分のみ</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 data-i18n="9. 料金プラン">9. 料金プラン</h2>
+      <ul>
+        <li data-i18n="フリー：512MB / 30日">フリー：512MB / 30日</li>
+        <li data-i18n="1GB：¥980">1GB：¥980</li>
+        <li data-i18n="5GB：¥1,980">5GB：¥1,980</li>
+        <li data-i18n="10GB：¥2,980">10GB：¥2,980</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 data-i18n="権限表">権限表</h2>
+      <table>
+        <thead>
+          <tr>
+            <th data-i18n="機能">機能</th>
+            <th data-i18n="管理者">管理者</th>
+            <th data-i18n="お部屋メンバー">お部屋メンバー</th>
+            <th data-i18n="フォルダメンバー">フォルダメンバー</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td data-i18n="お部屋作成">お部屋作成</td>
+            <td data-i18n="可">可</td>
+            <td data-i18n="可">可</td>
+            <td data-i18n="可">可</td>
+          </tr>
+          <tr>
+            <td data-i18n="招待URL">招待URL</td>
+            <td data-i18n="可">可</td>
+            <td data-i18n="不可">不可</td>
+            <td data-i18n="不可">不可</td>
+          </tr>
+          <tr>
+            <td data-i18n="削除">削除</td>
+            <td data-i18n="可">可</td>
+            <td data-i18n="不可">不可</td>
+            <td data-i18n="不可">不可</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

@@ -261,13 +261,17 @@ function freePlanConstraintSummary({ usageBytes, folderCount }) {
   };
 }
 
-function freePlanConstraintMessage(constraints) {
-  const lines = ['フリープランへの切り替えは、以下を満たす必要があります。', '・容量が512MB未満', '・フォルダの数が2つ以下'];
+function freePlanConstraintMessage(constraints, i18n = createExportI18n('ja')) {
+  const lines = [
+    i18n.t('フリープランへの切り替えは、以下を満たす必要があります。'),
+    i18n.t('・容量が512MB未満'),
+    i18n.t('・フォルダの数が2つ以下'),
+  ];
   if (constraints.unmet.includes('usageBytes')) {
-    lines.push(`・現在の容量: ${constraints.usageBytes} bytes`);
+    lines.push(i18n.format('・現在の容量: {bytes} bytes', { bytes: constraints.usageBytes }));
   }
   if (constraints.unmet.includes('folderCount')) {
-    lines.push(`・現在のフォルダ数: ${constraints.folderCount}`);
+    lines.push(i18n.format('・現在のフォルダ数: {count}', { count: constraints.folderCount }));
   }
   return lines.join('\n');
 }
@@ -2287,7 +2291,7 @@ async function changeTeamSubscription(event, user, room, authz, ctx) {
         folderCount,
       });
       return json(409, {
-        message: freePlanConstraintMessage(constraints),
+        message: freePlanConstraintMessage(constraints, ctx.i18n),
         code: 'FREE_PLAN_REQUIREMENTS_NOT_MET',
         constraints,
       });
@@ -2916,7 +2920,7 @@ async function teamDelete(event, user, room, authz, ctx) {
       reason: error?.message || 'stripe cancellation failed',
     });
     return json(409, {
-      message: '課金停止の確認に失敗したため、お部屋を削除できませんでした。時間をおいて再度お試しください。',
+      message: ctx.i18n.t('課金停止の確認に失敗したため、お部屋を削除できませんでした。時間をおいて再度お試しください。'),
     });
   }
 
@@ -3164,7 +3168,7 @@ async function createFolder(event, user, room, ctx) {
     const folderCount = await countRoomFolders(room.roomName);
     if (folderCount >= 2) {
       return json(409, {
-        message: 'フリープランではフォルダは2つまでです。有料プランで無制限になります。',
+        message: ctx.i18n.t('フリープランではフォルダは2つまでです。有料プランで無制限になります。'),
         code: 'FREE_PLAN_FOLDER_LIMIT_EXCEEDED',
         constraints: {
           folderCount,
@@ -3856,7 +3860,10 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
   const exportPhotos = split.visible;
   if (!exportPhotos.length) {
     return json(409, {
-      message: split.archivedCount > 0 ? '30日を過ぎた写真はアーカイブ済みのため、フリープランではPPT出力できません。' : '出力できる写真がありません。',
+      message:
+        split.archivedCount > 0
+          ? i18n.t('30日を過ぎた写真はアーカイブ済みのため、フリープランではPPT出力できません。')
+          : i18n.t('出力できる写真がありません'),
       code: 'NO_EXPORTABLE_PHOTOS',
       archivedCount: split.archivedCount,
     });
@@ -4168,7 +4175,10 @@ exports.handler = async (event) => {
 
     const p = event.pathParameters || {};
     const body = event.body ? JSON.parse(event.body) : {};
-    const ctx = { requestId: event.requestContext?.requestId || null };
+    const ctx = {
+      requestId: event.requestContext?.requestId || null,
+      i18n: createExportI18n(languageFromHeaders(event.headers || {})),
+    };
 
     if (method === 'GET' && path === '/me') return finish(await getMe(user));
     if (method === 'PUT' && path === '/me/display-name') return finish(await updateDisplayName(event, user, ctx));
