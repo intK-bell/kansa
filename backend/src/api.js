@@ -71,7 +71,7 @@ const CORS_ALLOWED_ORIGINS = new Set(
     .map((value) => value.trim())
     .filter(Boolean)
 );
-const PDF_FONT_PATH = path.resolve(__dirname, 'fonts', 'NotoSansJP-VariableFont_wght.ttf');
+const PDF_FONT_PATH = path.resolve(__dirname, 'fonts', 'NotoSansCJKjp-Regular.otf');
 const PDF_PAGE_WIDTH = 960;
 const PDF_PAGE_HEIGHT = 540;
 const PPT_TO_PDF_SCALE = 72;

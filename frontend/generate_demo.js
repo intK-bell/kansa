@@ -8,7 +8,7 @@ const { createExportI18n, normalizeLanguage } = require('../backend/src/export-i
 const PDF_PAGE_WIDTH = 960;
 const PDF_PAGE_HEIGHT = 540;
 const PPT_TO_PDF_SCALE = 72;
-const PDF_FONT_PATH = path.resolve(__dirname, '../backend/src/fonts/NotoSansJP-VariableFont_wght.ttf');
+const PDF_FONT_PATH = path.resolve(__dirname, '../backend/src/fonts/NotoSansCJKjp-Regular.otf');
 
 function pptUnit(value) {
   return Number(value || 0) * PPT_TO_PDF_SCALE;
