@@ -117,6 +117,17 @@ async function addExportPhotoSlide(pptx, options) {
     fontSize: 11,
     color: PALETTE.muted,
   });
+  if (photo.questText) {
+    slide.addText(`${i18n.t('クエスト')}: ${photo.questText}`, {
+      x: 0.55,
+      y: 1.43,
+      w: 7.8,
+      h: 0.18,
+      fontFace: 'Yu Gothic',
+      fontSize: 9,
+      color: PALETTE.brandText,
+    });
+  }
 
   const image = await resolveImage(photo);
   const layout = resolveExportSlideLayout(image?.dimensions || null);

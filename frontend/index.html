@@ -190,8 +190,30 @@
         <section id="folder-detail" class="card hidden">
           <h2 id="folder-detail-title"></h2>
           <p id="photo-archive-note" class="muted" style="margin:6px 0 10px;"></p>
-          <div class="row">
-            <input id="photo-files" type="file" accept="image/*" multiple />
+          <div class="mode-tabs" role="tablist" aria-label="表示モード">
+            <button id="photo-mode-tab" class="mode-tab is-active" type="button" data-mode="photo">フォトモード</button>
+            <button id="quest-mode-tab" class="mode-tab" type="button" data-mode="quest">クエストモード</button>
+          </div>
+          <div id="photo-mode-panel">
+            <div class="row">
+              <input id="photo-files" type="file" accept="image/*" multiple />
+            </div>
+          </div>
+          <div id="quest-mode-panel" class="hidden">
+            <div class="quest-create">
+              <textarea id="quest-text" rows="3" maxlength="100" placeholder="撮ってきてほしい写真を入力"></textarea>
+              <button id="create-quest-btn" type="button">クエスト作成</button>
+            </div>
+            <div class="quest-toolbar">
+              <label>
+                <span class="muted">並び順</span>
+                <select id="quest-sort">
+                  <option value="status">対応順</option>
+                  <option value="newest">新しい順</option>
+                  <option value="oldest">古い順</option>
+                </select>
+              </label>
+            </div>
           </div>
           <div id="upload-meta-card" class="upload-meta-card hidden">
             <div class="upload-meta-actions">
@@ -207,6 +229,7 @@
             </div>
           </div>
           <div id="photo-list" class="photo-grid"></div>
+          <div id="quest-list" class="quest-grid hidden"></div>
         </section>
       </section>
     </main>

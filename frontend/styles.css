@@ -811,6 +811,111 @@ button.is-loading::before {
   width: 100%;
 }
 
+.mode-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 12px;
+  flex-wrap: wrap;
+}
+
+.mode-tab {
+  background: var(--card-soft);
+  color: var(--text);
+}
+
+.mode-tab.is-active {
+  background: var(--primary);
+  color: #fff;
+}
+
+.quest-create {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+
+.quest-create textarea {
+  width: 100%;
+}
+
+.quest-toolbar {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.quest-grid {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.quest-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--card);
+}
+
+.quest-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.quest-status {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.quest-status-done .quest-status {
+  color: var(--primary-active);
+}
+
+.quest-text {
+  margin-top: 8px;
+  font-weight: 700;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.quest-photo-strip {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.quest-photo-tile {
+  display: grid;
+  gap: 4px;
+}
+
+.quest-photo-tile img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card-soft);
+  cursor: zoom-in;
+}
+
+.quest-add-photo {
+  margin-top: 10px;
+}
+
+.quest-comments {
+  margin-top: 10px;
+}
+
 .folder-item {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1406,5 +1511,9 @@ body.dark .room-row {
   .upload-draft-head-actions {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .quest-create {
+    grid-template-columns: 1fr;
   }
 }
