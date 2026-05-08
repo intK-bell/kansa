@@ -49,6 +49,7 @@ const state = {
   folderPasswordById: {},
   folders: [],
   folderUnreadMap: {},
+  folderModeUnreadMap: {},
   selectedFolder: null,
   selectedFolderArchive: null,
   activeFolderMode: 'photo',
@@ -121,13 +122,17 @@ function isUnread(photoId, latestIncomingAt) {
   return !map[photoId] || map[photoId] < latestIncomingAt;
 }
 
-function markAsRead(photoId, latestIncomingAt) {
+function markAsRead(readKey, latestIncomingAt) {
   if (!latestIncomingAt) return;
   const map = getReadState();
-  if (!map[photoId] || map[photoId] < latestIncomingAt) {
-    map[photoId] = latestIncomingAt;
+  if (!map[readKey] || map[readKey] < latestIncomingAt) {
+    map[readKey] = latestIncomingAt;
     setReadState(map);
   }
+}
+
+function questReadKey(questId) {
+  return `quest:${questId}`;
 }
 
 function hasCognitoConfig() {
@@ -173,6 +178,7 @@ function resetRoomContext() {
   state.folderPasswordById = {};
   state.folders = [];
   state.folderUnreadMap = {};
+  state.folderModeUnreadMap = {};
   state.selectedFolder = null;
   state.selectedFolderArchive = null;
   state.photos = [];
@@ -438,6 +444,7 @@ const els = {
   questText: document.querySelector('#quest-text'),
   createQuestBtn: document.querySelector('#create-quest-btn'),
   questSort: document.querySelector('#quest-sort'),
+  photoUploadMetaSlot: document.querySelector('#photo-upload-meta-slot'),
   photoFiles: document.querySelector('#photo-files'),
   uploadBtn: document.querySelector('#upload-btn'),
   uploadLoading: document.querySelector('#upload-loading'),
@@ -906,10 +913,11 @@ async function requestFolderExport(format) {
   startExportLoadingProgress();
   try {
     const folderId = state.selectedFolder.folderId;
+    const mode = state.activeFolderMode === 'quest' ? 'quest' : 'photo';
     const res = await api(`/folders/${folderId}/export`, {
       method: 'POST',
       headers: { ...folderPasswordHeader(folderId) },
-      body: JSON.stringify({ format }),
+      body: JSON.stringify({ format, mode }),
     });
     if (isPdf) {
       markExportLoadingDownloadReady();
@@ -1420,12 +1428,30 @@ function validateUploadDrafts() {
   return errors;
 }
 
+function moveUploadMetaCardToActiveSlot() {
+  if (!els.uploadMetaCard) return;
+  if (state.uploadTargetQuestId) {
+    const slots = Array.from(document.querySelectorAll('.quest-upload-slot[data-quest-id]'));
+    const slot = slots.find((node) => node.getAttribute('data-quest-id') === state.uploadTargetQuestId);
+    if (slot) {
+      slot.appendChild(els.uploadMetaCard);
+      return;
+    }
+  }
+  if (els.photoUploadMetaSlot) {
+    els.photoUploadMetaSlot.appendChild(els.uploadMetaCard);
+  }
+}
+
 function renderUploadDrafts() {
   if (!els.uploadMetaCard || !els.uploadMetaList || !els.uploadMetaStatus) return;
+  moveUploadMetaCardToActiveSlot();
   const hasDrafts = state.uploadDrafts.length > 0;
   const showBulkActions = state.uploadDrafts.length >= 2;
   els.uploadMetaCard.classList.toggle('hidden', !hasDrafts);
-  if (els.applyCommentBulkBtn) els.applyCommentBulkBtn.classList.toggle('hidden', !showBulkActions);
+  if (els.applyCommentBulkBtn) {
+    els.applyCommentBulkBtn.classList.toggle('hidden', !showBulkActions || Boolean(state.uploadTargetQuestId));
+  }
   if (els.applyNameSequenceBtn) els.applyNameSequenceBtn.classList.toggle('hidden', !showBulkActions);
   els.uploadMetaList.innerHTML = '';
   if (!hasDrafts) {
@@ -2382,7 +2408,8 @@ async function loadFolders() {
 
 async function computeFolderUnread(folderId) {
   const folder = state.folders.find((item) => item.folderId === folderId);
-  if (folder?.hasPassword && !state.folderPasswordById[folderId]) return false;
+  const result = { photo: false, quest: false };
+  if (folder?.hasPassword && !state.folderPasswordById[folderId]) return result;
   const photosData = await api(`/folders/${folderId}/photos`, {
     method: 'GET',
     headers: { ...folderPasswordHeader(folderId) },
@@ -2392,9 +2419,26 @@ async function computeFolderUnread(folderId) {
     const latestAt = photo.latestCommentAt || '';
     const latestBy = photo.latestCommentBy || '';
     const latestIncoming = latestAt && latestBy && latestBy !== state.userKey ? latestAt : '';
-    if (isUnread(photo.photoId, latestIncoming)) return true;
+    if (isUnread(photo.photoId, latestIncoming)) {
+      result.photo = true;
+      break;
+    }
   }
-  return false;
+  const questsData = await api(`/folders/${folderId}/quests`, {
+    method: 'GET',
+    headers: { ...folderPasswordHeader(folderId) },
+  });
+  const quests = questsData.items || [];
+  for (const quest of quests) {
+    const latestAt = quest.latestCommentAt || '';
+    const latestBy = quest.latestCommentBy || '';
+    const latestIncoming = latestAt && latestBy && latestBy !== state.userKey ? latestAt : '';
+    if (isUnread(questReadKey(quest.questId), latestIncoming)) {
+      result.quest = true;
+      break;
+    }
+  }
+  return result;
 }
 
 async function refreshFolderUnread(folderIds = null) {
@@ -2409,12 +2453,13 @@ async function refreshFolderUnread(folderIds = null) {
         const unread = await computeFolderUnread(folder.folderId);
         return [folder.folderId, unread];
       } catch (_) {
-        return [folder.folderId, false];
+        return [folder.folderId, { photo: false, quest: false }];
       }
     })
   );
   entries.forEach(([folderId, unread]) => {
-    state.folderUnreadMap[folderId] = unread;
+    state.folderModeUnreadMap[folderId] = unread;
+    state.folderUnreadMap[folderId] = Boolean(unread.photo || unread.quest);
   });
 }
 
@@ -2545,6 +2590,9 @@ async function loadQuests() {
   });
   state.quests = data.items || [];
   renderQuests();
+  await refreshFolderUnread([folderId]);
+  renderFolderMode();
+  renderFolders();
 }
 
 async function loadFolderContent() {
@@ -2739,6 +2787,10 @@ function renderFolderMode() {
   const mode = state.activeFolderMode === 'quest' ? 'quest' : 'photo';
   if (els.photoModeTab) els.photoModeTab.classList.toggle('is-active', mode === 'photo');
   if (els.questModeTab) els.questModeTab.classList.toggle('is-active', mode === 'quest');
+  const folderId = state.selectedFolder?.folderId || '';
+  const unread = state.folderModeUnreadMap[folderId] || {};
+  if (els.photoModeTab) els.photoModeTab.classList.toggle('has-unread', Boolean(unread.photo));
+  if (els.questModeTab) els.questModeTab.classList.toggle('has-unread', Boolean(unread.quest));
   if (els.photoModePanel) els.photoModePanel.classList.toggle('hidden', mode !== 'photo');
   if (els.questModePanel) els.questModePanel.classList.toggle('hidden', mode !== 'quest');
   if (els.photoList) els.photoList.classList.toggle('hidden', mode !== 'photo');
@@ -2848,6 +2900,7 @@ async function renderQuests() {
     });
     addPhoto.appendChild(fileInput);
     card.appendChild(addPhoto);
+    card.appendChild(el('div', { class: 'quest-upload-slot', 'data-quest-id': quest.questId }));
 
     const commentWrap = el('div', { class: 'comments quest-comments' });
     (quest.comments || []).forEach((comment) => {
@@ -2887,8 +2940,15 @@ async function renderQuests() {
     addRow.appendChild(addBtn);
     commentWrap.appendChild(addRow);
     card.appendChild(commentWrap);
+    if (state.activeFolderMode === 'quest') {
+      const latestAt = quest.latestCommentAt || '';
+      const latestBy = quest.latestCommentBy || '';
+      const latestIncoming = latestAt && latestBy && latestBy !== state.userKey ? latestAt : '';
+      if (latestIncoming) markAsRead(questReadKey(quest.questId), latestIncoming);
+    }
     els.questList.appendChild(card);
   });
+  if (state.uploadTargetQuestId) renderUploadDrafts();
 }
 
 async function renderPhotos() {
@@ -3583,11 +3643,16 @@ if (els.photoModeTab) {
 }
 
 if (els.questModeTab) {
-  els.questModeTab.onclick = () => {
+  els.questModeTab.onclick = safeAction(async () => {
     state.activeFolderMode = 'quest';
     clearUploadDrafts();
+    renderQuests();
+    if (state.selectedFolder) {
+      await refreshFolderUnread([state.selectedFolder.folderId]);
+      renderFolders();
+    }
     renderFolderMode();
-  };
+  }, '表示切替');
 }
 
 if (els.questSort) {

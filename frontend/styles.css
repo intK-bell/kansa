@@ -819,6 +819,7 @@ button.is-loading::before {
 }
 
 .mode-tab {
+  position: relative;
   background: var(--card-soft);
   color: var(--text);
 }
@@ -826,6 +827,18 @@ button.is-loading::before {
 .mode-tab.is-active {
   background: var(--primary);
   color: #fff;
+}
+
+.mode-tab.has-unread::after {
+  content: "";
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--card);
+  border-radius: 50%;
+  background: var(--danger);
 }
 
 .quest-create {
@@ -847,11 +860,15 @@ button.is-loading::before {
 
 .quest-grid {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   margin-top: 12px;
 }
 
 .quest-card {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px;
@@ -863,6 +880,10 @@ button.is-loading::before {
   justify-content: space-between;
   gap: 10px;
   align-items: flex-start;
+}
+
+.quest-head > * {
+  min-width: 0;
 }
 
 .quest-status {
@@ -894,6 +915,7 @@ button.is-loading::before {
 }
 
 .quest-photo-tile {
+  min-width: 0;
   display: grid;
   gap: 4px;
 }
@@ -909,6 +931,28 @@ button.is-loading::before {
 }
 
 .quest-add-photo {
+  margin-top: 10px;
+  min-width: 0;
+}
+
+.quest-add-photo input,
+.quest-card textarea,
+.quest-card button,
+.quest-card select {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.quest-add-photo input[type="file"] {
+  width: 100%;
+}
+
+.quest-card .upload-meta-card {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.quest-upload-slot {
   margin-top: 10px;
 }
 
@@ -1515,5 +1559,17 @@ body.dark .room-row {
 
   .quest-create {
     grid-template-columns: 1fr;
+  }
+
+  .quest-card {
+    padding: 10px;
+  }
+
+  .quest-head {
+    flex-direction: column;
+  }
+
+  .quest-photo-strip {
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
   }
 }

@@ -173,6 +173,12 @@ function normalizeExportFormat(value) {
   return 'pptx_high';
 }
 
+function normalizeExportMode(value) {
+  const mode = String(value || '').trim().toLowerCase();
+  if (mode === 'quest') return 'quest';
+  return 'photo';
+}
+
 function exportContentType(format) {
   if (format === 'pdf') return 'application/pdf';
   return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
@@ -4353,6 +4359,7 @@ async function updateComment(photoId, commentId, body, user, room, authz, ctx) {
 async function exportFolder(event, folderId, user, room, authz, ctx) {
   const body = event.body ? JSON.parse(event.body) : {};
   const format = normalizeExportFormat(body.format);
+  const mode = normalizeExportMode(body.mode);
   const folderRes = await ddb.send(
     new QueryCommand({
       TableName: TABLE_NAME,
@@ -4387,7 +4394,11 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
     })
   );
 
-  const photos = (photosRes.Items || []).filter((item) => isRoomMatch(item.roomName, room.roomName));
+  const photos = (photosRes.Items || []).filter((item) => {
+    if (!isRoomMatch(item.roomName, room.roomName)) return false;
+    if (mode === 'quest') return Boolean(item.questId);
+    return !item.questId;
+  });
   const questIds = [...new Set(photos.map((photo) => String(photo.questId || '')).filter(Boolean))];
   const questMap = new Map();
   if (questIds.length) {
@@ -4531,9 +4542,10 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
     result: 'success',
     exportKey: key,
     format,
+    mode,
   });
 
-  return json(200, { key, downloadUrl, format });
+  return json(200, { key, downloadUrl, format, mode });
 }
 
 async function deleteAllCommentsForPhoto(photoId) {
