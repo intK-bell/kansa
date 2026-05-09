@@ -59,6 +59,7 @@ const state = {
   restoreScrollY: null,
   season: 'spring',
   isUploading: false,
+  isCreatingQuest: false,
   uploadDrafts: [],
   uploadTargetQuestId: null,
 };
@@ -3681,16 +3682,27 @@ if (els.questSort) {
 
 if (els.createQuestBtn) {
   els.createQuestBtn.onclick = safeAction(async () => {
+    if (state.isCreatingQuest) return;
     if (!state.selectedFolder) return;
     const text = String(els.questText?.value || '').trim();
     if (!text) return;
-    await api(`/folders/${state.selectedFolder.folderId}/quests`, {
-      method: 'POST',
-      headers: { ...folderPasswordHeader(state.selectedFolder.folderId) },
-      body: JSON.stringify({ text }),
-    });
-    if (els.questText) els.questText.value = '';
-    await loadQuests();
+    const folderId = state.selectedFolder.folderId;
+    state.isCreatingQuest = true;
+    els.createQuestBtn.disabled = true;
+    if (els.questText) els.questText.disabled = true;
+    try {
+      await api(`/folders/${folderId}/quests`, {
+        method: 'POST',
+        headers: { ...folderPasswordHeader(folderId) },
+        body: JSON.stringify({ text }),
+      });
+      if (els.questText) els.questText.value = '';
+      await loadQuests();
+    } finally {
+      state.isCreatingQuest = false;
+      els.createQuestBtn.disabled = false;
+      if (els.questText) els.questText.disabled = false;
+    }
   }, 'クエスト作成');
 }
 
