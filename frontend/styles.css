@@ -328,7 +328,9 @@ select {
   max-width: 100%;
 }
 
-#folder-title {
+#folder-title,
+#folder-mode,
+#folder-password {
   width: 100%;
   max-width: 100%;
   display: block;
@@ -809,6 +811,125 @@ button.is-loading::before {
 #photo-files {
   max-width: 100%;
   width: 100%;
+}
+
+.quest-create {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+
+.quest-create textarea {
+  width: 100%;
+}
+
+.quest-toolbar {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.quest-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.quest-card {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  background: var(--card);
+}
+
+.quest-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.quest-head > * {
+  min-width: 0;
+}
+
+.quest-status {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.quest-status-done .quest-status {
+  color: var(--primary-active);
+}
+
+.quest-text {
+  margin-top: 8px;
+  font-weight: 700;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.quest-photo-strip {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.quest-photo-tile {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.quest-photo-tile img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card-soft);
+  cursor: zoom-in;
+}
+
+.quest-add-photo {
+  margin-top: 10px;
+  min-width: 0;
+}
+
+.quest-add-photo input,
+.quest-card textarea,
+.quest-card button,
+.quest-card select {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.quest-add-photo input[type="file"] {
+  width: 100%;
+}
+
+.quest-card .upload-meta-card {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.quest-upload-slot {
+  margin-top: 10px;
+}
+
+.quest-comments {
+  margin-top: 10px;
 }
 
 .folder-item {
@@ -1406,5 +1527,21 @@ body.dark .room-row {
   .upload-draft-head-actions {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .quest-create {
+    grid-template-columns: 1fr;
+  }
+
+  .quest-card {
+    padding: 10px;
+  }
+
+  .quest-head {
+    flex-direction: column;
+  }
+
+  .quest-photo-strip {
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
   }
 }

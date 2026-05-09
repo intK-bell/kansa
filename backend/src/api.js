@@ -173,6 +173,12 @@ function normalizeExportFormat(value) {
   return 'pptx_high';
 }
 
+function normalizeFolderMode(value) {
+  const mode = String(value || '').trim().toLowerCase();
+  if (mode === 'quest') return 'quest';
+  return 'photo';
+}
+
 function exportContentType(format) {
   if (format === 'pdf') return 'application/pdf';
   return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
@@ -387,6 +393,28 @@ function photoHashKey(folderId, contentSha256) {
   return { PK: `FOLDER#${folderId}`, SK: `PHOTOHASH#${contentSha256}` };
 }
 
+function normalizeQuestStatus(value) {
+  const v = String(value || '').trim().toLowerCase();
+  if (v === 'done' || v === 'completed' || v === 'complete' || value === '完了') return 'done';
+  if (v === 'shooting' || value === '撮影中') return 'shooting';
+  return 'open';
+}
+
+function questStatusLabel(status) {
+  const s = normalizeQuestStatus(status);
+  if (s === 'done') return '完了';
+  if (s === 'shooting') return '撮影中';
+  return '未対応';
+}
+
+function questKey(questId) {
+  return { PK: `QUEST#${questId}`, SK: 'META' };
+}
+
+function questCommentKey(questId, createdAt, commentId) {
+  return { PK: `QUEST#${questId}`, SK: `COMMENT#${createdAt}#${commentId}` };
+}
+
 async function sha256ForS3Object(key) {
   const res = await s3.send(new GetObjectCommand({ Bucket: PHOTO_BUCKET, Key: key }));
   const body = res?.Body;
@@ -584,6 +612,16 @@ async function buildExportPdf(options) {
       latinFont,
       color: hexToRgbColor(PALETTE.muted),
     });
+    if (photo.questText) {
+      drawMixedPdfText(page, `${i18n.t('クエスト')}: ${photo.questText}`, {
+        x: pptUnit(0.55),
+        y: PDF_PAGE_HEIGHT - pptUnit(1.62),
+        size: 9,
+        jpFont,
+        latinFont,
+        color: hexToRgbColor(PALETTE.brandText),
+      });
+    }
 
     page.drawRectangle({
       x: pptUnit(layout.image.x),
@@ -1302,6 +1340,25 @@ function canAccessFolder(folder, user, authz) {
   return folder.createdBy && folder.createdBy === user.userKey;
 }
 
+async function loadAccessibleFolder(event, folderId, user, room, authz) {
+  const folderRes = await ddb.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: 'ORG#DEFAULT', SK: `FOLDER#${folderId}` },
+    })
+  );
+  const folder = folderRes.Item;
+  if (!folder || !isRoomMatch(folder.roomName, room.roomName)) {
+    return { response: json(404, { message: 'folder not found' }) };
+  }
+  if (!canAccessFolder(folder, user, authz)) {
+    return { response: json(403, { message: 'forbidden' }) };
+  }
+  const pw = verifyFolderPassword(folder, event);
+  if (!pw.ok) return { response: json(403, { message: 'invalid folder password' }) };
+  return { folder };
+}
+
 function isUploadBlocked(billing) {
   return isUploadBlockedForBilling(billing);
 }
@@ -1336,6 +1393,20 @@ async function nextPhotoCode(folderId, folderCode) {
   );
   const seq = res.Attributes?.photoSeq || 1;
   return `${folderCode}-P${pad3(seq)}`;
+}
+
+async function nextQuestCode(folderId, folderCode) {
+  const res = await ddb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `FOLDER#${folderId}`, SK: 'META#QUEST_COUNTER' },
+      UpdateExpression: 'ADD questSeq :inc',
+      ExpressionAttributeValues: { ':inc': 1 },
+      ReturnValues: 'UPDATED_NEW',
+    })
+  );
+  const seq = res.Attributes?.questSeq || 1;
+  return `${folderCode}-Q${pad3(seq)}`;
 }
 
 async function createRoom(event, user, ctx) {
@@ -2939,6 +3010,7 @@ async function teamDelete(event, user, room, authz, ctx) {
 
   let purgedFolders = 0;
   let purgedPhotos = 0;
+  let purgedQuests = 0;
   let deletedMembers = 0;
   let deletedBillingItems = 0;
   let deletedExports = 0;
@@ -2982,8 +3054,10 @@ async function teamDelete(event, user, room, authz, ctx) {
     } while (lastKey);
 
     // Delete folder meta + counters.
+    purgedQuests += await deleteAllQuestsForFolder(folderId, room);
     await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: { PK: 'ORG#DEFAULT', SK: `FOLDER#${folderId}` } }));
     await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: { PK: `FOLDER#${folderId}`, SK: 'META#COUNTER' } }));
+    await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: { PK: `FOLDER#${folderId}`, SK: 'META#QUEST_COUNTER' } }));
     purgedFolders += 1;
 
     // Delete exports under this folder prefix (best-effort).
@@ -3045,6 +3119,7 @@ async function teamDelete(event, user, room, authz, ctx) {
     stripeCancellationResult: stripeCancellation.result || 'not_required',
     purgedFolders,
     purgedPhotos,
+    purgedQuests,
     deletedMembers,
     deletedBillingItems,
     deletedExports,
@@ -3055,6 +3130,7 @@ async function teamDelete(event, user, room, authz, ctx) {
     ok: true,
     purgedFolders,
     purgedPhotos,
+    purgedQuests,
     deletedMembers,
     deletedBillingItems,
     deletedExports,
@@ -3114,7 +3190,7 @@ async function listFolders(room, user, authz) {
   const nameMap = await loadDisplayNameMap(items.map((item) => item.createdBy));
   const hydrated = visible.map((item) => {
     const base = applyResolvedDisplayName(item, nameMap);
-    return { ...base, hasPassword: folderHasPassword(base) };
+    return { ...base, mode: normalizeFolderMode(base.mode), hasPassword: folderHasPassword(base) };
   });
   const withUsage = await Promise.all(
     hydrated.map(async (folder) => {
@@ -3158,6 +3234,7 @@ async function createFolder(event, user, room, ctx) {
   const body = JSON.parse(event.body || '{}');
   if (!body.title) return badRequest('title is required');
   const folderPassword = String(body.folderPassword || '').trim();
+  const mode = normalizeFolderMode(body.mode || body.folderMode);
   if (folderPassword && folderPassword.length > 64) return badRequest('folderPassword is too long');
 
   const billing = await getBillingMeta(ddb, { tableName: TABLE_NAME, roomId: room.roomId });
@@ -3188,6 +3265,7 @@ async function createFolder(event, user, room, ctx) {
     folderId,
     folderCode,
     roomName: room.roomName,
+    mode,
     title: body.title,
     createdBy: user.userKey,
     createdByName: user.userName,
@@ -3209,6 +3287,430 @@ async function createFolder(event, user, room, ctx) {
     result: 'success',
   });
   return json(201, { ...item, hasPassword: folderHasPassword(item) });
+}
+
+async function loadQuestForRoom(questId, room) {
+  const res = await ddb.send(new GetCommand({ TableName: TABLE_NAME, Key: questKey(questId) }));
+  const quest = res.Item || null;
+  if (!quest || !isRoomMatch(quest.roomName, room.roomName)) return null;
+  return quest;
+}
+
+async function listQuestCommentsRaw(questId, room) {
+  const res = await ddb.send(
+    new QueryCommand({
+      TableName: TABLE_NAME,
+      KeyConditionExpression: 'PK = :pk and begins_with(SK, :sk)',
+      ExpressionAttributeValues: {
+        ':pk': `QUEST#${questId}`,
+        ':sk': 'COMMENT#',
+      },
+      ScanIndexForward: true,
+    })
+  );
+  const items = (res.Items || []).filter((item) => isRoomMatch(item.roomName, room.roomName));
+  const nameMap = await loadDisplayNameMap(items.map((item) => item.createdBy));
+  return items.map((item) => applyResolvedDisplayName(item, nameMap));
+}
+
+async function listQuests(event, folderId, user, room, authz) {
+  const access = await loadAccessibleFolder(event, folderId, user, room, authz);
+  if (access.response) return access.response;
+  if (normalizeFolderMode(access.folder.mode) !== 'quest') return json(200, { items: [] });
+
+  const [questsRes, photosRes] = await Promise.all([
+    ddb.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        IndexName: 'GSI1',
+        KeyConditionExpression: 'GSI1PK = :pk and begins_with(GSI1SK, :sk)',
+        ExpressionAttributeValues: {
+          ':pk': `FOLDER#${folderId}`,
+          ':sk': 'QUEST#',
+        },
+        ScanIndexForward: false,
+      })
+    ),
+    ddb.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        IndexName: 'GSI1',
+        KeyConditionExpression: 'GSI1PK = :pk and begins_with(GSI1SK, :sk)',
+        ExpressionAttributeValues: {
+          ':pk': `FOLDER#${folderId}`,
+          ':sk': 'PHOTO#',
+        },
+        ScanIndexForward: false,
+      })
+    ),
+  ]);
+
+  const quests = (questsRes.Items || []).filter((item) => isRoomMatch(item.roomName, room.roomName));
+  const allQuestPhotos = (photosRes.Items || []).filter((item) => isRoomMatch(item.roomName, room.roomName) && item.questId);
+  const photos = splitArchivedPhotosForFreePlan(allQuestPhotos, isFreePlanBilling(authz.billing)).visible;
+  const questIds = new Set(quests.map((q) => q.questId));
+  const nameMap = await loadDisplayNameMap([
+    ...quests.map((item) => item.createdBy),
+    ...photos.map((item) => item.createdBy),
+  ]);
+  const photosByQuest = new Map();
+  const photoItems = await Promise.all(
+    photos
+      .filter((photo) => questIds.has(photo.questId))
+      .map(async (photo) => {
+        const keyForView = photo.previewKey || photo.s3Key;
+        let viewUrl = '';
+        if (keyForView) {
+          viewUrl = await getSignedUrl(
+            s3,
+            new GetObjectCommand({ Bucket: PHOTO_BUCKET, Key: keyForView }),
+            { expiresIn: 600 }
+          );
+        }
+        return { ...applyResolvedDisplayName(photo, nameMap), viewUrl };
+      })
+  );
+  photoItems.forEach((photo) => {
+    const list = photosByQuest.get(photo.questId) || [];
+    list.push(photo);
+    photosByQuest.set(photo.questId, list);
+  });
+
+  const items = await Promise.all(
+    quests.map(async (quest) => ({
+      ...applyResolvedDisplayName(quest, nameMap),
+      status: normalizeQuestStatus(quest.status),
+      statusLabel: questStatusLabel(quest.status),
+      photos: photosByQuest.get(quest.questId) || [],
+      comments: await listQuestCommentsRaw(quest.questId, room),
+    }))
+  );
+  return json(200, { items });
+}
+
+async function createQuest(event, folderId, body, user, room, authz, ctx) {
+  const access = await loadAccessibleFolder(event, folderId, user, room, authz);
+  if (access.response) return access.response;
+  if (normalizeFolderMode(access.folder.mode) !== 'quest') {
+    return json(409, { message: 'folder is not quest mode' });
+  }
+  const text = String(body.text || '').trim();
+  if (!text) return badRequest('text is required');
+  if (text.length > 100) return badRequest('text must be 100 chars or less');
+
+  const questId = randomUUID();
+  const now = new Date().toISOString();
+  const questCode = await nextQuestCode(folderId, access.folder.folderCode || 'F000');
+  const item = {
+    ...questKey(questId),
+    type: 'quest',
+    questId,
+    questCode,
+    folderId,
+    folderCode: access.folder.folderCode || 'F000',
+    roomName: room.roomName,
+    text,
+    status: 'open',
+    createdBy: user.userKey,
+    createdByName: user.userName,
+    createdAt: now,
+    updatedAt: now,
+    GSI1PK: `FOLDER#${folderId}`,
+    GSI1SK: `QUEST#${now}#${questId}`,
+  };
+  await ddb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
+  auditLog({
+    requestId: ctx.requestId,
+    action: 'quest.create',
+    actor: user.userKey,
+    actorName: user.userName,
+    folderId,
+    questId,
+    questCode,
+    result: 'success',
+  });
+  return json(201, { ...item, statusLabel: questStatusLabel(item.status), photos: [], comments: [] });
+}
+
+async function updateQuest(event, questId, body, user, room, authz, ctx) {
+  const quest = await loadQuestForRoom(questId, room);
+  if (!quest) return json(404, { message: 'quest not found' });
+  const access = await loadAccessibleFolder(event, quest.folderId, user, room, authz);
+  if (access.response) return access.response;
+
+  const updates = [];
+  const values = { ':u': new Date().toISOString() };
+  const names = {};
+  if (Object.prototype.hasOwnProperty.call(body, 'text')) {
+    if (quest.createdBy !== user.userKey && !authz.isAdmin) return json(403, { message: 'forbidden' });
+    const text = String(body.text || '').trim();
+    if (!text) return badRequest('text is required');
+    if (text.length > 100) return badRequest('text must be 100 chars or less');
+    updates.push('#text = :text');
+    names['#text'] = 'text';
+    values[':text'] = text;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'status')) {
+    const nextStatus = normalizeQuestStatus(body.status);
+    if (nextStatus === 'done' && !authz.isAdmin) return json(403, { message: 'forbidden' });
+    if (nextStatus === 'done') {
+      const photosRes = await ddb.send(
+        new QueryCommand({
+          TableName: TABLE_NAME,
+          IndexName: 'GSI1',
+          KeyConditionExpression: 'GSI1PK = :pk and begins_with(GSI1SK, :sk)',
+          ExpressionAttributeValues: {
+            ':pk': `FOLDER#${quest.folderId}`,
+            ':sk': 'PHOTO#',
+          },
+        })
+      );
+      const hasPhoto = (photosRes.Items || []).some(
+        (photo) => photo.questId === questId && isRoomMatch(photo.roomName, room.roomName)
+      );
+      if (!hasPhoto) return json(409, { message: 'quest has no photos' });
+    }
+    if (nextStatus !== 'done' && quest.createdBy !== user.userKey && !authz.isAdmin) {
+      return json(403, { message: 'forbidden' });
+    }
+    updates.push('#status = :status');
+    names['#status'] = 'status';
+    values[':status'] = nextStatus;
+    if (nextStatus === 'done') {
+      updates.push('completedAt = :u', 'completedBy = :actor', 'completedByName = :actorName');
+      values[':actor'] = user.userKey;
+      values[':actorName'] = user.userName;
+    }
+  }
+  if (!updates.length) return badRequest('text or status is required');
+  updates.push('updatedAt = :u');
+  await ddb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: questKey(questId),
+      UpdateExpression: `SET ${updates.join(', ')}`,
+      ExpressionAttributeNames: names,
+      ExpressionAttributeValues: values,
+      ConditionExpression: 'attribute_exists(PK) and attribute_exists(SK)',
+    })
+  );
+  auditLog({
+    requestId: ctx.requestId,
+    action: 'quest.update',
+    actor: user.userKey,
+    actorName: user.userName,
+    questId,
+    updates: {
+      text: Object.prototype.hasOwnProperty.call(body, 'text'),
+      status: values[':status'] || null,
+    },
+    result: 'success',
+  });
+  return json(200, { ok: true });
+}
+
+async function deleteAllQuestComments(questId) {
+  let lastKey = null;
+  do {
+    const res = await ddb.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        KeyConditionExpression: 'PK = :pk and begins_with(SK, :sk)',
+        ExpressionAttributeValues: {
+          ':pk': `QUEST#${questId}`,
+          ':sk': 'COMMENT#',
+        },
+        ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
+      })
+    );
+    for (const item of res.Items || []) {
+      await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: { PK: item.PK, SK: item.SK } }));
+    }
+    lastKey = res.LastEvaluatedKey || null;
+  } while (lastKey);
+}
+
+async function deleteQuest(event, questId, user, room, authz, ctx) {
+  const quest = await loadQuestForRoom(questId, room);
+  if (!quest) return json(404, { message: 'quest not found' });
+  const access = await loadAccessibleFolder(event, quest.folderId, user, room, authz);
+  if (access.response) return access.response;
+  if (quest.createdBy !== user.userKey && !authz.isAdmin) return json(403, { message: 'forbidden' });
+
+  const photosRes = await ddb.send(
+    new QueryCommand({
+      TableName: TABLE_NAME,
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'GSI1PK = :pk and begins_with(GSI1SK, :sk)',
+      ExpressionAttributeValues: {
+        ':pk': `FOLDER#${quest.folderId}`,
+        ':sk': 'PHOTO#',
+      },
+    })
+  );
+  const photos = (photosRes.Items || []).filter((p) => p.questId === questId && isRoomMatch(p.roomName, room.roomName));
+  for (const photo of photos) {
+    await purgePhotoByItem(photo, room, ctx, user);
+  }
+  await deleteAllQuestComments(questId);
+  await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: questKey(questId) }));
+  auditLog({
+    requestId: ctx.requestId,
+    action: 'quest.delete',
+    actor: user.userKey,
+    actorName: user.userName,
+    questId,
+    purgedPhotos: photos.length,
+    result: 'success',
+  });
+  return json(200, { ok: true, purgedPhotos: photos.length });
+}
+
+async function refreshQuestPhotoSummary(questId, folderId, room) {
+  if (!questId || !folderId) return;
+  const photosRes = await ddb.send(
+    new QueryCommand({
+      TableName: TABLE_NAME,
+      IndexName: 'GSI1',
+      KeyConditionExpression: 'GSI1PK = :pk and begins_with(GSI1SK, :sk)',
+      ExpressionAttributeValues: {
+        ':pk': `FOLDER#${folderId}`,
+        ':sk': 'PHOTO#',
+      },
+    })
+  );
+  const photos = (photosRes.Items || []).filter((p) => p.questId === questId && isRoomMatch(p.roomName, room.roomName));
+  const now = new Date().toISOString();
+  const updates = ['photoCount = :count', 'updatedAt = :u'];
+  const values = { ':count': photos.length, ':u': now };
+  const names = {};
+  if (!photos.length) {
+    updates.push('#status = :open');
+    names['#status'] = 'status';
+    values[':open'] = 'open';
+  }
+  await ddb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: questKey(questId),
+      UpdateExpression: `SET ${updates.join(', ')}`,
+      ...(Object.keys(names).length ? { ExpressionAttributeNames: names } : {}),
+      ExpressionAttributeValues: values,
+      ConditionExpression: 'attribute_exists(PK) and attribute_exists(SK)',
+    })
+  );
+}
+
+async function listQuestComments(event, questId, user, room, authz) {
+  const quest = await loadQuestForRoom(questId, room);
+  if (!quest) return json(404, { message: 'quest not found' });
+  const access = await loadAccessibleFolder(event, quest.folderId, user, room, authz);
+  if (access.response) return access.response;
+  return json(200, { items: await listQuestCommentsRaw(questId, room) });
+}
+
+async function createQuestComment(event, questId, body, user, room, authz, ctx) {
+  const quest = await loadQuestForRoom(questId, room);
+  if (!quest) return json(404, { message: 'quest not found' });
+  const access = await loadAccessibleFolder(event, quest.folderId, user, room, authz);
+  if (access.response) return access.response;
+  const text = String(body.text || '').trim();
+  if (!text) return badRequest('text is required');
+  const commentId = randomUUID();
+  const now = new Date().toISOString();
+  const item = {
+    ...questCommentKey(questId, now, commentId),
+    type: 'quest_comment',
+    questId,
+    folderId: quest.folderId,
+    roomName: room.roomName,
+    commentId,
+    text,
+    createdBy: user.userKey,
+    createdByName: user.userName,
+    createdAt: now,
+    GSI1PK: `QUEST#${questId}`,
+    GSI1SK: `COMMENT#${now}#${commentId}`,
+  };
+  await ddb.send(new PutCommand({ TableName: TABLE_NAME, Item: item }));
+  await ddb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: questKey(questId),
+      UpdateExpression: 'SET latestCommentAt = :t, latestCommentBy = :b, latestCommentByName = :bn, updatedAt = :u',
+      ExpressionAttributeValues: {
+        ':t': now,
+        ':b': user.userKey,
+        ':bn': user.userName,
+        ':u': now,
+      },
+    })
+  );
+  auditLog({
+    requestId: ctx.requestId,
+    action: 'quest.comment.create',
+    actor: user.userKey,
+    actorName: user.userName,
+    questId,
+    commentId,
+    result: 'success',
+  });
+  return json(201, item);
+}
+
+async function updateQuestComment(event, questId, commentId, body, user, room, authz, ctx) {
+  const quest = await loadQuestForRoom(questId, room);
+  if (!quest) return json(404, { message: 'quest not found' });
+  const access = await loadAccessibleFolder(event, quest.folderId, user, room, authz);
+  if (access.response) return access.response;
+  const text = String(body.text || '').trim();
+  if (!text) return badRequest('text is required');
+  const comments = await listQuestCommentsRaw(questId, room);
+  const found = comments.find((item) => item.commentId === commentId);
+  if (!found) return json(404, { message: 'comment not found' });
+  if (found.createdBy !== user.userKey && !authz.isAdmin) return json(403, { message: 'forbidden' });
+  const updatedAt = new Date().toISOString();
+  await ddb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: found.PK, SK: found.SK },
+      UpdateExpression: 'SET #t = :text, updatedAt = :updatedAt',
+      ExpressionAttributeNames: { '#t': 'text' },
+      ExpressionAttributeValues: { ':text': text, ':updatedAt': updatedAt },
+    })
+  );
+  auditLog({
+    requestId: ctx.requestId,
+    action: 'quest.comment.update',
+    actor: user.userKey,
+    actorName: user.userName,
+    questId,
+    commentId,
+    result: 'success',
+  });
+  return json(200, { ok: true });
+}
+
+async function deleteQuestComment(event, questId, commentId, user, room, authz, ctx) {
+  const quest = await loadQuestForRoom(questId, room);
+  if (!quest) return json(404, { message: 'quest not found' });
+  const access = await loadAccessibleFolder(event, quest.folderId, user, room, authz);
+  if (access.response) return access.response;
+  const comments = await listQuestCommentsRaw(questId, room);
+  const found = comments.find((item) => item.commentId === commentId);
+  if (!found) return json(404, { message: 'comment not found' });
+  if (found.createdBy !== user.userKey && !authz.isAdmin) return json(403, { message: 'forbidden' });
+  await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: { PK: found.PK, SK: found.SK } }));
+  auditLog({
+    requestId: ctx.requestId,
+    action: 'quest.comment.delete',
+    actor: user.userKey,
+    actorName: user.userName,
+    questId,
+    commentId,
+    result: 'success',
+  });
+  return json(200, { ok: true });
 }
 
 async function listPhotos(event, folderId, user, room, authz) {
@@ -3241,7 +3743,7 @@ async function listPhotos(event, folderId, user, room, authz) {
     })
   );
 
-  const items = (res.Items || []).filter((item) => isRoomMatch(item.roomName, room.roomName));
+  const items = (res.Items || []).filter((item) => isRoomMatch(item.roomName, room.roomName) && !item.questId);
   const isFreePlan = isFreePlanBilling(authz.billing);
   const split = splitArchivedPhotosForFreePlan(items, isFreePlan);
   const visibleItems = split.visible;
@@ -3329,6 +3831,7 @@ async function createUploadUrl(event, folderId, body, user, room, authz) {
 async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
   const originalS3Key = body.originalS3Key || body.s3Key || null;
   const previewS3Key = body.previewS3Key || null;
+  const questId = String(body.questId || '').trim();
   if (!body.photoId || !originalS3Key) return badRequest('photoId and originalS3Key are required');
   const fileName = String(body.fileName || '').trim();
   const initialComment = String(body.initialComment || '').trim();
@@ -3349,6 +3852,15 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
   }
   const pw = verifyFolderPassword(folder, event);
   if (!pw.ok) return json(403, { message: 'invalid folder password' });
+  const folderMode = normalizeFolderMode(folder.mode);
+  if (folderMode === 'quest' && !questId) return badRequest('questId is required for quest folder');
+  if (folderMode === 'photo' && questId) return badRequest('quest photos are not allowed in photo folder');
+
+  let quest = null;
+  if (questId) {
+    quest = await loadQuestForRoom(questId, room);
+    if (!quest || quest.folderId !== folderId) return json(404, { message: 'quest not found' });
+  }
 
   if (isUploadBlocked(authz.billing)) {
     const summary = summarizeBilling(authz.billing);
@@ -3430,6 +3942,7 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
     totalBytes,
     contentSha256,
     fileName,
+    questId: questId || null,
     createdBy: user.userKey,
     createdByName: user.userName,
     createdAt: now,
@@ -3441,6 +3954,10 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
     item.latestCommentBy = user.userKey;
     item.latestCommentByName = user.userName;
     item.updatedAt = now;
+  }
+  if (questId) {
+    item.questText = quest.text || '';
+    item.questCode = quest.questCode || null;
   }
 
   try {
@@ -3476,6 +3993,29 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
           createdAt: now,
           GSI1PK: `PHOTO#${body.photoId}`,
           GSI1SK: `COMMENT#${now}#${commentId}`,
+        },
+      })
+    );
+  }
+  if (questId) {
+    const status = normalizeQuestStatus(quest.status);
+    const nextStatus = status === 'done' || status === 'open' ? 'shooting' : status;
+    const resetCompletion = status === 'done';
+    await ddb.send(
+      new UpdateCommand({
+        TableName: TABLE_NAME,
+        Key: questKey(questId),
+        UpdateExpression:
+          `SET #status = :status, updatedAt = :u, latestPhotoAt = :u, latestPhotoId = :photoId, photoCount = if_not_exists(photoCount, :zero) + :one${
+            resetCompletion ? ' REMOVE completedAt, completedBy, completedByName' : ''
+          }`,
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: {
+          ':status': nextStatus,
+          ':u': now,
+          ':photoId': body.photoId,
+          ':zero': 0,
+          ':one': 1,
         },
       })
     );
@@ -3547,6 +4087,13 @@ async function deletePhoto(photoId, user, room, authz, ctx) {
       deltaBytes: -totalBytes,
       nowIso,
     });
+  }
+  if (item.questId) {
+    try {
+      await refreshQuestPhotoSummary(item.questId, item.folderId, room);
+    } catch (_) {
+      // Best-effort summary cleanup.
+    }
   }
   auditLog({
     requestId: ctx.requestId,
@@ -3839,6 +4386,7 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
   if (!canAccessFolder(folder, user, authz)) return json(403, { message: 'forbidden' });
   const pw = verifyFolderPassword(folder, event);
   if (!pw.ok) return json(403, { message: 'invalid folder password' });
+  const mode = normalizeFolderMode(folder.mode);
   const i18n = createExportI18n(languageFromHeaders(event.headers || {}));
   const billing = await getBillingMeta(ddb, { tableName: TABLE_NAME, roomId: room.roomId });
   const isFreePlanExport = isFreePlanBilling(billing);
@@ -3855,8 +4403,35 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
     })
   );
 
-  const photos = (photosRes.Items || []).filter((item) => isRoomMatch(item.roomName, room.roomName));
-  const split = splitArchivedPhotosForFreePlan(photos, isFreePlanExport);
+  const photos = (photosRes.Items || []).filter((item) => {
+    if (!isRoomMatch(item.roomName, room.roomName)) return false;
+    if (mode === 'quest') return Boolean(item.questId);
+    return !item.questId;
+  });
+  const questIds = [...new Set(photos.map((photo) => String(photo.questId || '')).filter(Boolean))];
+  const questMap = new Map();
+  if (questIds.length) {
+    const questItems = await Promise.all(questIds.map((questId) => loadQuestForRoom(questId, room)));
+    questItems.filter(Boolean).forEach((quest) => {
+      questMap.set(quest.questId, quest);
+    });
+  }
+  const eligiblePhotos = photos
+    .filter((photo) => {
+      if (!photo.questId) return true;
+      const quest = questMap.get(photo.questId);
+      return normalizeQuestStatus(quest?.status) === 'done';
+    })
+    .map((photo) => {
+      if (!photo.questId) return photo;
+      const quest = questMap.get(photo.questId);
+      return {
+        ...photo,
+        questText: quest?.text || photo.questText || '',
+        questCode: quest?.questCode || photo.questCode || null,
+      };
+    });
+  const split = splitArchivedPhotosForFreePlan(eligiblePhotos, isFreePlanExport);
   const exportPhotos = split.visible;
   if (!exportPhotos.length) {
     return json(409, {
@@ -3877,6 +4452,20 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
   const footerSummary = `${i18n.t('形式')}: ${exportFormatDescription(format, i18n)} / ${i18n.t('プラン')}: ${currentPlan} / ${i18n.t('使用量')}: ${formatBytes(usageBytes)} / ${i18n.t('上限')}: ${formatBytes(capacityBytes)} / ${i18n.t('出力')}: ${formatJstDisplayDateTime(exportAt.toISOString(), i18n)}`;
 
   const resolveCommentLines = async (photo) => {
+    if (photo.questId) {
+      const quest = questMap.get(photo.questId);
+      const comments = await listQuestCommentsRaw(photo.questId, room);
+      const lines = [];
+      if (quest?.text || photo.questText) {
+        lines.push(`${i18n.t('クエスト')}: ${quest?.text || photo.questText}`);
+      }
+      comments.forEach((c, idx) => {
+        const createdByName = c.createdByName || 'unknown';
+        const stampedBy = `${formatJstDisplayDateTime(c.createdAt, i18n)} ${createdByName}`;
+        lines.push(`${idx + 1}. ${c.text}\n${stampedBy}`);
+      });
+      return lines;
+    }
     const commentsRes = await ddb.send(
       new QueryCommand({
         TableName: TABLE_NAME,
@@ -3962,9 +4551,10 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
     result: 'success',
     exportKey: key,
     format,
+    mode,
   });
 
-  return json(200, { key, downloadUrl, format });
+  return json(200, { key, downloadUrl, format, mode });
 }
 
 async function deleteAllCommentsForPhoto(photoId) {
@@ -4052,6 +4642,33 @@ async function deleteS3Prefix(bucket, prefix) {
   return deleted;
 }
 
+async function deleteAllQuestsForFolder(folderId, room) {
+  let lastKey = null;
+  let deleted = 0;
+  do {
+    const res = await ddb.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        IndexName: 'GSI1',
+        KeyConditionExpression: 'GSI1PK = :pk and begins_with(GSI1SK, :sk)',
+        ExpressionAttributeValues: {
+          ':pk': `FOLDER#${folderId}`,
+          ':sk': 'QUEST#',
+        },
+        ...(lastKey ? { ExclusiveStartKey: lastKey } : {}),
+      })
+    );
+    const quests = (res.Items || []).filter((quest) => isRoomMatch(quest.roomName, room.roomName));
+    for (const quest of quests) {
+      await deleteAllQuestComments(quest.questId);
+      await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: questKey(quest.questId) }));
+      deleted += 1;
+    }
+    lastKey = res.LastEvaluatedKey || null;
+  } while (lastKey);
+  return deleted;
+}
+
 async function deleteFolder(event, folderId, user, room, authz, ctx) {
   if (!authz.isAdmin) return json(403, { message: 'forbidden' });
 
@@ -4092,8 +4709,10 @@ async function deleteFolder(event, folderId, user, room, authz, ctx) {
   } while (lastKey);
 
   await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: { PK: 'ORG#DEFAULT', SK: `FOLDER#${folderId}` } }));
+  const purgedQuests = await deleteAllQuestsForFolder(folderId, room);
   // Best-effort: remove per-folder counter item too.
   await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: { PK: `FOLDER#${folderId}`, SK: 'META#COUNTER' } }));
+  await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: { PK: `FOLDER#${folderId}`, SK: 'META#QUEST_COUNTER' } }));
   // Best-effort: delete exports created under this folder.
   try {
     await deleteS3Prefix(EXPORT_BUCKET, `exports/${room.roomId}/${folderId}/`);
@@ -4110,9 +4729,10 @@ async function deleteFolder(event, folderId, user, room, authz, ctx) {
     folderCode: folder.folderCode || null,
     roomName: room.roomName,
     purgedPhotos,
+    purgedQuests,
     result: 'success',
   });
-  return json(200, { ok: true, purgedPhotos });
+  return json(200, { ok: true, purgedPhotos, purgedQuests });
 }
 
 async function updateFolderPassword(event, folderId, user, room, authz, ctx) {
@@ -4230,6 +4850,41 @@ exports.handler = async (event) => {
     }
     if (method === 'PUT' && p.folderId && path.endsWith(`/folders/${p.folderId}/password`)) {
       return finish(await updateFolderPassword(event, p.folderId, user, room, authz, ctx));
+    }
+
+    if (method === 'GET' && p.folderId && path.endsWith(`/folders/${p.folderId}/quests`)) {
+      return finish(await listQuests(event, p.folderId, user, room, authz));
+    }
+    if (method === 'POST' && p.folderId && path.endsWith(`/folders/${p.folderId}/quests`)) {
+      return finish(await createQuest(event, p.folderId, body, user, room, authz, ctx));
+    }
+    if (method === 'PUT' && p.questId && path.endsWith(`/quests/${p.questId}`)) {
+      return finish(await updateQuest(event, p.questId, body, user, room, authz, ctx));
+    }
+    if (method === 'DELETE' && p.questId && path.endsWith(`/quests/${p.questId}`)) {
+      return finish(await deleteQuest(event, p.questId, user, room, authz, ctx));
+    }
+    if (method === 'GET' && p.questId && path.endsWith(`/quests/${p.questId}/comments`)) {
+      return finish(await listQuestComments(event, p.questId, user, room, authz));
+    }
+    if (method === 'POST' && p.questId && path.endsWith(`/quests/${p.questId}/comments`)) {
+      return finish(await createQuestComment(event, p.questId, body, user, room, authz, ctx));
+    }
+    if (
+      method === 'PUT' &&
+      p.questId &&
+      p.commentId &&
+      path.endsWith(`/quests/${p.questId}/comments/${p.commentId}`)
+    ) {
+      return finish(await updateQuestComment(event, p.questId, p.commentId, body, user, room, authz, ctx));
+    }
+    if (
+      method === 'DELETE' &&
+      p.questId &&
+      p.commentId &&
+      path.endsWith(`/quests/${p.questId}/comments/${p.commentId}`)
+    ) {
+      return finish(await deleteQuestComment(event, p.questId, p.commentId, user, room, authz, ctx));
     }
 
     if (method === 'GET' && p.folderId && path.endsWith(`/folders/${p.folderId}/photos`)) {

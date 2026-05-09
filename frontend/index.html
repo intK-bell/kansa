@@ -190,23 +190,44 @@
         <section id="folder-detail" class="card hidden">
           <h2 id="folder-detail-title"></h2>
           <p id="photo-archive-note" class="muted" style="margin:6px 0 10px;"></p>
-          <div class="row">
-            <input id="photo-files" type="file" accept="image/*" multiple />
-          </div>
-          <div id="upload-meta-card" class="upload-meta-card hidden">
-            <div class="upload-meta-actions">
-              <button id="apply-name-sequence-btn" type="button" data-i18n="1つ目の写真名を連番で反映">1つ目の写真名を連番で反映</button>
-              <button id="apply-comment-bulk-btn" type="button" data-i18n="1つ目のコメントを全件に反映">1つ目のコメントを全件に反映</button>
-              <button id="cancel-upload-drafts-btn" type="button" class="danger" data-i18n="キャンセル">キャンセル</button>
-              <button id="upload-btn" data-i18n="アップロード">アップロード</button>
+          <div id="photo-mode-panel">
+            <div class="row">
+              <input id="photo-files" type="file" accept="image/*" multiple />
             </div>
-            <p id="upload-meta-status" class="muted" style="margin:8px 0 0;"></p>
-            <div id="upload-meta-list" class="upload-meta-list"></div>
-            <div class="upload-submit-area">
-              <span id="upload-loading" class="upload-loading hidden" data-i18n="アップロード中...">アップロード中...</span>
+          </div>
+          <div id="quest-mode-panel" class="hidden">
+            <div class="quest-create">
+              <textarea id="quest-text" rows="3" maxlength="100" placeholder="撮ってきてほしい写真を入力"></textarea>
+              <button id="create-quest-btn" type="button">クエスト作成</button>
+            </div>
+            <div class="quest-toolbar">
+              <label>
+                <span class="muted">並び順</span>
+                <select id="quest-sort">
+                  <option value="status">対応順</option>
+                  <option value="newest">新しい順</option>
+                  <option value="oldest">古い順</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div id="photo-upload-meta-slot">
+            <div id="upload-meta-card" class="upload-meta-card hidden">
+              <div class="upload-meta-actions">
+                <button id="apply-name-sequence-btn" type="button" data-i18n="1つ目の写真名を連番で反映">1つ目の写真名を連番で反映</button>
+                <button id="apply-comment-bulk-btn" type="button" data-i18n="1つ目のコメントを全件に反映">1つ目のコメントを全件に反映</button>
+                <button id="cancel-upload-drafts-btn" type="button" class="danger" data-i18n="キャンセル">キャンセル</button>
+                <button id="upload-btn" data-i18n="アップロード">アップロード</button>
+              </div>
+              <p id="upload-meta-status" class="muted" style="margin:8px 0 0;"></p>
+              <div id="upload-meta-list" class="upload-meta-list"></div>
+              <div class="upload-submit-area">
+                <span id="upload-loading" class="upload-loading hidden" data-i18n="アップロード中...">アップロード中...</span>
+              </div>
             </div>
           </div>
           <div id="photo-list" class="photo-grid"></div>
+          <div id="quest-list" class="quest-grid hidden"></div>
         </section>
       </section>
     </main>
@@ -235,6 +256,10 @@
         </div>
         <div class="row" style="align-items:stretch;">
           <input id="folder-title" placeholder="〇〇工場_yyyymmdd" data-i18n-attr="placeholder:〇〇工場_yyyymmdd" />
+          <select id="folder-mode" aria-label="フォルダモード" data-i18n-attr="aria-label:フォルダモード">
+            <option value="photo">フォトフォルダ</option>
+            <option value="quest">クエストフォルダ</option>
+          </select>
           <input id="folder-password" placeholder="フォルダパスワード（任意）" type="password" data-i18n-attr="placeholder:フォルダパスワード（任意）" />
           <button id="create-folder-btn" data-i18n="作成">作成</button>
         </div>

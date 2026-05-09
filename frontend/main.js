@@ -49,14 +49,18 @@ const state = {
   folderPasswordById: {},
   folders: [],
   folderUnreadMap: {},
+  folderModeUnreadMap: {},
   selectedFolder: null,
   selectedFolderArchive: null,
   photos: [],
+  quests: [],
+  questSort: 'status',
   openAccordions: new Set(),
   restoreScrollY: null,
   season: 'spring',
   isUploading: false,
   uploadDrafts: [],
+  uploadTargetQuestId: null,
 };
 
 let exportLoadingTimer = null;
@@ -117,13 +121,17 @@ function isUnread(photoId, latestIncomingAt) {
   return !map[photoId] || map[photoId] < latestIncomingAt;
 }
 
-function markAsRead(photoId, latestIncomingAt) {
+function markAsRead(readKey, latestIncomingAt) {
   if (!latestIncomingAt) return;
   const map = getReadState();
-  if (!map[photoId] || map[photoId] < latestIncomingAt) {
-    map[photoId] = latestIncomingAt;
+  if (!map[readKey] || map[readKey] < latestIncomingAt) {
+    map[readKey] = latestIncomingAt;
     setReadState(map);
   }
+}
+
+function questReadKey(questId) {
+  return `quest:${questId}`;
 }
 
 function hasCognitoConfig() {
@@ -169,9 +177,11 @@ function resetRoomContext() {
   state.folderPasswordById = {};
   state.folders = [];
   state.folderUnreadMap = {};
+  state.folderModeUnreadMap = {};
   state.selectedFolder = null;
   state.selectedFolderArchive = null;
   state.photos = [];
+  state.quests = [];
   state.openAccordions.clear();
   state.restoreScrollY = null;
   if (els.folderDetail) els.folderDetail.classList.add('hidden');
@@ -181,6 +191,14 @@ function resetRoomContext() {
   setAdminUiVisibility();
   renderRoomSelect();
   renderFolders();
+}
+
+function normalizeFolderMode(value) {
+  return String(value || '').trim().toLowerCase() === 'quest' ? 'quest' : 'photo';
+}
+
+function currentFolderMode() {
+  return normalizeFolderMode(state.selectedFolder?.mode);
 }
 
 function supportsPkce() {
@@ -419,6 +437,7 @@ const els = {
   currentRoomSelect: document.querySelector('#current-room-select'),
   currentFolderSelect: document.querySelector('#current-folder-select'),
   folderTitle: document.querySelector('#folder-title'),
+  folderMode: document.querySelector('#folder-mode'),
   folderPassword: document.querySelector('#folder-password'),
   createFolderBtn: document.querySelector('#create-folder-btn'),
   folderDetail: document.querySelector('#folder-detail'),
@@ -426,6 +445,12 @@ const els = {
   photoArchiveNote: document.querySelector('#photo-archive-note'),
   folderPasswordSet: document.querySelector('#folder-password-set'),
   setFolderPasswordBtn: document.querySelector('#set-folder-password-btn'),
+  photoModePanel: document.querySelector('#photo-mode-panel'),
+  questModePanel: document.querySelector('#quest-mode-panel'),
+  questText: document.querySelector('#quest-text'),
+  createQuestBtn: document.querySelector('#create-quest-btn'),
+  questSort: document.querySelector('#quest-sort'),
+  photoUploadMetaSlot: document.querySelector('#photo-upload-meta-slot'),
   photoFiles: document.querySelector('#photo-files'),
   uploadBtn: document.querySelector('#upload-btn'),
   uploadLoading: document.querySelector('#upload-loading'),
@@ -437,6 +462,7 @@ const els = {
   cancelUploadDraftsBtn: document.querySelector('#cancel-upload-drafts-btn'),
   exportBtn: document.querySelector('#export-btn'),
   photoList: document.querySelector('#photo-list'),
+  questList: document.querySelector('#quest-list'),
   errorBox: document.querySelector('#error-box'),
   toast: document.querySelector('#toast'),
 };
@@ -831,6 +857,9 @@ function openFolderCreateModal() {
   els.folderCreateModal.classList.remove('hidden');
   if (els.folderTitle) {
     els.folderTitle.value = '';
+  }
+  if (els.folderMode) {
+    els.folderMode.value = 'photo';
   }
   if (els.folderPassword) {
     els.folderPassword.value = '';
@@ -1311,6 +1340,9 @@ function setUploadLoading(isLoading) {
   if (els.photoFiles) {
     els.photoFiles.disabled = isLoading;
   }
+  document.querySelectorAll('.js-quest-files').forEach((input) => {
+    input.disabled = isLoading;
+  });
   if (els.applyCommentBulkBtn) els.applyCommentBulkBtn.disabled = isLoading;
   if (els.applyNameSequenceBtn) els.applyNameSequenceBtn.disabled = isLoading;
   if (els.cancelUploadDraftsBtn) els.cancelUploadDraftsBtn.disabled = isLoading;
@@ -1345,12 +1377,17 @@ function revokeAllUploadDraftPreviews() {
 function clearUploadDrafts() {
   revokeAllUploadDraftPreviews();
   state.uploadDrafts = [];
+  state.uploadTargetQuestId = null;
   if (els.photoFiles) els.photoFiles.value = '';
+  document.querySelectorAll('.js-quest-files').forEach((input) => {
+    input.value = '';
+  });
   renderUploadDrafts();
 }
 
-function rebuildUploadDrafts(files) {
+function rebuildUploadDrafts(files, questId = null) {
   revokeAllUploadDraftPreviews();
+  state.uploadTargetQuestId = questId || null;
   state.uploadDrafts = files.map((file, index) => ({
     localId: `${Date.now()}_${index}_${file.name}`,
     file,
@@ -1399,12 +1436,30 @@ function validateUploadDrafts() {
   return errors;
 }
 
+function moveUploadMetaCardToActiveSlot() {
+  if (!els.uploadMetaCard) return;
+  if (state.uploadTargetQuestId) {
+    const slots = Array.from(document.querySelectorAll('.quest-upload-slot[data-quest-id]'));
+    const slot = slots.find((node) => node.getAttribute('data-quest-id') === state.uploadTargetQuestId);
+    if (slot) {
+      slot.appendChild(els.uploadMetaCard);
+      return;
+    }
+  }
+  if (els.photoUploadMetaSlot) {
+    els.photoUploadMetaSlot.appendChild(els.uploadMetaCard);
+  }
+}
+
 function renderUploadDrafts() {
   if (!els.uploadMetaCard || !els.uploadMetaList || !els.uploadMetaStatus) return;
+  moveUploadMetaCardToActiveSlot();
   const hasDrafts = state.uploadDrafts.length > 0;
   const showBulkActions = state.uploadDrafts.length >= 2;
   els.uploadMetaCard.classList.toggle('hidden', !hasDrafts);
-  if (els.applyCommentBulkBtn) els.applyCommentBulkBtn.classList.toggle('hidden', !showBulkActions);
+  if (els.applyCommentBulkBtn) {
+    els.applyCommentBulkBtn.classList.toggle('hidden', !showBulkActions || Boolean(state.uploadTargetQuestId));
+  }
   if (els.applyNameSequenceBtn) els.applyNameSequenceBtn.classList.toggle('hidden', !showBulkActions);
   els.uploadMetaList.innerHTML = '';
   if (!hasDrafts) {
@@ -1559,6 +1614,12 @@ async function scrollToPhotoList() {
   // Wait a frame so DOM updates from renderPhotos are reflected before scrolling.
   await new Promise((r) => window.requestAnimationFrame(() => r()));
   els.photoList.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function scrollToActiveList() {
+  await new Promise((r) => window.requestAnimationFrame(() => r()));
+  const target = currentFolderMode() === 'quest' ? els.questList : els.photoList;
+  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function planToProductLabel(plan) {
@@ -2355,19 +2416,40 @@ async function loadFolders() {
 
 async function computeFolderUnread(folderId) {
   const folder = state.folders.find((item) => item.folderId === folderId);
-  if (folder?.hasPassword && !state.folderPasswordById[folderId]) return false;
-  const photosData = await api(`/folders/${folderId}/photos`, {
-    method: 'GET',
-    headers: { ...folderPasswordHeader(folderId) },
-  });
-  const photos = photosData.items || [];
-  for (const photo of photos) {
-    const latestAt = photo.latestCommentAt || '';
-    const latestBy = photo.latestCommentBy || '';
-    const latestIncoming = latestAt && latestBy && latestBy !== state.userKey ? latestAt : '';
-    if (isUnread(photo.photoId, latestIncoming)) return true;
+  const result = { photo: false, quest: false };
+  if (folder?.hasPassword && !state.folderPasswordById[folderId]) return result;
+  if (normalizeFolderMode(folder?.mode) === 'quest') {
+    const questsData = await api(`/folders/${folderId}/quests`, {
+      method: 'GET',
+      headers: { ...folderPasswordHeader(folderId) },
+    });
+    const quests = questsData.items || [];
+    for (const quest of quests) {
+      const latestAt = quest.latestCommentAt || '';
+      const latestBy = quest.latestCommentBy || '';
+      const latestIncoming = latestAt && latestBy && latestBy !== state.userKey ? latestAt : '';
+      if (isUnread(questReadKey(quest.questId), latestIncoming)) {
+        result.quest = true;
+        break;
+      }
+    }
+  } else {
+    const photosData = await api(`/folders/${folderId}/photos`, {
+      method: 'GET',
+      headers: { ...folderPasswordHeader(folderId) },
+    });
+    const photos = photosData.items || [];
+    for (const photo of photos) {
+      const latestAt = photo.latestCommentAt || '';
+      const latestBy = photo.latestCommentBy || '';
+      const latestIncoming = latestAt && latestBy && latestBy !== state.userKey ? latestAt : '';
+      if (isUnread(photo.photoId, latestIncoming)) {
+        result.photo = true;
+        break;
+      }
+    }
   }
-  return false;
+  return result;
 }
 
 async function refreshFolderUnread(folderIds = null) {
@@ -2382,12 +2464,13 @@ async function refreshFolderUnread(folderIds = null) {
         const unread = await computeFolderUnread(folder.folderId);
         return [folder.folderId, unread];
       } catch (_) {
-        return [folder.folderId, false];
+        return [folder.folderId, { photo: false, quest: false }];
       }
     })
   );
   entries.forEach(([folderId, unread]) => {
-    state.folderUnreadMap[folderId] = unread;
+    state.folderModeUnreadMap[folderId] = unread;
+    state.folderUnreadMap[folderId] = Boolean(unread.photo || unread.quest);
   });
 }
 
@@ -2403,6 +2486,7 @@ function renderFolders() {
     els.currentFolderSelect.disabled = true;
     els.folderDetail.classList.add('hidden');
     state.selectedFolder = null;
+    state.quests = [];
     return;
   }
 
@@ -2416,7 +2500,8 @@ function renderFolders() {
     option.value = folder.folderId;
     const unread = state.folderUnreadMap[folder.folderId];
     const locked = Boolean(folder.hasPassword);
-    option.textContent = `${folder.folderCode || 'F---'} ${folder.title}${locked ? ` [${t('鍵')}]` : ''}${
+    const modeLabel = normalizeFolderMode(folder.mode) === 'quest' ? t('クエスト') : t('フォト');
+    option.textContent = `${folder.folderCode || 'F---'} ${folder.title} [${modeLabel}]${locked ? ` [${t('鍵')}]` : ''}${
       unread ? ` ${t('●新着')}` : ''
     }`;
     els.currentFolderSelect.appendChild(option);
@@ -2450,9 +2535,12 @@ async function selectFolder(folder) {
   state.selectedFolder = folder;
   renderFolders();
   els.folderDetail.classList.remove('hidden');
-  els.folderDetailTitle.textContent = tf('フォルダ: {folder}', { folder: `${folder.folderCode || 'F---'} ${folder.title}` });
+  const modeLabel = normalizeFolderMode(folder.mode) === 'quest' ? t('クエスト') : t('フォト');
+  els.folderDetailTitle.textContent = tf('フォルダ: {folder}', {
+    folder: `${folder.folderCode || 'F---'} ${folder.title} [${modeLabel}]`,
+  });
   try {
-    await loadPhotos();
+    await loadFolderContent();
   } catch (error) {
     const body = parseApiErrorBody(error);
     if (error?.status === 403 && body?.message === 'invalid folder password') {
@@ -2473,6 +2561,7 @@ async function selectFolderById(folderId) {
   if (!folderId) {
     state.selectedFolder = null;
     state.selectedFolderArchive = null;
+    state.quests = [];
     clearUploadDrafts();
     els.folderDetail.classList.add('hidden');
     renderPhotoArchiveNote();
@@ -2508,6 +2597,32 @@ async function loadPhotos() {
   }
 }
 
+async function loadQuests() {
+  const folderId = state.selectedFolder.folderId;
+  const data = await api(`/folders/${folderId}/quests`, {
+    method: 'GET',
+    headers: { ...folderPasswordHeader(folderId) },
+  });
+  state.quests = data.items || [];
+  renderQuests();
+  await refreshFolderUnread([folderId]);
+  renderFolderMode();
+  renderFolders();
+}
+
+async function loadFolderContent() {
+  if (currentFolderMode() === 'quest') {
+    state.photos = [];
+    state.selectedFolderArchive = null;
+    renderPhotoArchiveNote();
+    await loadQuests();
+  } else {
+    state.quests = [];
+    await loadPhotos();
+  }
+  renderFolderMode();
+}
+
 async function uploadFiles() {
   if (state.isUploading) return;
   syncUploadDraftsFromDom();
@@ -2523,6 +2638,7 @@ async function uploadFiles() {
     const totalFiles = drafts.length;
     let uploadedCount = 0;
     let duplicateCount = 0;
+    const targetQuestId = state.uploadTargetQuestId || null;
 
     const resizeToJpeg = async (file, maxLongSide = 2048, quality = 0.82) => {
       // Best-effort client-side resize; if anything fails, fall back to original.
@@ -2621,7 +2737,8 @@ async function uploadFiles() {
             originalS3Key: up.originalS3Key,
             previewS3Key: resized ? up.previewS3Key : null,
             fileName: String(draft.photoName || '').trim(),
-            initialComment: String(draft.initialComment || '').trim() || null,
+            initialComment: targetQuestId ? null : String(draft.initialComment || '').trim() || null,
+            questId: targetQuestId,
           }),
         });
         uploadedCount += 1;
@@ -2637,8 +2754,8 @@ async function uploadFiles() {
 
     clearUploadDrafts();
     if (uploadedCount > 0) {
-      await loadPhotos();
-      await scrollToPhotoList();
+      await loadFolderContent();
+      await scrollToActiveList();
       if (duplicateCount > 0) {
         showToast(tf('{uploaded}/{total}件アップロード完了。{duplicate}件は重複のためスキップしました。', {
           uploaded: uploadedCount,
@@ -2686,6 +2803,168 @@ function canDelete(item) {
 function formatDateTime(value) {
   if (!value) return '-';
   return new Date(value).toLocaleString(appLocale);
+}
+
+function renderFolderMode() {
+  const mode = currentFolderMode();
+  if (els.photoModePanel) els.photoModePanel.classList.toggle('hidden', mode !== 'photo');
+  if (els.questModePanel) els.questModePanel.classList.toggle('hidden', mode !== 'quest');
+  if (els.photoList) els.photoList.classList.toggle('hidden', mode !== 'photo');
+  if (els.questList) els.questList.classList.toggle('hidden', mode !== 'quest');
+}
+
+function sortQuests(items) {
+  const list = items.slice();
+  const rank = { open: 0, shooting: 1, done: 2 };
+  if (state.questSort === 'oldest') {
+    return list.sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+  }
+  if (state.questSort === 'newest') {
+    return list.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
+  }
+  return list.sort((a, b) => {
+    const statusDiff = (rank[a.status] ?? 9) - (rank[b.status] ?? 9);
+    if (statusDiff) return statusDiff;
+    return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+  });
+}
+
+function questStatusText(status) {
+  if (status === 'done') return t('完了');
+  if (status === 'shooting') return t('撮影中');
+  return t('未対応');
+}
+
+async function renderQuests() {
+  if (!els.questList) return;
+  els.questList.innerHTML = '';
+  const quests = sortQuests(state.quests || []);
+  if (!quests.length) {
+    els.questList.appendChild(el('div', { class: 'muted' }, t('クエストはまだなかです。')));
+    return;
+  }
+  quests.forEach((quest) => {
+    const card = el('div', { class: `quest-card quest-status-${quest.status || 'open'}` });
+    const head = el('div', { class: 'quest-head' });
+    const title = el('div');
+    title.appendChild(el('strong', {}, quest.questCode || 'Q---'));
+    title.appendChild(el('span', { class: 'quest-status' }, questStatusText(quest.status)));
+    head.appendChild(title);
+    const actions = el('div', { class: 'comment-actions' });
+    if (state.isAdmin && quest.status !== 'done') {
+      const doneBtn = el('button', { type: 'button' }, t('完了'));
+      doneBtn.onclick = safeAction(async () => {
+        await api(`/quests/${quest.questId}`, {
+          method: 'PUT',
+          headers: { ...folderPasswordHeader(quest.folderId) },
+          body: JSON.stringify({ status: 'done' }),
+        });
+        await loadQuests();
+      }, 'クエスト完了');
+      actions.appendChild(doneBtn);
+    }
+    if (canDelete(quest)) {
+      const delBtn = el('button', { class: 'icon-btn danger', type: 'button', title: t('削除') }, '🗑');
+      delBtn.onclick = safeAction(async () => {
+        if (!window.confirm(t('このクエストを削除してよかですか？写真も消えます。'))) return;
+        await api(`/quests/${quest.questId}`, {
+          method: 'DELETE',
+          headers: { ...folderPasswordHeader(quest.folderId) },
+        });
+        await loadFolderContent();
+      }, 'クエスト削除');
+      actions.appendChild(delBtn);
+    }
+    head.appendChild(actions);
+    card.appendChild(head);
+    card.appendChild(el('div', { class: 'quest-text' }, quest.text || ''));
+    card.appendChild(el('div', { class: 'muted' }, `${t('投稿')} ${formatDateTime(quest.createdAt)} ${quest.createdByName || ''}`));
+
+    const photoWrap = el('div', { class: 'quest-photo-strip' });
+    (quest.photos || []).forEach((photo) => {
+      const tile = el('div', { class: 'quest-photo-tile' });
+      const img = el('img', {
+        src: photo.viewUrl || '',
+        alt: photo.fileName || photo.photoId,
+        loading: 'lazy',
+        title: photo.fileName || '',
+      });
+      img.onclick = () => openPhotoPreview(photo);
+      tile.appendChild(img);
+      tile.appendChild(el('span', { class: 'muted' }, photo.fileName || photo.photoCode || ''));
+      if (canDelete(photo)) {
+        const deletePhotoBtn = el('button', { class: 'icon-btn danger', type: 'button', title: t('写真削除') }, '🗑');
+        deletePhotoBtn.onclick = safeAction(async () => {
+          if (!window.confirm(t('この写真を削除してよかですか？'))) return;
+          await api(`/photos/${photo.photoId}`, { method: 'DELETE' });
+          await loadFolderContent();
+        }, '写真削除');
+        tile.appendChild(deletePhotoBtn);
+      }
+      photoWrap.appendChild(tile);
+    });
+    if (!(quest.photos || []).length) {
+      photoWrap.appendChild(el('div', { class: 'muted' }, t('写真はまだなかです。')));
+    }
+    card.appendChild(photoWrap);
+
+    const addPhoto = el('div', { class: 'quest-add-photo' });
+    const fileInput = el('input', { class: 'js-quest-files', type: 'file', accept: 'image/*', multiple: 'multiple' });
+    fileInput.addEventListener('change', (event) => {
+      const files = Array.from(event.target.files || []);
+      if (files.length) rebuildUploadDrafts(files, quest.questId);
+    });
+    addPhoto.appendChild(fileInput);
+    card.appendChild(addPhoto);
+    card.appendChild(el('div', { class: 'quest-upload-slot', 'data-quest-id': quest.questId }));
+
+    const commentWrap = el('div', { class: 'comments quest-comments' });
+    (quest.comments || []).forEach((comment) => {
+      const row = el('div', { class: 'comment' });
+      row.appendChild(el('div', { class: 'comment-meta-text' }, `${formatDateTime(comment.updatedAt || comment.createdAt)} ${comment.createdByName || ''}`));
+      row.appendChild(el('div', { class: 'comment-text' }, comment.text));
+      if (canDelete(comment)) {
+        const ca = el('div', { class: 'comment-actions' });
+        const deleteBtn = el('button', { class: 'icon-btn danger', type: 'button', title: t('コメント削除') }, '🗑');
+        deleteBtn.onclick = safeAction(async () => {
+          if (!window.confirm(t('このコメントを削除してよかですか？'))) return;
+          await api(`/quests/${quest.questId}/comments/${comment.commentId}`, {
+            method: 'DELETE',
+            headers: { ...folderPasswordHeader(quest.folderId) },
+          });
+          await loadQuests();
+        }, 'コメント削除');
+        ca.appendChild(deleteBtn);
+        row.appendChild(ca);
+      }
+      commentWrap.appendChild(row);
+    });
+    const addRow = el('div', { class: 'row', style: 'margin-top:8px;' });
+    const ta = el('textarea', { rows: '2', placeholder: t('コメント'), style: 'flex:1' });
+    const addBtn = el('button', { type: 'button' }, t('追加'));
+    addBtn.onclick = safeAction(async () => {
+      const text = ta.value.trim();
+      if (!text) return;
+      await api(`/quests/${quest.questId}/comments`, {
+        method: 'POST',
+        headers: { ...folderPasswordHeader(quest.folderId) },
+        body: JSON.stringify({ text }),
+      });
+      await loadQuests();
+    }, 'コメント追加');
+    addRow.appendChild(ta);
+    addRow.appendChild(addBtn);
+    commentWrap.appendChild(addRow);
+    card.appendChild(commentWrap);
+    if (currentFolderMode() === 'quest') {
+      const latestAt = quest.latestCommentAt || '';
+      const latestBy = quest.latestCommentBy || '';
+      const latestIncoming = latestAt && latestBy && latestBy !== state.userKey ? latestAt : '';
+      if (latestIncoming) markAsRead(questReadKey(quest.questId), latestIncoming);
+    }
+    els.questList.appendChild(card);
+  });
+  if (state.uploadTargetQuestId) renderUploadDrafts();
 }
 
 async function renderPhotos() {
@@ -3335,11 +3614,12 @@ els.createFolderBtn.onclick = safeAction(async () => {
   const title = els.folderTitle.value.trim();
   if (!title) return;
   const folderPassword = String(els.folderPassword?.value || '').trim();
+  const mode = normalizeFolderMode(els.folderMode?.value);
   let created;
   try {
     created = await api('/folders', {
       method: 'POST',
-      body: JSON.stringify({ title, folderPassword: folderPassword || null }),
+      body: JSON.stringify({ title, mode, folderPassword: folderPassword || null }),
     });
   } catch (error) {
     const body = parseApiErrorBody(error);
@@ -3350,6 +3630,7 @@ els.createFolderBtn.onclick = safeAction(async () => {
     throw error;
   }
   els.folderTitle.value = '';
+  if (els.folderMode) els.folderMode.value = 'photo';
   if (els.folderPassword) els.folderPassword.value = '';
   closeFolderCreateModal();
   showToast(tf('フォルダ：{title} を作成しました。', { title: created.title }));
@@ -3357,16 +3638,40 @@ els.createFolderBtn.onclick = safeAction(async () => {
   await selectFolderById(created.folderId);
 }, 'フォルダ作成');
 
-els.uploadBtn.onclick = safeAction(async () => {
-  if (state.isUploading) return;
-  await uploadFiles();
-}, '写真アップロード');
+if (els.uploadBtn) {
+  els.uploadBtn.onclick = safeAction(async () => {
+    if (state.isUploading) return;
+    await uploadFiles();
+  }, '写真アップロード');
+}
 
 if (els.photoFiles) {
   els.photoFiles.addEventListener('change', (event) => {
     const files = Array.from(event.target.files || []);
     rebuildUploadDrafts(files);
   });
+}
+
+if (els.questSort) {
+  els.questSort.addEventListener('change', (event) => {
+    state.questSort = event.target.value || 'status';
+    renderQuests();
+  });
+}
+
+if (els.createQuestBtn) {
+  els.createQuestBtn.onclick = safeAction(async () => {
+    if (!state.selectedFolder) return;
+    const text = String(els.questText?.value || '').trim();
+    if (!text) return;
+    await api(`/folders/${state.selectedFolder.folderId}/quests`, {
+      method: 'POST',
+      headers: { ...folderPasswordHeader(state.selectedFolder.folderId) },
+      body: JSON.stringify({ text }),
+    });
+    if (els.questText) els.questText.value = '';
+    await loadQuests();
+  }, 'クエスト作成');
 }
 
 if (els.applyCommentBulkBtn) {

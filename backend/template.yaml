@@ -4,7 +4,7 @@ Description: Kansa photo audit app backend (localStorage user mode)
 
 Globals:
   Function:
-    Runtime: nodejs20.x
+    Runtime: nodejs24.x
     Timeout: 30
     MemorySize: 512
     Environment:
@@ -432,6 +432,54 @@ Resources:
             ApiId: !Ref HttpApi
             Path: /folders/{folderId}/password
             Method: PUT
+        ListQuests:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /folders/{folderId}/quests
+            Method: GET
+        CreateQuest:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /folders/{folderId}/quests
+            Method: POST
+        UpdateQuest:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /quests/{questId}
+            Method: PUT
+        DeleteQuest:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /quests/{questId}
+            Method: DELETE
+        ListQuestComments:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /quests/{questId}/comments
+            Method: GET
+        CreateQuestComment:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /quests/{questId}/comments
+            Method: POST
+        UpdateQuestComment:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /quests/{questId}/comments/{commentId}
+            Method: PUT
+        DeleteQuestComment:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Path: /quests/{questId}/comments/{commentId}
+            Method: DELETE
 
         TeamMe:
           Type: HttpApi
@@ -583,7 +631,7 @@ Resources:
     Properties:
       CodeUri: src/
       Handler: log-retention.handler
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Timeout: 30
       MemorySize: 128
       Policies:
