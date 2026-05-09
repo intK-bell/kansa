@@ -437,6 +437,7 @@ const els = {
   currentRoomSelect: document.querySelector('#current-room-select'),
   currentFolderSelect: document.querySelector('#current-folder-select'),
   folderTitle: document.querySelector('#folder-title'),
+  folderTitleError: document.querySelector('#folder-title-error'),
   folderMode: document.querySelector('#folder-mode'),
   folderPassword: document.querySelector('#folder-password'),
   createFolderBtn: document.querySelector('#create-folder-btn'),
@@ -857,6 +858,9 @@ function openFolderCreateModal() {
   els.folderCreateModal.classList.remove('hidden');
   if (els.folderTitle) {
     els.folderTitle.value = '';
+  }
+  if (els.folderTitleError) {
+    els.folderTitleError.classList.add('hidden');
   }
   if (els.folderMode) {
     els.folderMode.value = 'photo';
@@ -3612,7 +3616,15 @@ els.createRoomBtn.onclick = async () => {
 
 els.createFolderBtn.onclick = safeAction(async () => {
   const title = els.folderTitle.value.trim();
-  if (!title) return;
+  if (!title) {
+    if (els.folderTitleError) {
+      els.folderTitleError.textContent = t('フォルダ名を入力してください。');
+      els.folderTitleError.classList.remove('hidden');
+    }
+    if (els.folderTitle) els.folderTitle.focus();
+    return;
+  }
+  if (els.folderTitleError) els.folderTitleError.classList.add('hidden');
   const folderPassword = String(els.folderPassword?.value || '').trim();
   const mode = normalizeFolderMode(els.folderMode?.value);
   let created;
@@ -3649,6 +3661,14 @@ if (els.photoFiles) {
   els.photoFiles.addEventListener('change', (event) => {
     const files = Array.from(event.target.files || []);
     rebuildUploadDrafts(files);
+  });
+}
+
+if (els.folderTitle) {
+  els.folderTitle.addEventListener('input', () => {
+    if (els.folderTitle.value.trim() && els.folderTitleError) {
+      els.folderTitleError.classList.add('hidden');
+    }
   });
 }
 
