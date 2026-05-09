@@ -173,7 +173,7 @@ function normalizeExportFormat(value) {
   return 'pptx_high';
 }
 
-function normalizeExportMode(value) {
+function normalizeFolderMode(value) {
   const mode = String(value || '').trim().toLowerCase();
   if (mode === 'quest') return 'quest';
   return 'photo';
@@ -3190,7 +3190,7 @@ async function listFolders(room, user, authz) {
   const nameMap = await loadDisplayNameMap(items.map((item) => item.createdBy));
   const hydrated = visible.map((item) => {
     const base = applyResolvedDisplayName(item, nameMap);
-    return { ...base, hasPassword: folderHasPassword(base) };
+    return { ...base, mode: normalizeFolderMode(base.mode), hasPassword: folderHasPassword(base) };
   });
   const withUsage = await Promise.all(
     hydrated.map(async (folder) => {
@@ -3234,6 +3234,7 @@ async function createFolder(event, user, room, ctx) {
   const body = JSON.parse(event.body || '{}');
   if (!body.title) return badRequest('title is required');
   const folderPassword = String(body.folderPassword || '').trim();
+  const mode = normalizeFolderMode(body.mode || body.folderMode);
   if (folderPassword && folderPassword.length > 64) return badRequest('folderPassword is too long');
 
   const billing = await getBillingMeta(ddb, { tableName: TABLE_NAME, roomId: room.roomId });
@@ -3264,6 +3265,7 @@ async function createFolder(event, user, room, ctx) {
     folderId,
     folderCode,
     roomName: room.roomName,
+    mode,
     title: body.title,
     createdBy: user.userKey,
     createdByName: user.userName,
@@ -3314,6 +3316,7 @@ async function listQuestCommentsRaw(questId, room) {
 async function listQuests(event, folderId, user, room, authz) {
   const access = await loadAccessibleFolder(event, folderId, user, room, authz);
   if (access.response) return access.response;
+  if (normalizeFolderMode(access.folder.mode) !== 'quest') return json(200, { items: [] });
 
   const [questsRes, photosRes] = await Promise.all([
     ddb.send(
@@ -3388,6 +3391,9 @@ async function listQuests(event, folderId, user, room, authz) {
 async function createQuest(event, folderId, body, user, room, authz, ctx) {
   const access = await loadAccessibleFolder(event, folderId, user, room, authz);
   if (access.response) return access.response;
+  if (normalizeFolderMode(access.folder.mode) !== 'quest') {
+    return json(409, { message: 'folder is not quest mode' });
+  }
   const text = String(body.text || '').trim();
   if (!text) return badRequest('text is required');
   if (text.length > 100) return badRequest('text must be 100 chars or less');
@@ -3846,6 +3852,9 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
   }
   const pw = verifyFolderPassword(folder, event);
   if (!pw.ok) return json(403, { message: 'invalid folder password' });
+  const folderMode = normalizeFolderMode(folder.mode);
+  if (folderMode === 'quest' && !questId) return badRequest('questId is required for quest folder');
+  if (folderMode === 'photo' && questId) return badRequest('quest photos are not allowed in photo folder');
 
   let quest = null;
   if (questId) {
@@ -4359,7 +4368,6 @@ async function updateComment(photoId, commentId, body, user, room, authz, ctx) {
 async function exportFolder(event, folderId, user, room, authz, ctx) {
   const body = event.body ? JSON.parse(event.body) : {};
   const format = normalizeExportFormat(body.format);
-  const mode = normalizeExportMode(body.mode);
   const folderRes = await ddb.send(
     new QueryCommand({
       TableName: TABLE_NAME,
@@ -4378,6 +4386,7 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
   if (!canAccessFolder(folder, user, authz)) return json(403, { message: 'forbidden' });
   const pw = verifyFolderPassword(folder, event);
   if (!pw.ok) return json(403, { message: 'invalid folder password' });
+  const mode = normalizeFolderMode(folder.mode);
   const i18n = createExportI18n(languageFromHeaders(event.headers || {}));
   const billing = await getBillingMeta(ddb, { tableName: TABLE_NAME, roomId: room.roomId });
   const isFreePlanExport = isFreePlanBilling(billing);

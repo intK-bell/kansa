@@ -328,7 +328,9 @@ select {
   max-width: 100%;
 }
 
-#folder-title {
+#folder-title,
+#folder-mode,
+#folder-password {
   width: 100%;
   max-width: 100%;
   display: block;
@@ -809,36 +811,6 @@ button.is-loading::before {
 #photo-files {
   max-width: 100%;
   width: 100%;
-}
-
-.mode-tabs {
-  display: flex;
-  gap: 8px;
-  margin: 10px 0 12px;
-  flex-wrap: wrap;
-}
-
-.mode-tab {
-  position: relative;
-  background: var(--card-soft);
-  color: var(--text);
-}
-
-.mode-tab.is-active {
-  background: var(--primary);
-  color: #fff;
-}
-
-.mode-tab.has-unread::after {
-  content: "";
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  width: 10px;
-  height: 10px;
-  border: 2px solid var(--card);
-  border-radius: 50%;
-  background: var(--danger);
 }
 
 .quest-create {

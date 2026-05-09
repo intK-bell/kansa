@@ -52,7 +52,6 @@ const state = {
   folderModeUnreadMap: {},
   selectedFolder: null,
   selectedFolderArchive: null,
-  activeFolderMode: 'photo',
   photos: [],
   quests: [],
   questSort: 'status',
@@ -192,6 +191,14 @@ function resetRoomContext() {
   setAdminUiVisibility();
   renderRoomSelect();
   renderFolders();
+}
+
+function normalizeFolderMode(value) {
+  return String(value || '').trim().toLowerCase() === 'quest' ? 'quest' : 'photo';
+}
+
+function currentFolderMode() {
+  return normalizeFolderMode(state.selectedFolder?.mode);
 }
 
 function supportsPkce() {
@@ -430,6 +437,7 @@ const els = {
   currentRoomSelect: document.querySelector('#current-room-select'),
   currentFolderSelect: document.querySelector('#current-folder-select'),
   folderTitle: document.querySelector('#folder-title'),
+  folderMode: document.querySelector('#folder-mode'),
   folderPassword: document.querySelector('#folder-password'),
   createFolderBtn: document.querySelector('#create-folder-btn'),
   folderDetail: document.querySelector('#folder-detail'),
@@ -437,8 +445,6 @@ const els = {
   photoArchiveNote: document.querySelector('#photo-archive-note'),
   folderPasswordSet: document.querySelector('#folder-password-set'),
   setFolderPasswordBtn: document.querySelector('#set-folder-password-btn'),
-  photoModeTab: document.querySelector('#photo-mode-tab'),
-  questModeTab: document.querySelector('#quest-mode-tab'),
   photoModePanel: document.querySelector('#photo-mode-panel'),
   questModePanel: document.querySelector('#quest-mode-panel'),
   questText: document.querySelector('#quest-text'),
@@ -852,6 +858,9 @@ function openFolderCreateModal() {
   if (els.folderTitle) {
     els.folderTitle.value = '';
   }
+  if (els.folderMode) {
+    els.folderMode.value = 'photo';
+  }
   if (els.folderPassword) {
     els.folderPassword.value = '';
   }
@@ -913,11 +922,10 @@ async function requestFolderExport(format) {
   startExportLoadingProgress();
   try {
     const folderId = state.selectedFolder.folderId;
-    const mode = state.activeFolderMode === 'quest' ? 'quest' : 'photo';
     const res = await api(`/folders/${folderId}/export`, {
       method: 'POST',
       headers: { ...folderPasswordHeader(folderId) },
-      body: JSON.stringify({ format, mode }),
+      body: JSON.stringify({ format }),
     });
     if (isPdf) {
       markExportLoadingDownloadReady();
@@ -1610,7 +1618,7 @@ async function scrollToPhotoList() {
 
 async function scrollToActiveList() {
   await new Promise((r) => window.requestAnimationFrame(() => r()));
-  const target = state.activeFolderMode === 'quest' ? els.questList : els.photoList;
+  const target = currentFolderMode() === 'quest' ? els.questList : els.photoList;
   if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -2410,32 +2418,35 @@ async function computeFolderUnread(folderId) {
   const folder = state.folders.find((item) => item.folderId === folderId);
   const result = { photo: false, quest: false };
   if (folder?.hasPassword && !state.folderPasswordById[folderId]) return result;
-  const photosData = await api(`/folders/${folderId}/photos`, {
-    method: 'GET',
-    headers: { ...folderPasswordHeader(folderId) },
-  });
-  const photos = photosData.items || [];
-  for (const photo of photos) {
-    const latestAt = photo.latestCommentAt || '';
-    const latestBy = photo.latestCommentBy || '';
-    const latestIncoming = latestAt && latestBy && latestBy !== state.userKey ? latestAt : '';
-    if (isUnread(photo.photoId, latestIncoming)) {
-      result.photo = true;
-      break;
+  if (normalizeFolderMode(folder?.mode) === 'quest') {
+    const questsData = await api(`/folders/${folderId}/quests`, {
+      method: 'GET',
+      headers: { ...folderPasswordHeader(folderId) },
+    });
+    const quests = questsData.items || [];
+    for (const quest of quests) {
+      const latestAt = quest.latestCommentAt || '';
+      const latestBy = quest.latestCommentBy || '';
+      const latestIncoming = latestAt && latestBy && latestBy !== state.userKey ? latestAt : '';
+      if (isUnread(questReadKey(quest.questId), latestIncoming)) {
+        result.quest = true;
+        break;
+      }
     }
-  }
-  const questsData = await api(`/folders/${folderId}/quests`, {
-    method: 'GET',
-    headers: { ...folderPasswordHeader(folderId) },
-  });
-  const quests = questsData.items || [];
-  for (const quest of quests) {
-    const latestAt = quest.latestCommentAt || '';
-    const latestBy = quest.latestCommentBy || '';
-    const latestIncoming = latestAt && latestBy && latestBy !== state.userKey ? latestAt : '';
-    if (isUnread(questReadKey(quest.questId), latestIncoming)) {
-      result.quest = true;
-      break;
+  } else {
+    const photosData = await api(`/folders/${folderId}/photos`, {
+      method: 'GET',
+      headers: { ...folderPasswordHeader(folderId) },
+    });
+    const photos = photosData.items || [];
+    for (const photo of photos) {
+      const latestAt = photo.latestCommentAt || '';
+      const latestBy = photo.latestCommentBy || '';
+      const latestIncoming = latestAt && latestBy && latestBy !== state.userKey ? latestAt : '';
+      if (isUnread(photo.photoId, latestIncoming)) {
+        result.photo = true;
+        break;
+      }
     }
   }
   return result;
@@ -2489,7 +2500,8 @@ function renderFolders() {
     option.value = folder.folderId;
     const unread = state.folderUnreadMap[folder.folderId];
     const locked = Boolean(folder.hasPassword);
-    option.textContent = `${folder.folderCode || 'F---'} ${folder.title}${locked ? ` [${t('鍵')}]` : ''}${
+    const modeLabel = normalizeFolderMode(folder.mode) === 'quest' ? t('クエスト') : t('フォト');
+    option.textContent = `${folder.folderCode || 'F---'} ${folder.title} [${modeLabel}]${locked ? ` [${t('鍵')}]` : ''}${
       unread ? ` ${t('●新着')}` : ''
     }`;
     els.currentFolderSelect.appendChild(option);
@@ -2523,7 +2535,10 @@ async function selectFolder(folder) {
   state.selectedFolder = folder;
   renderFolders();
   els.folderDetail.classList.remove('hidden');
-  els.folderDetailTitle.textContent = tf('フォルダ: {folder}', { folder: `${folder.folderCode || 'F---'} ${folder.title}` });
+  const modeLabel = normalizeFolderMode(folder.mode) === 'quest' ? t('クエスト') : t('フォト');
+  els.folderDetailTitle.textContent = tf('フォルダ: {folder}', {
+    folder: `${folder.folderCode || 'F---'} ${folder.title} [${modeLabel}]`,
+  });
   try {
     await loadFolderContent();
   } catch (error) {
@@ -2596,8 +2611,15 @@ async function loadQuests() {
 }
 
 async function loadFolderContent() {
-  await loadPhotos();
-  await loadQuests();
+  if (currentFolderMode() === 'quest') {
+    state.photos = [];
+    state.selectedFolderArchive = null;
+    renderPhotoArchiveNote();
+    await loadQuests();
+  } else {
+    state.quests = [];
+    await loadPhotos();
+  }
   renderFolderMode();
 }
 
@@ -2784,13 +2806,7 @@ function formatDateTime(value) {
 }
 
 function renderFolderMode() {
-  const mode = state.activeFolderMode === 'quest' ? 'quest' : 'photo';
-  if (els.photoModeTab) els.photoModeTab.classList.toggle('is-active', mode === 'photo');
-  if (els.questModeTab) els.questModeTab.classList.toggle('is-active', mode === 'quest');
-  const folderId = state.selectedFolder?.folderId || '';
-  const unread = state.folderModeUnreadMap[folderId] || {};
-  if (els.photoModeTab) els.photoModeTab.classList.toggle('has-unread', Boolean(unread.photo));
-  if (els.questModeTab) els.questModeTab.classList.toggle('has-unread', Boolean(unread.quest));
+  const mode = currentFolderMode();
   if (els.photoModePanel) els.photoModePanel.classList.toggle('hidden', mode !== 'photo');
   if (els.questModePanel) els.questModePanel.classList.toggle('hidden', mode !== 'quest');
   if (els.photoList) els.photoList.classList.toggle('hidden', mode !== 'photo');
@@ -2940,7 +2956,7 @@ async function renderQuests() {
     addRow.appendChild(addBtn);
     commentWrap.appendChild(addRow);
     card.appendChild(commentWrap);
-    if (state.activeFolderMode === 'quest') {
+    if (currentFolderMode() === 'quest') {
       const latestAt = quest.latestCommentAt || '';
       const latestBy = quest.latestCommentBy || '';
       const latestIncoming = latestAt && latestBy && latestBy !== state.userKey ? latestAt : '';
@@ -3598,11 +3614,12 @@ els.createFolderBtn.onclick = safeAction(async () => {
   const title = els.folderTitle.value.trim();
   if (!title) return;
   const folderPassword = String(els.folderPassword?.value || '').trim();
+  const mode = normalizeFolderMode(els.folderMode?.value);
   let created;
   try {
     created = await api('/folders', {
       method: 'POST',
-      body: JSON.stringify({ title, folderPassword: folderPassword || null }),
+      body: JSON.stringify({ title, mode, folderPassword: folderPassword || null }),
     });
   } catch (error) {
     const body = parseApiErrorBody(error);
@@ -3613,6 +3630,7 @@ els.createFolderBtn.onclick = safeAction(async () => {
     throw error;
   }
   els.folderTitle.value = '';
+  if (els.folderMode) els.folderMode.value = 'photo';
   if (els.folderPassword) els.folderPassword.value = '';
   closeFolderCreateModal();
   showToast(tf('フォルダ：{title} を作成しました。', { title: created.title }));
@@ -3632,27 +3650,6 @@ if (els.photoFiles) {
     const files = Array.from(event.target.files || []);
     rebuildUploadDrafts(files);
   });
-}
-
-if (els.photoModeTab) {
-  els.photoModeTab.onclick = () => {
-    state.activeFolderMode = 'photo';
-    clearUploadDrafts();
-    renderFolderMode();
-  };
-}
-
-if (els.questModeTab) {
-  els.questModeTab.onclick = safeAction(async () => {
-    state.activeFolderMode = 'quest';
-    clearUploadDrafts();
-    renderQuests();
-    if (state.selectedFolder) {
-      await refreshFolderUnread([state.selectedFolder.folderId]);
-      renderFolders();
-    }
-    renderFolderMode();
-  }, '表示切替');
 }
 
 if (els.questSort) {

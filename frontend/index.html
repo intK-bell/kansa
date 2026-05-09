@@ -190,10 +190,6 @@
         <section id="folder-detail" class="card hidden">
           <h2 id="folder-detail-title"></h2>
           <p id="photo-archive-note" class="muted" style="margin:6px 0 10px;"></p>
-          <div class="mode-tabs" role="tablist" aria-label="表示モード">
-            <button id="photo-mode-tab" class="mode-tab is-active" type="button" data-mode="photo">フォトモード</button>
-            <button id="quest-mode-tab" class="mode-tab" type="button" data-mode="quest">クエストモード</button>
-          </div>
           <div id="photo-mode-panel">
             <div class="row">
               <input id="photo-files" type="file" accept="image/*" multiple />
@@ -260,6 +256,10 @@
         </div>
         <div class="row" style="align-items:stretch;">
           <input id="folder-title" placeholder="〇〇工場_yyyymmdd" data-i18n-attr="placeholder:〇〇工場_yyyymmdd" />
+          <select id="folder-mode" aria-label="フォルダモード" data-i18n-attr="aria-label:フォルダモード">
+            <option value="photo">フォトフォルダ</option>
+            <option value="quest">クエストフォルダ</option>
+          </select>
           <input id="folder-password" placeholder="フォルダパスワード（任意）" type="password" data-i18n-attr="placeholder:フォルダパスワード（任意）" />
           <button id="create-folder-btn" data-i18n="作成">作成</button>
         </div>
