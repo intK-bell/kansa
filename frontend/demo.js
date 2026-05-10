@@ -3545,13 +3545,24 @@ if (els.cancelUploadDraftsBtn) {
   };
 }
 
+// els.exportBtn.onclick = safeAction(async () => {
+//   if (!state.selectedFolder) {
+//     window.alert(t('先にフォルダを選択してください。'));
+//     return;
+//   }
+//   closeMenu();
+//   openExportOptionsModal();
+// }, 'PPT出力');
+
 els.exportBtn.onclick = safeAction(async () => {
   if (!state.selectedFolder) {
     window.alert(t('先にフォルダを選択してください。'));
     return;
   }
+
   closeMenu();
-  openExportOptionsModal();
+
+  window.alert(t('デモでは出力できません。'));
 }, 'PPT出力');
 
 if (els.teamAdminBtn && els.teamAdminCard) {
