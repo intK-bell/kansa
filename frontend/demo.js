@@ -3560,9 +3560,14 @@ els.exportBtn.onclick = safeAction(async () => {
     return;
   }
 
-  closeMenu();
+  // デモ制限
+  if (state.selectedFolder.name?.includes('クエスト')) {
+    window.alert(t('デモではクエストフォルダは出力できません。'));
+    return;
+  }
 
-  window.alert(t('デモでは出力できません。'));
+  closeMenu();
+  openExportOptionsModal();
 }, 'PPT出力');
 
 if (els.teamAdminBtn && els.teamAdminCard) {
