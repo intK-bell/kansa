@@ -35,16 +35,32 @@ Notes:
 - You cannot rejoin a room without an invitation URL after leaving.
 - Admins cannot leave their own room. Delete the room from room management instead.
 
-## 3. Folders and Photos
+## 3. Folders
 
 ### Create a Folder
 1. Open `Folders > Create` from the top-right menu.
-2. Enter a folder title and press `Create`.
-3. Set a folder password if needed.
+2. Enter a folder title.
+3. Select `Photo folder` or `Quest folder`, then press `Create`.
+4. Set a folder password if needed.
 
-### Upload Photos
+Folder count:
+- Free: 2 folders
+- Paid: unlimited
+
+Folder types:
+- Photo folder
+- Quest folder
+
+### Photo Folders
 1. Select a folder from the `Current folder` dropdown.
-2. Use `Upload` to add multiple images.
+2. Upload any photos you choose.
+3. Team members can leave comments on the uploaded photos.
+
+### Quest Folders
+1. Select a quest folder from the `Current folder` dropdown.
+2. Request the photos you want taken using text.
+3. Team members upload the requested photos.
+4. Team members can leave comments on the uploaded photos.
 
 ### Comments
 1. Open `Comments` on a photo card.

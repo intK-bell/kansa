@@ -35,16 +35,32 @@ Lưu ý:
 - Sau khi rời khỏi, bạn không thể tham gia lại phòng nếu không có URL mời.
 - Quản trị viên không thể rời khỏi phòng của chính mình. Hãy xóa phòng từ màn hình quản lý phòng.
 
-## 3. Thư mục và ảnh
+## 3. Thư mục
 
 ### Tạo thư mục
 1. Mở `Thư mục > Tạo` từ menu góc trên bên phải.
-2. Nhập tiêu đề thư mục và nhấn `Tạo`.
-3. Đặt mật khẩu thư mục nếu cần.
+2. Nhập tiêu đề thư mục.
+3. Chọn `Thư mục ảnh` hoặc `Thư mục nhiệm vụ`, rồi nhấn `Tạo`.
+4. Đặt mật khẩu thư mục nếu cần.
 
-### Tải ảnh lên
+Số lượng thư mục:
+- Miễn phí: 2 thư mục
+- Trả phí: không giới hạn
+
+Loại thư mục:
+- Thư mục ảnh
+- Thư mục nhiệm vụ
+
+### Thư mục ảnh
 1. Chọn thư mục từ danh sách `Thư mục hiện tại`.
-2. Dùng `Tải lên` để thêm nhiều ảnh.
+2. Tải lên ảnh tùy ý.
+3. Thành viên trong nhóm có thể để lại bình luận cho các ảnh đã tải lên.
+
+### Thư mục nhiệm vụ
+1. Chọn thư mục nhiệm vụ từ danh sách `Thư mục hiện tại`.
+2. Dùng văn bản để yêu cầu ảnh cần chụp.
+3. Thành viên trong nhóm tải lên ảnh được yêu cầu.
+4. Thành viên trong nhóm có thể để lại bình luận cho các ảnh đã tải lên.
 
 ### Bình luận
 1. Mở `Bình luận` trong thẻ ảnh.

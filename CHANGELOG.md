@@ -2,6 +2,7 @@
 
 ## 2026-05-09
 
+- Updated the user manual and localized guide text for Photo folders and Quest folders.
 - Added Quest folder support to the demo app, including quest folder creation, quest cards, quest photo uploads, comments, completion, and sample quest data.
 - Added folder-level Quest mode for text-based photo requests.
 - Added quest creation, quest comments, multiple photo uploads per quest, admin-only completion, and automatic return to shooting status when photos are added after completion.
