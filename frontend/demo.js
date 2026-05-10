@@ -3560,8 +3560,8 @@ els.exportBtn.onclick = safeAction(async () => {
     return;
   }
 
-  // デモ制限
-  if (state.selectedFolder.name?.includes('クエスト')) {
+  // クエストフォルダは出力不可
+  if (normalizeFolderMode(state.selectedFolder.mode) === 'quest') {
     window.alert(t('デモではクエストフォルダは出力できません。'));
     return;
   }
