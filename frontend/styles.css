@@ -1435,8 +1435,15 @@ body.dark .room-row {
     backdrop-filter: blur(10px);
   }
   
+  .folder-admin-picker {
+    width: 100%;
+  }
+  
   .folder-admin-picker select {
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
   }
 
   .page-header {
