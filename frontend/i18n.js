@@ -734,6 +734,7 @@
       'お部屋がありません。': 'No rooms.',
       '取得失敗: {message}': 'Failed to fetch: {message}',
       '{folder}（作成:{creator} / 容量:{size}）': '{folder} (created by: {creator} / storage: {size})',
+      メンバー: 'Member',
     },
     'zh-CN': {
       'Photo Hub for 監査': '审计 Photo Hub',
@@ -1443,6 +1444,7 @@
       'フォルダ招待URLを失効しました。': '文件夹邀请 URL 已失效。',
       'フォルダのパスワードを設定しました。': '已设置文件夹密码。',
       'フォルダのパスワードを解除しました。': '已解除文件夹密码。',
+      メンバー: '成员',
     },
     vi: {
       'Photo Hub for 監査': 'Photo Hub cho kiểm toán',
@@ -2165,6 +2167,7 @@
       'フォルダ招待URLを失効しました。': 'Đã thu hồi URL mời thư mục.',
       'フォルダのパスワードを設定しました。': 'Đã đặt mật khẩu thư mục.',
       'フォルダのパスワードを解除しました。': 'Đã gỡ mật khẩu thư mục.',
+      メンバー: 'Thành viên',
     },
   };
 

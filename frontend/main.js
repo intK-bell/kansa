@@ -2134,7 +2134,7 @@ async function loadAdminPanel() {
 
         const f = folders.find((item) => item.folderId === state.adminFolderId);
         if (!f) {
-          els.folderAdminList.appendChild(el('div', { class: 'muted folder-admin-empty' }, t('フォルダを選択してください')));
+          els.folderAdminList.appendChild(el('div', { class: 'muted folder-admin-empty' }, t('')));
         } else {
           const wrap = el('div', { class: 'folder-admin-block' });
           const header = el('div', { class: 'folder-admin-header' });
@@ -2197,9 +2197,6 @@ async function loadAdminPanel() {
           inviteRow.appendChild(folderInviteCell);
           wrap.appendChild(inviteRow);
 
-          const membersBox = el('div', { class: 'muted folder-admin-members' }, t('メンバー読み込み中...'));
-          wrap.appendChild(membersBox);
-
           const passwordRow = el('div', { class: 'row folder-admin-actions folder-admin-password' });
           const passwordInput = el('input', {
             placeholder: t('フォルダパスワード（空で解除）'),
@@ -2245,6 +2242,9 @@ async function loadAdminPanel() {
           deleteRow.appendChild(delBtn);
           wrap.appendChild(deleteRow);
 
+          const membersBox = el('div', { class: 'folder-admin-members' }, t('メンバー読み込み中...'));
+          wrap.appendChild(membersBox);
+
           els.folderAdminList.appendChild(wrap);
           api(`/folders/${encodeURIComponent(f.folderId)}/members`, { method: 'GET' })
             .then((members) => {
@@ -2260,7 +2260,7 @@ async function loadAdminPanel() {
                 owner: t('作成者'),
                 invited: t('フォルダ招待'),
               };
-              membersBox.appendChild(el('div', { class: 'muted' }, t('メンバー')));
+              membersBox.appendChild(el('h3', {}, t('メンバー')));
               items.forEach((m) => {
                 const name = m.displayName || m.userKey;
                 const row = el('div', { class: 'member-row folder-admin-member-row' });

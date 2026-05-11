@@ -263,8 +263,12 @@ h3 {
 }
 
 .folder-admin-members {
-  font-size: 0.92rem;
   margin-top: 8px;
+}
+
+.folder-admin-member-row button {
+  line-height: 1.2;
+  font-size: 0.8rem;
 }
 
 .folder-admin-picker {
