@@ -10,8 +10,8 @@ const LANGUAGE_ALIASES = {
 
 const TRANSLATIONS = {
   en: {
-    'Photo Hub for 監査': 'Photo Hub for Audit',
-    監査レポート: 'Audit report',
+    フォトスマ: 'Photosma',
+    フォトスマレポート: 'Photosma report',
     コメント: 'Comments',
     コメントなし: 'No comments',
     デモ画像: 'Demo image',
@@ -37,8 +37,8 @@ const TRANSLATIONS = {
     出力できる写真がありません: 'There are no photos available for export.',
   },
   'zh-CN': {
-    'Photo Hub for 監査': '审计 Photo Hub',
-    監査レポート: '审计报告',
+    フォトスマ: 'Photosma',
+    フォトスマレポート: 'Photosma report',
     コメント: '评论',
     コメントなし: '无评论',
     デモ画像: '演示图片',
@@ -64,8 +64,8 @@ const TRANSLATIONS = {
     出力できる写真がありません: '没有可导出的照片。',
   },
   vi: {
-    'Photo Hub for 監査': 'Photo Hub cho kiểm toán',
-    監査レポート: 'Báo cáo kiểm toán',
+    フォトスマ: 'Photosma',
+    フォトスマレポート: 'Photosma report',
     コメント: 'Bình luận',
     コメントなし: 'Không có bình luận',
     デモ画像: 'Ảnh demo',

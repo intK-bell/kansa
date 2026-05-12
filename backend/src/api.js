@@ -589,7 +589,7 @@ async function buildExportPdf(options) {
       borderColor: hexToRgbColor('BFD2B7'),
       borderWidth: 1,
     });
-    page.drawText(i18n.t('監査レポート'), {
+    page.drawText(i18n.t('フォトスマレポート'), {
       x: pptUnit(0.82),
       y: PDF_PAGE_HEIGHT - pptUnit(0.58),
       size: 10,

@@ -1,4 +1,4 @@
-# User Guide (Photo Hub for Audit)
+# User Guide (Photosma Audit)
 
 This guide explains the basic workflow for field users and admins.
 

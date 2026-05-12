@@ -62,7 +62,7 @@
 補足:
 - `GET /team/members` は管理画面表示用として `left` と `folderScope=invited` のメンバーを返さない。お部屋メンバー一覧には管理者とお部屋メンバーだけを返す。
 - `GET /team/members` の `userKey` は、管理画面から `PUT /team/members/{userKey}` に渡す更新用キーとして返す。
-- `PUT /team/members/{userKey}` の削除操作は `status:left` 更新であり、監査・再招待のためメンバー情報は残す。
+- `PUT /team/members/{userKey}` の削除操作は `status:left` 更新であり、写真記録・再招待のためメンバー情報は残す。
 - `folderScope=invited` かつ複数 `folderIds` を持つフォルダメンバーは、`PUT /team/members/{userKey}` の `status:left` では削除しない。必ず `DELETE /folders/{folderId}/members/{userKey}` を使う。
 - 古いメンバー item で `userKey` 属性と `MEMBER#...` キーが一致しない場合は、`userKey` から同じ部屋の item を引き直して更新する。
 - DynamoDB の更新では `status` を予約語衝突回避のため `#status` で指定する。

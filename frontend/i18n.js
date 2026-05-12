@@ -12,12 +12,74 @@
 
   const TRANSLATIONS = {
     en: {
-      'Photo Hub for 監査': 'Photo Hub for Audit',
-      'Photo Hub for 監査 | デモ': 'Photo Hub for Audit | Demo',
-      'Photo Hub for 監査 | プロダクトランディングページ': 'Photo Hub for Audit | Product Landing Page',
-      '特定商取引法に基づく表記・利用規約・プライバシーポリシー | Photo Hub for 監査':
-        'Legal Notice, Terms of Use, and Privacy Policy | Photo Hub for Audit',
-      監査写真コメントアプリ: 'Audit photo comment app',
+      フォトスマ: 'Photosma',
+      'フォトスマ | デモ': 'Photosma | Demo',
+      'フォトスマ | プロダクトランディングページ': 'Photosma | Product Landing Page',
+      '特定商取引法に基づく表記・利用規約・プライバシーポリシー | Photosma':
+        'Legal Notice, Terms of Use, and Privacy Policy | Photosma',
+      写真記録アプリ: 'Photo Recording app',
+      '撮った写真、<br />あとで整理し直していませんか？':
+        'Are you still organizing photos<br />after taking them?',
+      '撮る・残す・共有するを、<br />その場で完結。':
+        'Capture, record, and share<br />all on the spot.',
+      '「写真整理、毎回なんか面倒だな。」そう感じた方向けのサービスです。':
+        'For people who feel photo organization is a hassle every time.',
+      その場で記録: 'Record on the spot',
+      '写真もコメントも、現場で残せる': 'Keep photos and comments on site',
+      共有までスムーズ: 'Smooth sharing',
+      あとで整理し直さなくていい: 'No need to reorganize later',
+      難しい設定なしですぐ使える: 'Start quickly with no complex setup',
+      'こんな写真運用、続いていませんか？':
+        'Is this photo workflow still happening?',
+      整理はあとでPC作業: 'Organizing happens later on a PC',
+      帰ってから整理作業: 'Organizing after returning',
+      同じ写真を何度も見返す: 'Checking the same photos again and again',
+      '原因は、「記録」と「整理」が分かれていること。':
+        'The problem is that recording and organizing are separated.',
+      '撮影・共有・整理が別々やけん、移動・再整理・二重作業が発生しています。':
+        'Because capturing, sharing, and organizing are separate, moving data, reorganizing, and duplicate work happen.',
+      整理: 'Organize',
+      メッセージアプリ: 'Messaging app',
+      'この分断によって、<span class="accent">「あと整理」が当たり前</span>になっています。':
+        'This separation makes <span class="accent">“organizing later” the norm</span>.',
+      'でも、複雑な管理システムは現場に定着しにくい。':
+        'But complex management systems are hard to establish in the field.',
+      '高機能すぎるほど、現場では使われなくなります。':
+        'The more feature-heavy it is, the less likely it is to be used on site.',
+      難しい: 'Difficult',
+      続かない: 'Does not last',
+      '1人数千円すると、全員導入しづらい。':
+        'If it costs several thousand yen per person, it is hard to roll out to everyone.',
+      '設定や説明で止まりやすい。': 'Setup and explanations can slow adoption.',
+      '結局いつものLINEに戻る。': 'Teams end up going back to LINE.',
+      'フォトスマは、写真記録を一つの流れにします。':
+        'Photosma turns photo recording into one smooth flow.',
+      '写真・コメント・共有を、<br /><strong>一つの流れで完結。</strong>':
+        'Photos, comments, and sharing<br /><strong>completed in one flow.</strong>',
+      '撮った瞬間から、<br />「整理済み」に近づける。':
+        'From the moment you take a photo,<br />it moves closer to being organized.',
+      チームにすぐ共有できる: 'Share with the team right away',
+      シンプル: 'Simple',
+      スマホ中心: 'Phone-first',
+      すぐ始められる: 'Quick to start',
+      '写真記録に必要な機能だけに絞っているから、シンプルに使えます。':
+        'It focuses only on what photo recording needs, so it stays simple.',
+      'やることが見えやすく、迷いにくい。':
+        'The next action is clear, so people are less likely to get lost.',
+      '現場の流れを止めずに使える。':
+        'Use it without stopping the field workflow.',
+      '大きな準備なしで導入できる。':
+        'Start without major preparation.',
+      '「あと整理」が、「その場で完結」に変わります。':
+        '“Organize later” becomes “complete on the spot.”',
+      '撮る → 帰る → 整理する': 'Capture → return → organize',
+      '撮る → その場で共有': 'Capture → share on the spot',
+      '写真記録が、その場でまとまっていく流れ。':
+        'Photo records come together on the spot.',
+      '写真整理を、“あと作業”にしない。':
+        'Do not turn photo organization into after-work.',
+      'まずは触って、今のやり方との違いを体感してみてください。':
+        'Try it first and feel the difference from your current workflow.',
       '監査のあと、<br />会社に戻って報告書を作っていませんか？':
         'After an audit,<br />are you going back to the office to create the report?',
       '現場で終わるはずの仕事を、<br />その場で完結させる。':
@@ -387,7 +449,7 @@
       'フォルダ作成 → 写真アップロード → コメント追加 → 出力': 'Create a folder, upload photos, add comments, then export.',
       'マニュアル：': 'Manual:',
       こちら: 'Open',
-      'Photo Hub for 監査 使い方マニュアル': 'Photo Hub for Audit User Manual',
+      'フォトスマ 使い方マニュアル': 'Photosma User Manual',
       '使い方マニュアル': 'User Manual',
       '作成日：': 'Created:',
       '2026年4月19日': 'April 19, 2026',
@@ -737,12 +799,76 @@
       メンバー: 'Member',
     },
     'zh-CN': {
-      'Photo Hub for 監査': '审计 Photo Hub',
-      'Photo Hub for 監査 | デモ': '审计 Photo Hub | 演示',
-      'Photo Hub for 監査 | プロダクトランディングページ': '审计 Photo Hub | 产品落地页',
-      '特定商取引法に基づく表記・利用規約・プライバシーポリシー | Photo Hub for 監査':
-        '特定商业交易法标示、使用条款和隐私政策 | 审计 Photo Hub',
-      監査写真コメントアプリ: '审计照片评论应用',
+      フォトスマ: 'Photosma',
+      'フォトスマ | デモ': 'フォトスマ | 演示',
+      'フォトスマ | プロダクトランディングページ': 'フォトスマ | 产品落地页',
+      '特定商取引法に基づく表記・利用規約・プライバシーポリシー | フォトスマ':
+        '特定商业交易法标示、使用条款和隐私政策 | フォトスマ',
+      写真記録アプリ: '审计照片评论应用',
+      '撮った写真、<br />あとで整理し直していませんか？':
+        '拍好的照片，<br />之后还要重新整理吗？',
+      '撮る・残す・共有するを、<br />その場で完結。':
+        '拍摄、记录、共享，<br />就在现场完成。',
+      '「写真整理、毎回なんか面倒だな。」そう感じた方向けのサービスです。':
+        '这是为觉得“每次整理照片都很麻烦”的人准备的服务。',
+      その場で記録: '现场记录',
+      '写真もコメントも、現場で残せる': '照片和评论都能在现场留下',
+      共有までスムーズ: '共享也很顺畅',
+      あとで整理し直さなくていい: '之后无需重新整理',
+      難しい設定なしですぐ使える: '无需复杂设置，马上可用',
+      'こんな写真運用、続いていませんか？':
+        '这样的照片运用方式还在继续吗？',
+      整理はあとでPC作業: '整理工作之后在电脑上完成',
+      帰ってから整理作業: '回去后还要整理',
+      同じ写真を何度も見返す: '反复查看同一张照片',
+      '原因は、「記録」と「整理」が分かれていること。':
+        '原因是“记录”和“整理”被分开了。',
+      '撮影・共有・整理が別々やけん、移動・再整理・二重作業が発生しています。':
+        '因为拍摄、共享和整理是分开的，所以会产生移动、重新整理和重复作业。',
+      整理: '整理',
+      メッセージアプリ: '聊天应用',
+      'この分断によって、<span class="accent">「あと整理」が当たり前</span>になっています。':
+        '这种分离让<span class="accent">“之后再整理”变成了理所当然</span>。',
+      'でも、複雑な管理システムは現場に定着しにくい。':
+        '但是，复杂的管理系统很难在现场固定下来。',
+      '高機能すぎるほど、現場では使われなくなります。':
+        '功能越复杂，现场越不容易使用。',
+      難しい: '困难',
+      続かない: '难以持续',
+      '1人数千円すると、全員導入しづらい。':
+        '如果每人需要数千日元，就很难给所有人导入。',
+      '設定や説明で止まりやすい。':
+        '容易卡在设置和说明阶段。',
+      '結局いつものLINEに戻る。':
+        '最后还是回到平时使用的 LINE。',
+      'フォトスマは、写真記録を一つの流れにします。':
+        'Photosma 将照片记录变成一个完整流程。',
+      '写真・コメント・共有を、<br /><strong>一つの流れで完結。</strong>':
+        '照片、评论和共享，<br /><strong>在一个流程中完成。</strong>',
+      '撮った瞬間から、<br />「整理済み」に近づける。':
+        '从拍下的瞬间开始，<br />就接近“已整理”状态。',
+      チームにすぐ共有できる: '可以立即共享给团队',
+      シンプル: '简单',
+      スマホ中心: '以手机为中心',
+      すぐ始められる: '马上开始',
+      '写真記録に必要な機能だけに絞っているから、シンプルに使えます。':
+        '因为只保留照片记录所需的功能，所以可以简单使用。',
+      'やることが見えやすく、迷いにくい。':
+        '要做的事情清楚，不容易迷惑。',
+      '現場の流れを止めずに使える。':
+        '不打断现场流程也能使用。',
+      '大きな準備なしで導入できる。':
+        '无需大量准备即可导入。',
+      '「あと整理」が、「その場で完結」に変わります。':
+        '“之后再整理”会变成“现场完成”。',
+      '撮る → 帰る → 整理する': '拍摄 → 回去 → 整理',
+      '撮る → その場で共有': '拍摄 → 现场共享',
+      '写真記録が、その場でまとまっていく流れ。':
+        '照片记录会在现场逐步整理成形。',
+      '写真整理を、“あと作業”にしない。':
+        '不要让照片整理变成“之后的工作”。',
+      'まずは触って、今のやり方との違いを体感してみてください。':
+        '请先试用一下，感受与当前做法的不同。',
       '監査のあと、<br />会社に戻って報告書を作っていませんか？':
         '审计之后，<br />还要回公司制作报告吗？',
       '現場で終わるはずの仕事を、<br />その場で完結させる。': '把本应在现场完成的工作，<br />就在现场完成。',
@@ -1103,7 +1229,7 @@
       'フォルダ作成 → 写真アップロード → コメント追加 → 出力': '创建文件夹 → 上传照片 → 添加评论 → 导出',
       'マニュアル：': '手册：',
       こちら: '打开',
-      'Photo Hub for 監査 使い方マニュアル': '审计 Photo Hub 使用手册',
+      'フォトスマ 使い方マニュアル': 'Photosma 使用手册',
       '使い方マニュアル': '使用手册',
       '作成日：': '创建日期：',
       '2026年4月19日': '2026年4月19日',
@@ -1447,12 +1573,76 @@
       メンバー: '成员',
     },
     vi: {
-      'Photo Hub for 監査': 'Photo Hub cho kiểm toán',
-      'Photo Hub for 監査 | デモ': 'Photo Hub cho kiểm toán | Demo',
-      'Photo Hub for 監査 | プロダクトランディングページ': 'Photo Hub cho kiểm toán | Trang sản phẩm',
-      '特定商取引法に基づく表記・利用規約・プライバシーポリシー | Photo Hub for 監査':
-        'Thông báo pháp lý, Điều khoản sử dụng và Chính sách quyền riêng tư | Photo Hub cho kiểm toán',
-      監査写真コメントアプリ: 'Ứng dụng ghi chú ảnh kiểm toán',
+      フォトスマ: 'Photosma',
+      'フォトスマ | デモ': 'Photosma | Demo',
+      'フォトスマ | プロダクトランディングページ': 'Photosma | Trang sản phẩm',
+      '特定商取引法に基づく表記・利用規約・プライバシーポリシー | フォトスマ':
+        'Thông báo pháp lý, Điều khoản sử dụng và Chính sách quyền riêng tư | Photosma',
+      写真記録アプリ: 'Ứng dụng ghi chú ảnh kiểm toán',
+      '撮った写真、<br />あとで整理し直していませんか？':
+        'Ảnh đã chụp,<br />bạn vẫn phải sắp xếp lại sau đó?',
+      '撮る・残す・共有するを、<br />その場で完結。':
+        'Chụp, lưu và chia sẻ<br />ngay tại chỗ.',
+      '「写真整理、毎回なんか面倒だな。」そう感じた方向けのサービスです。':
+        'Dịch vụ này dành cho những ai thấy việc sắp xếp ảnh lần nào cũng phiền.',
+      その場で記録: 'Ghi nhận tại chỗ',
+      '写真もコメントも、現場で残せる': 'Lưu ảnh và bình luận ngay tại hiện trường',
+      共有までスムーズ: 'Chia sẻ mượt mà',
+      あとで整理し直さなくていい: 'Không cần sắp xếp lại sau',
+      難しい設定なしですぐ使える: 'Dùng ngay, không cần thiết lập phức tạp',
+      'こんな写真運用、続いていませんか？':
+        'Quy trình ảnh như thế này vẫn đang tiếp diễn?',
+      整理はあとでPC作業: 'Sắp xếp sau đó trên PC',
+      帰ってから整理作業: 'Sắp xếp sau khi quay về',
+      同じ写真を何度も見返す: 'Xem đi xem lại cùng một ảnh',
+      '原因は、「記録」と「整理」が分かれていること。':
+        'Nguyên nhân là “ghi nhận” và “sắp xếp” bị tách rời.',
+      '撮影・共有・整理が別々やけん、移動・再整理・二重作業が発生しています。':
+        'Vì chụp, chia sẻ và sắp xếp tách rời nhau, việc di chuyển, sắp xếp lại và làm trùng lặp phát sinh.',
+      整理: 'Sắp xếp',
+      メッセージアプリ: 'Ứng dụng nhắn tin',
+      'この分断によって、<span class="accent">「あと整理」が当たり前</span>になっています。':
+        'Sự tách rời này khiến <span class="accent">“sắp xếp sau” trở thành điều hiển nhiên</span>.',
+      'でも、複雑な管理システムは現場に定着しにくい。':
+        'Nhưng hệ thống quản lý phức tạp khó bám rễ tại hiện trường.',
+      '高機能すぎるほど、現場では使われなくなります。':
+        'Càng nhiều chức năng, càng khó được dùng tại hiện trường.',
+      難しい: 'Khó',
+      続かない: 'Không duy trì được',
+      '1人数千円すると、全員導入しづらい。':
+        'Nếu tốn vài nghìn yên mỗi người, rất khó triển khai cho tất cả.',
+      '設定や説明で止まりやすい。':
+        'Dễ bị dừng lại ở bước thiết lập và giải thích.',
+      '結局いつものLINEに戻る。':
+        'Cuối cùng lại quay về LINE quen thuộc.',
+      'フォトスマは、写真記録を一つの流れにします。':
+        'Photosma biến ghi nhận ảnh thành một luồng thống nhất.',
+      '写真・コメント・共有を、<br /><strong>一つの流れで完結。</strong>':
+        'Ảnh, bình luận và chia sẻ<br /><strong>hoàn tất trong một luồng.</strong>',
+      '撮った瞬間から、<br />「整理済み」に近づける。':
+        'Ngay từ lúc chụp,<br />ảnh đã tiến gần hơn đến trạng thái “đã sắp xếp”.',
+      チームにすぐ共有できる: 'Chia sẻ ngay với nhóm',
+      シンプル: 'Đơn giản',
+      スマホ中心: 'Tập trung vào điện thoại',
+      すぐ始められる: 'Bắt đầu ngay',
+      '写真記録に必要な機能だけに絞っているから、シンプルに使えます。':
+        'Vì chỉ tập trung vào chức năng cần thiết cho ghi nhận ảnh, nên rất dễ dùng.',
+      'やることが見えやすく、迷いにくい。':
+        'Việc cần làm rõ ràng, khó bị lúng túng.',
+      '現場の流れを止めずに使える。':
+        'Có thể dùng mà không làm gián đoạn luồng công việc tại hiện trường.',
+     '大きな準備なしで導入できる。':
+        'Có thể triển khai mà không cần chuẩn bị lớn.',
+      '「あと整理」が、「その場で完結」に変わります。':
+        '“Sắp xếp sau” trở thành “hoàn tất tại chỗ”.',
+      '撮る → 帰る → 整理する': 'Chụp → quay về → sắp xếp',
+      '撮る → その場で共有': 'Chụp → chia sẻ ngay tại chỗ',
+      '写真記録が、その場でまとまっていく流れ。':
+        'Ghi nhận ảnh được tổng hợp ngay tại chỗ.',
+      '写真整理を、“あと作業”にしない。':
+        'Đừng biến việc sắp xếp ảnh thành “việc làm sau”.',
+      'まずは触って、今のやり方との違いを体感してみてください。':
+        'Hãy thử trước và cảm nhận sự khác biệt so với cách làm hiện tại.',
       '監査のあと、<br />会社に戻って報告書を作っていませんか？':
         'Sau kiểm toán,<br />bạn vẫn quay lại công ty để làm báo cáo?',
       '現場で終わるはずの仕事を、<br />その場で完結させる。':
@@ -1823,7 +2013,7 @@
       'フォルダ作成 → 写真アップロード → コメント追加 → 出力': 'Tạo thư mục -> tải ảnh lên -> thêm bình luận -> xuất',
       'マニュアル：': 'Tài liệu:',
       こちら: 'Mở',
-      'Photo Hub for 監査 使い方マニュアル': 'Hướng dẫn sử dụng Photo Hub cho kiểm toán',
+      'フォトスマ 使い方マニュアル': 'Photosma cho kiểm toán',
       '使い方マニュアル': 'Hướng dẫn sử dụng',
       '作成日：': 'Ngày tạo:',
       '2026年4月19日': '19 tháng 4, 2026',
