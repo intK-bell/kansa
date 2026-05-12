@@ -19,6 +19,32 @@
     firstScript.parentNode.insertBefore(clarityScript, firstScript);
   }
 
+  // -------------------------
+  // Clarity Event Tracking
+  // -------------------------
+  document.addEventListener("click", function (event) {
+    var button = event.target.closest(".btn.btn-primary");
+
+    if (!button || typeof window.clarity !== "function") {
+      return;
+    }
+
+    // Hero CTA
+    if (button.closest(".hero")) {
+      window.clarity("event", "lp_click_hero_free");
+    }
+
+    // Bottom CTA
+    else if (button.closest(".bottom-cta")) {
+      window.clarity("event", "lp_click_bottom_free");
+    }
+
+    // Apply section
+    else if (button.id === "to-app") {
+      window.clarity("event", "lp_click_apply");
+    }
+  });
+
   var appButton = document.getElementById("to-app");
   var legalButton = document.getElementById("to-legal");
   var demoButtons = [
