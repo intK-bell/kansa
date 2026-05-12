@@ -62,6 +62,8 @@
       シンプル: 'Simple',
       スマホ中心: 'Phone-first',
       すぐ始められる: 'Quick to start',
+      'だから、現場で続けやすい。':
+        'That is why it is easier to continue using it on site.',
       '写真記録に必要な機能だけに絞っているから、シンプルに使えます。':
         'It focuses only on what photo recording needs, so it stays simple.',
       'やることが見えやすく、迷いにくい。':
@@ -851,6 +853,8 @@
       シンプル: '简单',
       スマホ中心: '以手机为中心',
       すぐ始められる: '马上开始',
+      'だから、現場で続けやすい。':
+        '因此，更容易在现场持续使用。',
       '写真記録に必要な機能だけに絞っているから、シンプルに使えます。':
         '因为只保留照片记录所需的功能，所以可以简单使用。',
       'やることが見えやすく、迷いにくい。':
@@ -1625,6 +1629,8 @@
       シンプル: 'Đơn giản',
       スマホ中心: 'Tập trung vào điện thoại',
       すぐ始められる: 'Bắt đầu ngay',
+      'だから、現場で続けやすい。':
+        'Vì vậy, dễ duy trì sử dụng tại hiện trường.',
       '写真記録に必要な機能だけに絞っているから、シンプルに使えます。':
         'Vì chỉ tập trung vào chức năng cần thiết cho ghi nhận ảnh, nên rất dễ dùng.',
       'やることが見えやすく、迷いにくい。':
