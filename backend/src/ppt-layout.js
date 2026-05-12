@@ -58,8 +58,8 @@ function addFreePlanWatermarks(slide, imageBox) {
 function createPresentation(i18n = createExportI18n('ja')) {
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_WIDE';
-  pptx.author = i18n.t('Photo Hub for 監査');
-  pptx.company = i18n.t('Photo Hub for 監査');
+  pptx.author = i18n.t('フォトスマ');
+  pptx.company = i18n.t('フォトスマ');
   pptx.subject = 'Folder export';
   pptx.lang = i18n.locale;
   return pptx;
@@ -87,7 +87,7 @@ async function addExportPhotoSlide(pptx, options) {
     fill: { color: PALETTE.brandSoft },
     line: { color: 'BFD2B7', pt: 1 },
   });
-  slide.addText(i18n.t('監査レポート'), {
+  slide.addText(i18n.t('フォトスマレポート'), {
     x: 0.82,
     y: 0.45,
     w: 1.35,

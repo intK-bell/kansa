@@ -1,4 +1,4 @@
-# Hướng Dẫn Sử Dụng (Photo Hub cho kiểm toán)
+# Hướng Dẫn Sử Dụng (Photosma)
 
 Hướng dẫn này mô tả quy trình cơ bản cho người dùng hiện trường và quản trị viên.
 
