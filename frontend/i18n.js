@@ -2470,6 +2470,24 @@
     document.documentElement.dataset.lang = currentLanguage;
     document.title = translateText(document.title);
     translateRoot(document.body);
+    applyLogo();
+  }
+
+  function applyLogo() {
+    const logos = document.querySelectorAll('.i18n-logo');
+  
+    const logoMap = {
+      ja: './img/photosma-logo.png',
+      en: './img/photosma-logo-en.png',
+      'zh-CN': './img/photosma-logo-zh.png',
+      vi: './img/photosma-logo-vi.png',
+    };
+  
+    const logoSrc = logoMap[currentLanguage] || logoMap.ja;
+  
+    logos.forEach((logo) => {
+      logo.src = logoSrc;
+    });
   }
 
   window.KANSA_I18N = {
