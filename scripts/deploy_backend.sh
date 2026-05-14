@@ -3,6 +3,11 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
+SAM_CONFIG_ENV="${SAM_CONFIG_ENV:-default}"
+STACK_NAME="${STACK_NAME:-kansa-backend}"
+if [[ "$SAM_CONFIG_ENV" == "dev" && "${STACK_NAME:-}" == "kansa-backend" ]]; then
+  STACK_NAME="kansa-backend-dev"
+fi
 
 # Work around broken permissions in the user's global npm cache.
 # SAM's NodejsNpmBuilder invokes npm and honors npm_config_cache.
@@ -27,16 +32,15 @@ if [[ -n "$STRIPE_SECRET_KEY_VALUE" && -n "$STRIPE_WEBHOOK_SECRET_VALUE" ]]; the
     sed -n 's/^parameter_overrides[[:space:]]*=[[:space:]]*"\(.*\)"[[:space:]]*$/\1/p' samconfig.toml \
       | head -n 1
   )"
-  sam deploy --parameter-overrides $EXISTING_OVERRIDES \
+  sam deploy --config-env "$SAM_CONFIG_ENV" --parameter-overrides $EXISTING_OVERRIDES \
     StripeSecretKey="$STRIPE_SECRET_KEY_VALUE" \
     StripeWebhookSecret="$STRIPE_WEBHOOK_SECRET_VALUE"
 else
   echo "[WARN] Stripe keys not provided. Deploying without Stripe secrets." 1>&2
   echo "       Set STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET env vars to enable Stripe." 1>&2
-  sam deploy
+  sam deploy --config-env "$SAM_CONFIG_ENV"
 fi
 
-STACK_NAME="kansa-backend"
 API_URL="$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' --output text)"
 PHOTO_BUCKET="$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs[?OutputKey==`PhotoBucketName`].OutputValue' --output text)"
 COGNITO_REGION="$(aws configure get region)"

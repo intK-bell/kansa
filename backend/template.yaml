@@ -34,6 +34,13 @@ Parameters:
     Type: Number
     Default: 100
     Description: API Gateway default route burst limit
+  DisableExecuteApiEndpoint:
+    Type: String
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+    Description: Disable the default execute-api endpoint. Keep true for production custom-domain-only API.
   FrontendAllowedOrigins:
     Type: CommaDelimitedList
     Default: "http://localhost:5173,http://127.0.0.1:5173,https://ph4k.aokigk.com"
@@ -68,12 +75,12 @@ Parameters:
     Description: Alternate local development logout URL
   CognitoDevCallbackUrl:
     Type: String
-    Default: https://dev.d3vej31wy18srw.amplifyapp.com
-    Description: Amplify dev callback URL
+    Default: ""
+    Description: Optional Amplify dev callback URL
   CognitoDevLogoutUrl:
     Type: String
-    Default: https://dev.d3vej31wy18srw.amplifyapp.com
-    Description: Amplify dev logout URL
+    Default: ""
+    Description: Optional Amplify dev logout URL
   AlertEmail:
     Type: String
     Default: aokigyoumukikaku@gmail.com
@@ -125,6 +132,10 @@ Parameters:
     Default: ""
     Description: Comma-separated Cognito usernames/emails allowed to open developer summary
 
+Conditions:
+  HasCognitoDevCallbackUrl: !Not [!Equals [!Ref CognitoDevCallbackUrl, ""]]
+  HasCognitoDevLogoutUrl: !Not [!Equals [!Ref CognitoDevLogoutUrl, ""]]
+
 Resources:
   UserPool:
     Type: AWS::Cognito::UserPool
@@ -168,12 +179,12 @@ Resources:
         - !Ref CognitoCallbackUrl
         - !Ref CognitoLocalCallbackUrl
         - !Ref CognitoLocalCallbackUrlAlt
-        - !Ref CognitoDevCallbackUrl
+        - !If [HasCognitoDevCallbackUrl, !Ref CognitoDevCallbackUrl, !Ref "AWS::NoValue"]
       LogoutURLs:
         - !Ref CognitoLogoutUrl
         - !Ref CognitoLocalLogoutUrl
         - !Ref CognitoLocalLogoutUrlAlt
-        - !Ref CognitoDevLogoutUrl
+        - !If [HasCognitoDevLogoutUrl, !Ref CognitoDevLogoutUrl, !Ref "AWS::NoValue"]
       ExplicitAuthFlows:
         - ALLOW_REFRESH_TOKEN_AUTH
         - ALLOW_USER_SRP_AUTH
@@ -187,7 +198,7 @@ Resources:
   HttpApi:
     Type: AWS::Serverless::HttpApi
     Properties:
-      DisableExecuteApiEndpoint: true
+      DisableExecuteApiEndpoint: !Ref DisableExecuteApiEndpoint
       Auth:
         DefaultAuthorizer: CognitoJwtAuthorizer
         Authorizers:

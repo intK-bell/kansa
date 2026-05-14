@@ -7,3 +7,5 @@ artifacts.zip
 backend/.aws-sam/
 backend/src/node_modules/
 backend/.DS_Store
+backend/samconfig.toml
+backend/template.yaml

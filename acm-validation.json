@@ -1,0 +1,17 @@
+{
+  "Changes": [
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "_84d0d9c05514ababf76b1d84407c72f6.dev-api.ph4k.aokigk.com.",
+        "Type": "CNAME",
+        "TTL": 300,
+        "ResourceRecords": [
+          {
+            "Value": "_3c86bb34367c2421dc9092a2d601745f.jkddzztszm.acm-validations.aws."
+          }
+        ]
+      }
+    }
+  ]
+}
