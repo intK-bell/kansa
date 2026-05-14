@@ -9,7 +9,7 @@
   };
 
   const dev = {
-    apiBase: 'https://dev-api.ph4k.aokigk.com/',
+    apiBase: 'https://dev-api.ph4k.aokigk.com',
     photoBucket: 'kansa-backend-dev-photobucket-j8ixrzh8g0u0',
     cognitoRegion: 'ap-northeast-1',
     cognitoDomain: 'photohub4kansa-dev',
