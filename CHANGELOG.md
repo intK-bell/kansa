@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-05-14
+
+- Fixed paid subscription plan changes so existing paid users use the subscription change API instead of opening a new Stripe Checkout session.
+- Added a backend guard that rejects new subscription Checkout creation when an existing paid subscription is already attached to the room.
+- Added localized plan-change messages for upgrade and downgrade flows.
+- Clarified the Free plan return confirmation and success messages to state immediate Stripe cancellation, no refund for the remaining month, and Free plan requirements.
+- Documented the four-plan subscription change risk review and the high-risk mitigation.
+
 ## 2026-05-09
 
 - Updated the user manual and localized guide text for Photo folders and Quest folders.

@@ -1096,6 +1096,26 @@ function freePlanRequirementDialogText(constraints = {}) {
   return lines.join('\n');
 }
 
+function freePlanReturnConfirmText() {
+  return [
+    t('フリープランへ戻してよかですか？'),
+    '',
+    t('実行するとStripeの定期課金は今すぐ停止します。'),
+    t('当月の残り期間分の返金はありません。'),
+    t('フリープランへ戻すには、容量512MB未満・フォルダ2個以下である必要があります。'),
+  ].join('\n');
+}
+
+function freePlanReturnSuccessText() {
+  return [
+    t('フリープランに戻りました。'),
+    '',
+    t('Stripeの定期課金は停止しました。'),
+    t('当月の残り期間分の返金はありません。'),
+    t('現在の上限は、容量512MB未満・フォルダ2個までです。'),
+  ].join('\n');
+}
+
 function renderPhotoArchiveNote() {
   if (!els.photoArchiveNote) return;
   const archived = state.selectedFolderArchive || null;
@@ -1641,6 +1661,14 @@ function planToDisplayLabel(plan) {
   if (product) return tf('{product}プラン', { product });
   if (v === 'FREE') return t('無料プラン');
   return v || t('不明');
+}
+
+function subscriptionPlanRank(plan) {
+  const v = String(plan || '').trim().toUpperCase();
+  if (v === 'BASIC') return 1;
+  if (v === 'PLUS') return 2;
+  if (v === 'PRO') return 3;
+  return 0;
 }
 
 function clearPurchaseParamsFromUrl() {
@@ -3765,12 +3793,40 @@ async function startSubscriptionCheckout(plan) {
   throw new Error(t('Stripe決済URLが取得できませんでした。'));
 }
 
-if (els.subscribeBasicBtn) els.subscribeBasicBtn.onclick = safeAction(() => startSubscriptionCheckout('BASIC'), '購入');
-if (els.subscribePlusBtn) els.subscribePlusBtn.onclick = safeAction(() => startSubscriptionCheckout('PLUS'), '購入');
-if (els.subscribeProBtn) els.subscribeProBtn.onclick = safeAction(() => startSubscriptionCheckout('PRO'), '購入');
+async function changeSubscriptionPlan(targetPlan) {
+  const mode = String(state.billing?.billingMode || 'prepaid').toLowerCase();
+  const currentPlan = String(state.billing?.subscription?.currentPlan || 'FREE').toUpperCase();
+  const currentRank = subscriptionPlanRank(currentPlan);
+  const targetRank = subscriptionPlanRank(targetPlan);
+  if (!targetRank) throw new Error(t('プランが不正です。'));
+  if (mode !== 'subscription' || currentRank === 0) {
+    await startSubscriptionCheckout(targetPlan);
+    return;
+  }
+  if (currentRank === targetRank) return;
+
+  const action = targetRank > currentRank ? 'upgrade' : 'downgrade';
+  await api('/team/subscription/change', {
+    method: 'POST',
+    body: JSON.stringify({ action, targetPlan }),
+  });
+  await loadTeamMe();
+  await loadAdminPanel();
+
+  const label = planToDisplayLabel(targetPlan);
+  if (action === 'upgrade') {
+    window.alert(tf('{plan}へ変更しました。差額はStripeで即時請求されます。', { plan: label }));
+  } else {
+    window.alert(tf('{plan}への変更を予約しました。次回請求期間から反映されます。', { plan: label }));
+  }
+}
+
+if (els.subscribeBasicBtn) els.subscribeBasicBtn.onclick = safeAction(() => changeSubscriptionPlan('BASIC'), 'プラン変更');
+if (els.subscribePlusBtn) els.subscribePlusBtn.onclick = safeAction(() => changeSubscriptionPlan('PLUS'), 'プラン変更');
+if (els.subscribeProBtn) els.subscribeProBtn.onclick = safeAction(() => changeSubscriptionPlan('PRO'), 'プラン変更');
 if (els.subscribeFreeBtn) {
   els.subscribeFreeBtn.onclick = safeAction(async () => {
-    const ok = window.confirm(t('フリープランへ戻してよかですか？'));
+    const ok = window.confirm(freePlanReturnConfirmText());
     if (!ok) return;
     try {
       await api('/team/subscription/change', { method: 'POST', body: JSON.stringify({ action: 'free' }) });
@@ -3785,7 +3841,7 @@ if (els.subscribeFreeBtn) {
     await loadTeamMe();
     await loadFolders();
     await loadAdminPanel();
-    window.alert(t('フリープランに戻りました。\n\n現在の上限は、容量512MB未満・フォルダ2個までです。'));
+    window.alert(freePlanReturnSuccessText());
   }, 'フリープラン変更');
 }
 if (els.lowStorageChargeBtn) {
@@ -3799,7 +3855,7 @@ if (els.lowStorageChargeBtn) {
     const usage = Number(state.billing?.usageBytes || 0);
     const gib = 1024 * 1024 * 1024;
     const recommended = usage > 5 * gib ? 'PRO' : usage > gib ? 'PLUS' : 'BASIC';
-    await startSubscriptionCheckout(recommended);
+    await changeSubscriptionPlan(recommended);
   }, '容量チャージ');
 }
 

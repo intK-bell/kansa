@@ -971,6 +971,26 @@ function freePlanRequirementDialogText(constraints = {}) {
   return lines.join('\n');
 }
 
+function freePlanReturnConfirmText() {
+  return [
+    t('フリープランへ戻してよかですか？'),
+    '',
+    t('実行するとStripeの定期課金は今すぐ停止します。'),
+    t('当月の残り期間分の返金はありません。'),
+    t('フリープランへ戻すには、容量512MB未満・フォルダ2個以下である必要があります。'),
+  ].join('\n');
+}
+
+function freePlanReturnSuccessText() {
+  return [
+    t('フリープランに戻りました。'),
+    '',
+    t('Stripeの定期課金は停止しました。'),
+    t('当月の残り期間分の返金はありません。'),
+    t('現在の上限は、容量512MB未満・フォルダ2個までです。'),
+  ].join('\n');
+}
+
 function renderPhotoArchiveNote() {
   if (!els.photoArchiveNote) return;
   const archived = state.selectedFolderArchive || null;
@@ -1504,6 +1524,14 @@ function planToDisplayLabel(plan) {
   if (product) return `${product}プラン`;
   if (v === 'FREE') return '無料プラン';
   return v || '不明';
+}
+
+function subscriptionPlanRank(plan) {
+  const v = String(plan || '').trim().toUpperCase();
+  if (v === 'BASIC') return 1;
+  if (v === 'PLUS') return 2;
+  if (v === 'PRO') return 3;
+  return 0;
 }
 
 function clearPurchaseParamsFromUrl() {
@@ -3602,12 +3630,40 @@ async function startSubscriptionCheckout(plan) {
   throw new Error('Stripe決済URLが取得できませんでした。');
 }
 
-if (els.subscribeBasicBtn) els.subscribeBasicBtn.onclick = safeAction(() => startSubscriptionCheckout('BASIC'), '購入');
-if (els.subscribePlusBtn) els.subscribePlusBtn.onclick = safeAction(() => startSubscriptionCheckout('PLUS'), '購入');
-if (els.subscribeProBtn) els.subscribeProBtn.onclick = safeAction(() => startSubscriptionCheckout('PRO'), '購入');
+async function changeSubscriptionPlan(targetPlan) {
+  const mode = String(state.billing?.billingMode || 'prepaid').toLowerCase();
+  const currentPlan = String(state.billing?.subscription?.currentPlan || 'FREE').toUpperCase();
+  const currentRank = subscriptionPlanRank(currentPlan);
+  const targetRank = subscriptionPlanRank(targetPlan);
+  if (!targetRank) throw new Error('プランが不正です。');
+  if (mode !== 'subscription' || currentRank === 0) {
+    await startSubscriptionCheckout(targetPlan);
+    return;
+  }
+  if (currentRank === targetRank) return;
+
+  const action = targetRank > currentRank ? 'upgrade' : 'downgrade';
+  await api('/team/subscription/change', {
+    method: 'POST',
+    body: JSON.stringify({ action, targetPlan }),
+  });
+  await loadTeamMe();
+  await loadAdminPanel();
+
+  const label = planToDisplayLabel(targetPlan);
+  if (action === 'upgrade') {
+    window.alert(`${label}へ変更しました。差額はStripeで即時請求されます。`);
+  } else {
+    window.alert(`${label}への変更を予約しました。次回請求期間から反映されます。`);
+  }
+}
+
+if (els.subscribeBasicBtn) els.subscribeBasicBtn.onclick = safeAction(() => changeSubscriptionPlan('BASIC'), 'プラン変更');
+if (els.subscribePlusBtn) els.subscribePlusBtn.onclick = safeAction(() => changeSubscriptionPlan('PLUS'), 'プラン変更');
+if (els.subscribeProBtn) els.subscribeProBtn.onclick = safeAction(() => changeSubscriptionPlan('PRO'), 'プラン変更');
 if (els.subscribeFreeBtn) {
   els.subscribeFreeBtn.onclick = safeAction(async () => {
-    const ok = window.confirm(t('フリープランへ戻してよかですか？'));
+    const ok = window.confirm(freePlanReturnConfirmText());
     if (!ok) return;
     try {
       await api('/team/subscription/change', { method: 'POST', body: JSON.stringify({ action: 'free' }) });
@@ -3622,7 +3678,7 @@ if (els.subscribeFreeBtn) {
     await loadTeamMe();
     await loadFolders();
     await loadAdminPanel();
-    window.alert(t('フリープランに戻りました。\n\n現在の上限は、容量512MB未満・フォルダ2個までです。'));
+    window.alert(freePlanReturnSuccessText());
   }, 'フリープラン変更');
 }
 if (els.lowStorageChargeBtn) {
@@ -3636,7 +3692,7 @@ if (els.lowStorageChargeBtn) {
     const usage = Number(state.billing?.usageBytes || 0);
     const gib = 1024 * 1024 * 1024;
     const recommended = usage > 5 * gib ? 'PRO' : usage > gib ? 'PLUS' : 'BASIC';
-    await startSubscriptionCheckout(recommended);
+    await changeSubscriptionPlan(recommended);
   }, '容量チャージ');
 }
 
@@ -4545,7 +4601,8 @@ api = async function (path, options = {}) {
 
   if (path === '/team/subscription/change' && method === 'POST') {
     if (!activeRoom) throw demoError(404, 'no active room');
-    if (String(body.action || '').toLowerCase() === 'free') {
+    const action = String(body.action || '').toLowerCase();
+    if (action === 'free') {
       const usageBytes = Number(activeRoom.billing?.usageBytes || 0);
       if (usageBytes > DEMO_PLAN_BYTES.FREE || activeRoom.folders.length > 2) {
         throw demoError(400, 'free plan requirements not met', {
@@ -4560,8 +4617,21 @@ api = async function (path, options = {}) {
       }
       activeRoom.subscriptionPlan = 'FREE';
       demoRecalculate();
+    } else if (action === 'upgrade' || action === 'downgrade') {
+      const targetPlan = String(body.targetPlan || '').toUpperCase();
+      const currentPlan = String(activeRoom.subscriptionPlan || 'FREE').toUpperCase();
+      const targetRank = subscriptionPlanRank(targetPlan);
+      const currentRank = subscriptionPlanRank(currentPlan);
+      if (!targetRank) throw demoError(400, 'targetPlan is required');
+      if (action === 'upgrade' && targetRank <= currentRank) throw demoError(400, 'targetPlan must be higher than currentPlan');
+      if (action === 'downgrade' && targetRank >= currentRank) throw demoError(400, 'targetPlan must be lower than currentPlan');
+      if (action === 'downgrade' && Number(activeRoom.billing?.usageBytes || 0) > DEMO_PLAN_BYTES[targetPlan]) {
+        throw demoError(400, 'current usage exceeds target plan limit; cannot schedule downgrade');
+      }
+      activeRoom.subscriptionPlan = targetPlan;
+      demoRecalculate();
     }
-    return { ok: true };
+    return { ok: true, billing: demoClone(activeRoom.billing) };
   }
 
   if (path === '/team/delete' && method === 'POST') {

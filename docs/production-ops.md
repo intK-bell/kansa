@@ -52,6 +52,7 @@ aws cloudformation describe-stacks \
 - 2026-04-29 22:56 JST: お部屋メンバー一覧から `folderScope=invited` を除外し、フォルダメンバー一覧は対象フォルダの `folderScope=invited` だけ返す修正を `./scripts/deploy_backend.sh` で再デプロイ。`sam build` / `sam deploy` 成功、CloudFormation `UPDATE_COMPLETE`。デプロイ後に bell が お部屋メンバー一覧から除外され、対象フォルダメンバー一覧だけに表示されることを確認済み。
 - 2026-04-29 23:12 JST: フォルダメンバー解除を `status:left` ではなく `folderIds` から対象フォルダだけ外す `DELETE /folders/{folderId}/members/{userKey}` に変更。残りフォルダが空の場合のみ `status=left` にする修正を `./scripts/deploy_backend.sh` で再デプロイ。`sam build` / `sam deploy` 成功、CloudFormation `UPDATE_COMPLETE`。
 - 2026-04-29 23:16 JST: 本番フロントが古い間の安全装置として、複数 `folderIds` を持つフォルダメンバーは `PUT /team/members/{userKey}` の `status:left` で削除できないようにする修正を `./scripts/deploy_backend.sh` で再デプロイ。`sam build` / `sam deploy` 成功、CloudFormation `UPDATE_COMPLETE`。
+- 2026-05-14 22:08 JST: 既存有料サブスクがある部屋で新規 Checkout 作成を拒否する修正を `./scripts/deploy_backend.sh` で再デプロイ。`sam build` / `sam deploy` 成功、CloudFormation `UPDATE_COMPLETE`。Stripe秘密値は環境変数未指定のため未注入。
 
 ### 手動で実行したい場合
 

@@ -2244,6 +2244,30 @@ async function teamSubscriptionCheckout(event, user, room, authz, ctx) {
   const body = JSON.parse(event.body || '{}');
   const plan = normalizeSubscriptionPlanCode(body.plan || '');
   if (!plan || plan === 'FREE') return badRequest('plan is required (BASIC|PLUS|PRO)');
+  const currentMode = String(authz.billing?.billingMode || BILLING_MODE_PREPAID).toLowerCase();
+  const currentPlan = normalizeSubscriptionPlanCode(authz.billing?.currentPlan || 'FREE');
+  const stripeSubId = String(authz.billing?.stripeSubscriptionId || '').trim();
+  const stripeStatus = String(authz.billing?.stripeSubscriptionStatus || '').trim().toLowerCase();
+  if (currentMode === BILLING_MODE_SUBSCRIPTION && (currentPlan !== 'FREE' || stripeSubId) && stripeStatus !== 'canceled') {
+    auditLog({
+      requestId: ctx.requestId,
+      action: 'subscription.checkout.create',
+      actor: user.userKey,
+      actorName: user.userName,
+      roomId: room.roomId,
+      roomName: room.roomName,
+      plan,
+      currentPlan,
+      stripeSubscriptionId: stripeSubId || null,
+      result: 'rejected',
+      reason: 'existing_subscription',
+    });
+    return json(409, {
+      message: 'active subscription already exists; use subscription change',
+      code: 'SUBSCRIPTION_ALREADY_EXISTS',
+      currentPlan,
+    });
+  }
   const priceId = subscriptionPriceIdForPlan(plan);
   if (!priceId) return json(500, { message: `stripe is not configured (missing subscription price for ${plan})` });
 

@@ -744,7 +744,22 @@
         'The Free plan allows up to 2 folders. Paid plans allow unlimited folders.',
       'フォルダ：{title} を作成しました。': 'Folder "{title}" was created.',
       'Stripe決済URLが取得できませんでした。': 'Could not get the Stripe checkout URL.',
+      プラン変更: 'Plan change',
+      'プランが不正です。': 'Invalid plan.',
+      '{plan}へ変更しました。差額はStripeで即時請求されます。':
+        'Changed to {plan}. Stripe will immediately charge the prorated difference.',
+      '{plan}への変更を予約しました。次回請求期間から反映されます。':
+        'Scheduled the change to {plan}. It will take effect from the next billing period.',
       'フリープランへ戻してよかですか？': 'Return to the Free plan?',
+      '実行するとStripeの定期課金は今すぐ停止します。':
+        'If you continue, the Stripe subscription will stop immediately.',
+      '当月の残り期間分の返金はありません。': 'There is no refund for the remaining days in the current month.',
+      'フリープランへ戻すには、容量512MB未満・フォルダ2個以下である必要があります。':
+        'To return to the Free plan, storage must be under 512 MB and there must be no more than 2 folders.',
+      'フリープランに戻りました。': 'Returned to the Free plan.',
+      'Stripeの定期課金は停止しました。': 'The Stripe subscription has been stopped.',
+      '現在の上限は、容量512MB未満・フォルダ2個までです。':
+        'Current limits are under 512 MB storage and up to 2 folders.',
       'フリープランに戻りました。\n\n現在の上限は、容量512MB未満・フォルダ2個までです。':
         'Returned to the Free plan.\n\nCurrent limits are under 512 MB storage and up to 2 folders.',
       'このお部屋を削除すると、フォルダ/写真/コメント/課金情報が全て削除され、Stripeの定期課金も即時停止されます。よかですか？':
@@ -1479,7 +1494,21 @@
       'お部屋作成失敗: {message}': '创建房间失败：{message}',
       'フォルダ：{title} を作成しました。': '文件夹“{title}”已创建。',
       'Stripe決済URLが取得できませんでした。': '无法获取 Stripe 支付 URL。',
+      プラン変更: '更改计划',
+      'プランが不正です。': '计划无效。',
+      '{plan}へ変更しました。差額はStripeで即時請求されます。':
+        '已更改为 {plan}。Stripe 会立即收取按比例计算的差额。',
+      '{plan}への変更を予約しました。次回請求期間から反映されます。':
+        '已预约更改为 {plan}。将在下一个计费周期生效。',
       'フリープランへ戻してよかですか？': '要返回免费计划吗？',
+      '実行するとStripeの定期課金は今すぐ停止します。': '执行后，Stripe 定期订阅会立即停止。',
+      '当月の残り期間分の返金はありません。': '本月剩余期间不会退款。',
+      'フリープランへ戻すには、容量512MB未満・フォルダ2個以下である必要があります。':
+        '返回免费计划需要容量小于 512 MB，且文件夹不超过 2 个。',
+      'フリープランに戻りました。': '已返回免费计划。',
+      'Stripeの定期課金は停止しました。': 'Stripe 定期订阅已停止。',
+      '現在の上限は、容量512MB未満・フォルダ2個までです。':
+        '当前限制为容量小于 512 MB、文件夹最多 2 个。',
       '本当によかですか？（取り消せません）': '确定吗？此操作无法撤销。',
       'お部屋を削除しました。': '已删除房间。',
       'アカウントを削除しました。': '已删除账户。',
@@ -2268,7 +2297,21 @@
       'お部屋作成失敗: {message}': 'Tạo phòng thất bại: {message}',
       'フォルダ：{title} を作成しました。': 'Đã tạo thư mục "{title}".',
       'Stripe決済URLが取得できませんでした。': 'Không lấy được URL thanh toán Stripe.',
+      プラン変更: 'Đổi gói',
+      'プランが不正です。': 'Gói không hợp lệ.',
+      '{plan}へ変更しました。差額はStripeで即時請求されます。':
+        'Đã đổi sang {plan}. Stripe sẽ thu ngay phần chênh lệch theo tỷ lệ.',
+      '{plan}への変更を予約しました。次回請求期間から反映されます。':
+        'Đã lên lịch đổi sang {plan}. Thay đổi sẽ có hiệu lực từ kỳ thanh toán tiếp theo.',
       'フリープランへ戻してよかですか？': 'Quay lại gói miễn phí?',
+      '実行するとStripeの定期課金は今すぐ停止します。': 'Nếu tiếp tục, đăng ký định kỳ trên Stripe sẽ dừng ngay.',
+      '当月の残り期間分の返金はありません。': 'Không hoàn tiền cho phần thời gian còn lại trong tháng này.',
+      'フリープランへ戻すには、容量512MB未満・フォルダ2個以下である必要があります。':
+        'Để quay lại gói miễn phí, dung lượng phải dưới 512 MB và có tối đa 2 thư mục.',
+      'フリープランに戻りました。': 'Đã quay lại gói miễn phí.',
+      'Stripeの定期課金は停止しました。': 'Đăng ký định kỳ trên Stripe đã dừng.',
+      '現在の上限は、容量512MB未満・フォルダ2個までです。':
+        'Giới hạn hiện tại là dưới 512 MB dung lượng và tối đa 2 thư mục.',
       '本当によかですか？（取り消せません）': 'Bạn chắc chắn chứ? Không thể hoàn tác.',
       'お部屋を削除しました。': 'Đã xóa phòng.',
       'アカウントを削除しました。': 'Đã xóa tài khoản.',
