@@ -2336,6 +2336,8 @@ async function changeTeamSubscription(event, user, room, authz, ctx) {
   if (action === 'upgrade') {
     if (!targetPlan) return badRequest('targetPlan is required for upgrade');
     if (planRank(targetPlan) <= planRank(currentPlan)) return badRequest('targetPlan must be higher than currentPlan');
+    const targetPriceId = subscriptionPriceIdForPlan(targetPlan);
+    if (!targetPriceId) return json(500, { message: `stripe price not configured for plan ${targetPlan}` });
     updates.push('billingMode = :ms', 'nextBillingAt = :nb', 'currentPlan = :cp', 'pendingPlan = :null', 'cancelAtPeriodEnd = :f');
     values[':ms'] = BILLING_MODE_SUBSCRIPTION;
     values[':nb'] = nextBillingAt;
@@ -2404,6 +2406,71 @@ async function changeTeamSubscription(event, user, room, authz, ctx) {
     return badRequest('action must be upgrade|downgrade|cancel|resume|free');
   }
 
+  const secretKey = process.env.STRIPE_SECRET_KEY || '';
+  const stripeSubId = String(authz.billing?.stripeSubscriptionId || '').trim();
+  const needsImmediateStripe = action === 'upgrade' || action === 'cancel' || action === 'resume' || action === 'free';
+  if (needsImmediateStripe && (!secretKey || !stripeSubId)) {
+    auditLog({
+      requestId: ctx?.requestId || null,
+      action: 'subscription.change',
+      actor: user.userKey,
+      actorName: user.userName,
+      roomId: room.roomId,
+      roomName: room.roomName,
+      changeAction: action,
+      currentPlan,
+      targetPlan: targetPlan || null,
+      result: 'rejected',
+      reason: 'stripe_subscription_not_configured',
+    });
+    return json(500, {
+      message: 'stripe subscription is not configured',
+      code: 'STRIPE_SUBSCRIPTION_NOT_CONFIGURED',
+    });
+  }
+  try {
+    if (secretKey && stripeSubId) {
+      if (action === 'upgrade') {
+        const targetPriceId = subscriptionPriceIdForPlan(targetPlan);
+        const stripeSub = await stripeUpdateSubscriptionPlan(secretKey, stripeSubId, targetPriceId, 'always_invoice');
+        const itemId = stripeSub?.items?.data?.[0]?.id || null;
+        const stripePlan = planCodeFromSubscriptionPriceId(stripeSub?.items?.data?.[0]?.price?.id) || targetPlan;
+        values[':cp'] = stripePlan;
+        updates.push('stripeSubscriptionStatus = :ss', 'stripeSubscriptionItemId = :si');
+        values[':ss'] = stripeSub?.status || 'active';
+        values[':si'] = itemId;
+      } else if (action === 'cancel' || action === 'resume') {
+        const stripeSub = await stripeSetCancelAtPeriodEnd(secretKey, stripeSubId, action === 'cancel');
+        updates.push('stripeSubscriptionStatus = :ss');
+        values[':ss'] = stripeSub?.status || authz.billing?.stripeSubscriptionStatus || null;
+      } else if (action === 'free') {
+        const stripeSub = await stripeCancelSubscriptionNow(secretKey, stripeSubId);
+        updates.push('stripeSubscriptionStatus = :ss');
+        values[':ss'] = stripeSub?.status || 'canceled';
+      }
+    }
+  } catch (error) {
+    auditLog({
+      requestId: ctx?.requestId || null,
+      action: 'subscription.change',
+      actor: user.userKey,
+      actorName: user.userName,
+      roomId: room.roomId,
+      roomName: room.roomName,
+      changeAction: action,
+      currentPlan,
+      targetPlan: targetPlan || null,
+      result: 'rejected',
+      reason: 'stripe_update_failed',
+      stripeStatusCode: error?.statusCode || null,
+    });
+    console.error(error);
+    return json(502, {
+      message: 'stripe subscription update failed',
+      code: 'STRIPE_SUBSCRIPTION_UPDATE_FAILED',
+    });
+  }
+
   const res = await ddb.send(
     new UpdateCommand({
       TableName: TABLE_NAME,
@@ -2414,71 +2481,7 @@ async function changeTeamSubscription(event, user, room, authz, ctx) {
     })
   );
 
-  let updated = res.Attributes || authz.billing;
-  const secretKey = process.env.STRIPE_SECRET_KEY || '';
-  const stripeSubId = String(updated?.stripeSubscriptionId || '').trim();
-  if (secretKey && stripeSubId) {
-    if (action === 'upgrade') {
-      const targetPriceId = subscriptionPriceIdForPlan(targetPlan);
-      if (!targetPriceId) return json(500, { message: `stripe price not configured for plan ${targetPlan}` });
-      const stripeSub = await stripeUpdateSubscriptionPlan(secretKey, stripeSubId, targetPriceId, 'always_invoice');
-      const itemId = stripeSub?.items?.data?.[0]?.id || null;
-      const stripePlan = planCodeFromSubscriptionPriceId(stripeSub?.items?.data?.[0]?.price?.id) || targetPlan;
-      const reflect = await ddb.send(
-        new UpdateCommand({
-          TableName: TABLE_NAME,
-          Key: { PK: `ROOM#${room.roomId}`, SK: 'META#BILLING' },
-          UpdateExpression:
-            'SET currentPlan = :cp, pendingPlan = :null, stripeSubscriptionStatus = :ss, stripeSubscriptionItemId = :si, updatedAt = :u',
-          ExpressionAttributeValues: {
-            ':cp': stripePlan,
-            ':null': null,
-            ':ss': stripeSub?.status || 'active',
-            ':si': itemId,
-            ':u': new Date().toISOString(),
-          },
-          ReturnValues: 'ALL_NEW',
-        })
-      );
-      updated = reflect.Attributes || updated;
-    } else if (action === 'cancel' || action === 'resume') {
-      const stripeSub = await stripeSetCancelAtPeriodEnd(secretKey, stripeSubId, action === 'cancel');
-      const reflect = await ddb.send(
-        new UpdateCommand({
-          TableName: TABLE_NAME,
-          Key: { PK: `ROOM#${room.roomId}`, SK: 'META#BILLING' },
-          UpdateExpression: 'SET cancelAtPeriodEnd = :c, stripeSubscriptionStatus = :ss, updatedAt = :u',
-          ExpressionAttributeValues: {
-            ':c': Boolean(stripeSub?.cancel_at_period_end),
-            ':ss': stripeSub?.status || updated?.stripeSubscriptionStatus || null,
-            ':u': new Date().toISOString(),
-          },
-          ReturnValues: 'ALL_NEW',
-        })
-      );
-      updated = reflect.Attributes || updated;
-    } else if (action === 'free') {
-      const stripeSub = await stripeCancelSubscriptionNow(secretKey, stripeSubId);
-      const reflect = await ddb.send(
-        new UpdateCommand({
-          TableName: TABLE_NAME,
-          Key: { PK: `ROOM#${room.roomId}`, SK: 'META#BILLING' },
-          UpdateExpression:
-            'SET billingMode = :mp, currentPlan = :free, pendingPlan = :null, cancelAtPeriodEnd = :f, nextBillingAt = :null, stripeSubscriptionStatus = :ss, updatedAt = :u',
-          ExpressionAttributeValues: {
-            ':mp': BILLING_MODE_PREPAID,
-            ':free': 'FREE',
-            ':null': null,
-            ':f': false,
-            ':ss': stripeSub?.status || 'canceled',
-            ':u': new Date().toISOString(),
-          },
-          ReturnValues: 'ALL_NEW',
-        })
-      );
-      updated = reflect.Attributes || updated;
-    }
-  }
+  const updated = res.Attributes || authz.billing;
 
   auditLog({
     requestId: ctx?.requestId || null,

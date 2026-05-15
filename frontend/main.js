@@ -1671,6 +1671,26 @@ function subscriptionPlanRank(plan) {
   return 0;
 }
 
+function subscriptionPlanChangeConfirmText(currentPlan, targetPlan, action) {
+  const currentLabel = planToDisplayLabel(currentPlan);
+  const targetLabel = planToDisplayLabel(targetPlan);
+  if (action === 'checkout') {
+    return tf('{plan}を申し込みますか？', { plan: targetLabel });
+  }
+  if (action === 'upgrade') {
+    return [
+      tf('{currentPlan}から{targetPlan}へ変更してよかですか？', { currentPlan: currentLabel, targetPlan: targetLabel }),
+      '',
+      t('差額はStripeで即時請求されます。'),
+    ].join('\n');
+  }
+  return [
+    tf('{currentPlan}から{targetPlan}への変更を予約してよかですか？', { currentPlan: currentLabel, targetPlan: targetLabel }),
+    '',
+    t('次回請求期間から反映されます。'),
+  ].join('\n');
+}
+
 function clearPurchaseParamsFromUrl() {
   const url = new URL(window.location.href);
   ['subscription', 'plan', 'session_id', 'sessionId'].forEach((k) => url.searchParams.delete(k));
@@ -3800,12 +3820,14 @@ async function changeSubscriptionPlan(targetPlan) {
   const targetRank = subscriptionPlanRank(targetPlan);
   if (!targetRank) throw new Error(t('プランが不正です。'));
   if (mode !== 'subscription' || currentRank === 0) {
+    if (!window.confirm(subscriptionPlanChangeConfirmText(currentPlan, targetPlan, 'checkout'))) return;
     await startSubscriptionCheckout(targetPlan);
     return;
   }
   if (currentRank === targetRank) return;
 
   const action = targetRank > currentRank ? 'upgrade' : 'downgrade';
+  if (!window.confirm(subscriptionPlanChangeConfirmText(currentPlan, targetPlan, action))) return;
   await api('/team/subscription/change', {
     method: 'POST',
     body: JSON.stringify({ action, targetPlan }),

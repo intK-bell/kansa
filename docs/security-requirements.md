@@ -173,6 +173,35 @@
 
 ## ローンチ前の優先対応
 
+### 現状確認メモ（2026-05-15）
+
+- Cognito JWT authorizer、MFA、パスワードポリシーは `backend/template.yaml` で設定済み
+- API CORS は `FrontendAllowedOrigins` allowlist 参照に更新済み
+- 写真バケット、Export バケットともに Public Access Block と S3 CORS allowlist が設定済み
+- `DisableExecuteApiEndpoint` は既定値 `true` で、独自ドメイン運用前提になっている
+- Stripe Webhook は `Authorizer: NONE` だが、`STRIPE_WEBHOOK_SECRET` による署名検証を実施している
+- Frontend は CSP とセキュリティヘッダを `frontend/*.html`, `frontend/customHttp.yml`, `amplify.yml` に設定済み
+- `npm audit --omit=dev` では `fast-xml-builder <=1.1.6` の high 脆弱性が 1 件検出された
+
+### 次回対応候補（2026-05-15）
+
+#### 優先度A
+
+- `finalizePhoto` で `originalS3Key`, `previewS3Key`, `photoId` の対応関係をサーバー側で検証する
+- アップロード URL 発行時に、許可 MIME タイプ、拡張子、ファイルサイズ上限をサーバー側で強制する
+- 監査ログに招待トークンの生値を出さず、ハッシュまたは末尾数文字だけを記録する
+
+#### 優先度B
+
+- Cognito claims が無い場合の `x-user-key` fallback を本番では無効化する、または明示的なローカル開発モードだけに限定する
+- ID トークンと招待トークンの `localStorage` 保存を見直し、少なくとも `sessionStorage` 化または BFF / Cookie 化を検討する
+- `fast-xml-builder` 脆弱性は `npm audit fix` または AWS SDK 更新で解消し、Backend の構文確認と主要 API 受け入れ確認を行う
+
+#### 優先度C
+
+- S3 アクセスログ、マルウェアスキャン、WAF レート制限を運用要件として具体化する
+- Stripe API 障害時の再試行、手動復旧、課金状態の突合手順を `docs/production-ops.md` に追記する
+
 ### 優先度A
 
 - API と S3 の CORS を allowlist 化する

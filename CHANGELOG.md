@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-05-15
+
+- Added confirmation dialogs before starting paid subscription checkout, upgrading a paid plan, or scheduling a paid downgrade.
+- Changed paid subscription updates so immediate Stripe operations succeed before DynamoDB billing metadata is changed, preventing the app plan from moving ahead when Stripe fails.
+- Changed Stripe subscription update failures to return a structured `STRIPE_SUBSCRIPTION_UPDATE_FAILED` response instead of leaving a partial plan change.
+- Restored the dev `dev-choco` room to the Free plan and canceled its Stripe test subscription after the failed plan-change test.
+
 ## 2026-05-14
 
 - Fixed paid subscription plan changes so existing paid users use the subscription change API instead of opening a new Stripe Checkout session.

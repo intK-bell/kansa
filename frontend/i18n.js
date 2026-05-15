@@ -746,6 +746,12 @@
       'Stripe決済URLが取得できませんでした。': 'Could not get the Stripe checkout URL.',
       プラン変更: 'Plan change',
       'プランが不正です。': 'Invalid plan.',
+      '{plan}を申し込みますか？': 'Subscribe to {plan}?',
+      '{currentPlan}から{targetPlan}へ変更してよかですか？': 'Change from {currentPlan} to {targetPlan}?',
+      '差額はStripeで即時請求されます。': 'Stripe will immediately charge the prorated difference.',
+      '{currentPlan}から{targetPlan}への変更を予約してよかですか？':
+        'Schedule a change from {currentPlan} to {targetPlan}?',
+      '次回請求期間から反映されます。': 'It will take effect from the next billing period.',
       '{plan}へ変更しました。差額はStripeで即時請求されます。':
         'Changed to {plan}. Stripe will immediately charge the prorated difference.',
       '{plan}への変更を予約しました。次回請求期間から反映されます。':
@@ -1496,6 +1502,12 @@
       'Stripe決済URLが取得できませんでした。': '无法获取 Stripe 支付 URL。',
       プラン変更: '更改计划',
       'プランが不正です。': '计划无效。',
+      '{plan}を申し込みますか？': '要订阅 {plan} 吗？',
+      '{currentPlan}から{targetPlan}へ変更してよかですか？': '要从 {currentPlan} 更改为 {targetPlan} 吗？',
+      '差額はStripeで即時請求されます。': 'Stripe 会立即收取按比例计算的差额。',
+      '{currentPlan}から{targetPlan}への変更を予約してよかですか？':
+        '要预约从 {currentPlan} 更改为 {targetPlan} 吗？',
+      '次回請求期間から反映されます。': '将在下一个计费周期生效。',
       '{plan}へ変更しました。差額はStripeで即時請求されます。':
         '已更改为 {plan}。Stripe 会立即收取按比例计算的差额。',
       '{plan}への変更を予約しました。次回請求期間から反映されます。':
@@ -2299,6 +2311,12 @@
       'Stripe決済URLが取得できませんでした。': 'Không lấy được URL thanh toán Stripe.',
       プラン変更: 'Đổi gói',
       'プランが不正です。': 'Gói không hợp lệ.',
+      '{plan}を申し込みますか？': 'Đăng ký {plan}?',
+      '{currentPlan}から{targetPlan}へ変更してよかですか？': 'Đổi từ {currentPlan} sang {targetPlan}?',
+      '差額はStripeで即時請求されます。': 'Stripe sẽ thu ngay phần chênh lệch theo tỷ lệ.',
+      '{currentPlan}から{targetPlan}への変更を予約してよかですか？':
+        'Lên lịch đổi từ {currentPlan} sang {targetPlan}?',
+      '次回請求期間から反映されます。': 'Thay đổi sẽ có hiệu lực từ kỳ thanh toán tiếp theo.',
       '{plan}へ変更しました。差額はStripeで即時請求されます。':
         'Đã đổi sang {plan}. Stripe sẽ thu ngay phần chênh lệch theo tỷ lệ.',
       '{plan}への変更を予約しました。次回請求期間から反映されます。':
