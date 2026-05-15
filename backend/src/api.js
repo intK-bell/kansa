@@ -236,6 +236,13 @@ function planRank(planCode) {
   return idx >= 0 ? idx : 0;
 }
 
+function expressionValuesForUpdate(updates, values) {
+  const expression = updates.join(', ');
+  return Object.fromEntries(
+    Object.entries(values || {}).filter(([key]) => expression.includes(key))
+  );
+}
+
 async function countRoomFolders(roomName) {
   const res = await ddb.send(
     new QueryCommand({
@@ -1303,7 +1310,7 @@ async function applyPendingSubscriptionIfDue(room, billing, ctx) {
       TableName: TABLE_NAME,
       Key: { PK: `ROOM#${room.roomId}`, SK: 'META#BILLING' },
       UpdateExpression: `SET ${updates.join(', ')}`,
-      ExpressionAttributeValues: values,
+      ExpressionAttributeValues: expressionValuesForUpdate(updates, values),
       ReturnValues: 'ALL_NEW',
     })
   );
@@ -2476,7 +2483,7 @@ async function changeTeamSubscription(event, user, room, authz, ctx) {
       TableName: TABLE_NAME,
       Key: { PK: `ROOM#${room.roomId}`, SK: 'META#BILLING' },
       UpdateExpression: `SET ${updates.join(', ')}`,
-      ExpressionAttributeValues: values,
+      ExpressionAttributeValues: expressionValuesForUpdate(updates, values),
       ReturnValues: 'ALL_NEW',
     })
   );

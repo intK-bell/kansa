@@ -742,6 +742,8 @@
       'お部屋作成失敗: {message}': 'Room creation failed: {message}',
       'フリープランではフォルダは2つまでです。有料プランで無制限になります。':
         'The Free plan allows up to 2 folders. Paid plans allow unlimited folders.',
+      '現在の使用量がこのプランの上限を超えているため変更できません。':
+        'You cannot change to this plan because current usage exceeds its limit.',
       'フォルダ：{title} を作成しました。': 'Folder "{title}" was created.',
       'Stripe決済URLが取得できませんでした。': 'Could not get the Stripe checkout URL.',
       プラン変更: 'Plan change',
@@ -1498,6 +1500,8 @@
       'お部屋：{roomName} が作成されました。': '房间“{roomName}”已创建。',
       '同じ部屋名は作成できません。別の部屋名にしてください。': '无法创建相同房间名。请使用其他名称。',
       'お部屋作成失敗: {message}': '创建房间失败：{message}',
+      '現在の使用量がこのプランの上限を超えているため変更できません。':
+        '当前使用量超过此计划上限，因此无法更改。',
       'フォルダ：{title} を作成しました。': '文件夹“{title}”已创建。',
       'Stripe決済URLが取得できませんでした。': '无法获取 Stripe 支付 URL。',
       プラン変更: '更改计划',
@@ -2307,6 +2311,8 @@
       'お部屋：{roomName} が作成されました。': 'Đã tạo phòng "{roomName}".',
       '同じ部屋名は作成できません。別の部屋名にしてください。': 'Không thể tạo tên phòng trùng. Hãy chọn tên khác.',
       'お部屋作成失敗: {message}': 'Tạo phòng thất bại: {message}',
+      '現在の使用量がこのプランの上限を超えているため変更できません。':
+        'Không thể đổi sang gói này vì dung lượng hiện tại vượt quá giới hạn.',
       'フォルダ：{title} を作成しました。': 'Đã tạo thư mục "{title}".',
       'Stripe決済URLが取得できませんでした。': 'Không lấy được URL thanh toán Stripe.',
       プラン変更: 'Đổi gói',

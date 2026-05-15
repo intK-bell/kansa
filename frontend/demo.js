@@ -1114,6 +1114,8 @@ function syncSubscriptionPlanButtons() {
   const mode = String(state.billing?.billingMode || 'prepaid').toLowerCase();
   const currentPlan = String(state.billing?.subscription?.currentPlan || 'FREE').toUpperCase();
   const isFreeCurrent = mode !== 'subscription' || currentPlan === 'FREE';
+  const usageBytes = Number(state.billing?.usageBytes || 0);
+  const currentRank = subscriptionPlanRank(currentPlan);
   if (els.subscribeFreeBtn) {
     els.subscribeFreeBtn.textContent = isFreeCurrent ? 'フリープランに戻る（現在のプラン）' : 'フリープランに戻る';
     els.subscribeFreeBtn.disabled = isFreeCurrent;
@@ -1127,9 +1129,12 @@ function syncSubscriptionPlanButtons() {
   planButtons.forEach(({ plan, button, label }) => {
     if (!button) return;
     const isCurrent = mode === 'subscription' && currentPlan === plan;
+    const isDowngrade = mode === 'subscription' && subscriptionPlanRank(plan) < currentRank;
+    const isOverTargetLimit = isDowngrade && usageBytes > subscriptionPlanLimitBytes(plan);
     button.textContent = isCurrent ? `${label}（現在のプラン）` : label;
-    button.disabled = isCurrent;
+    button.disabled = isCurrent || isOverTargetLimit;
     button.setAttribute('aria-pressed', isCurrent ? 'true' : 'false');
+    button.title = isOverTargetLimit ? '現在の使用量がこのプランの上限を超えているため変更できません。' : '';
   });
 }
 
@@ -1532,6 +1537,15 @@ function subscriptionPlanRank(plan) {
   if (v === 'PLUS') return 2;
   if (v === 'PRO') return 3;
   return 0;
+}
+
+function subscriptionPlanLimitBytes(plan) {
+  const gib = 1024 * 1024 * 1024;
+  const v = String(plan || '').trim().toUpperCase();
+  if (v === 'BASIC') return gib;
+  if (v === 'PLUS') return 5 * gib;
+  if (v === 'PRO') return 10 * gib;
+  return 512 * 1024 * 1024;
 }
 
 function subscriptionPlanChangeConfirmText(currentPlan, targetPlan, action) {
