@@ -2751,13 +2751,13 @@ async function uploadFiles() {
   }
 
   setUploadLoading(true);
+  let activeDraft = null;
   try {
     const totalFiles = drafts.length;
     let uploadedCount = 0;
     let duplicateCount = 0;
     const uploadedDraftIds = [];
     const targetQuestId = state.uploadTargetQuestId || null;
-    let activeDraft = null;
 
     const resizeToJpeg = async (file, maxLongSide = 2048, quality = 0.82) => {
       // Best-effort client-side resize; if anything fails, fall back to original.
