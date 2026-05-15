@@ -1701,9 +1701,9 @@ function subscriptionPlanChangeConfirmText(currentPlan, targetPlan, action) {
     ].join('\n');
   }
   return [
-    tf('{currentPlan}から{targetPlan}への変更を予約してよかですか？', { currentPlan: currentLabel, targetPlan: targetLabel }),
+    tf('{currentPlan}から{targetPlan}へ変更してよかですか？', { currentPlan: currentLabel, targetPlan: targetLabel }),
     '',
-    t('次回請求期間から反映されます。'),
+    t('今すぐ反映されます。'),
   ].join('\n');
 }
 
@@ -3855,7 +3855,7 @@ async function changeSubscriptionPlan(targetPlan) {
   if (action === 'upgrade') {
     window.alert(tf('{plan}へ変更しました。差額はStripeで即時請求されます。', { plan: label }));
   } else {
-    window.alert(tf('{plan}への変更を予約しました。次回請求期間から反映されます。', { plan: label }));
+    window.alert(tf('{plan}へ変更しました。', { plan: label }));
   }
 }
 

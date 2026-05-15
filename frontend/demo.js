@@ -1557,7 +1557,7 @@ function subscriptionPlanChangeConfirmText(currentPlan, targetPlan, action) {
   if (action === 'upgrade') {
     return [`${currentLabel}から${targetLabel}へ変更してよかですか？`, '', '差額はStripeで即時請求されます。'].join('\n');
   }
-  return [`${currentLabel}から${targetLabel}への変更を予約してよかですか？`, '', '次回請求期間から反映されます。'].join('\n');
+  return [`${currentLabel}から${targetLabel}へ変更してよかですか？`, '', '今すぐ反映されます。'].join('\n');
 }
 
 function clearPurchaseParamsFromUrl() {
@@ -3682,7 +3682,7 @@ async function changeSubscriptionPlan(targetPlan) {
   if (action === 'upgrade') {
     window.alert(`${label}へ変更しました。差額はStripeで即時請求されます。`);
   } else {
-    window.alert(`${label}への変更を予約しました。次回請求期間から反映されます。`);
+    window.alert(`${label}へ変更しました。`);
   }
 }
 

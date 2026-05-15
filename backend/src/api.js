@@ -2352,16 +2352,18 @@ async function changeTeamSubscription(event, user, room, authz, ctx) {
   } else if (action === 'downgrade') {
     if (!targetPlan) return badRequest('targetPlan is required for downgrade');
     if (planRank(targetPlan) >= planRank(currentPlan)) return badRequest('targetPlan must be lower than currentPlan');
+    const targetPriceId = subscriptionPriceIdForPlan(targetPlan);
+    if (!targetPriceId) return json(500, { message: `stripe price not configured for plan ${targetPlan}` });
     const targetLimit = subscriptionPlanLimitBytes(targetPlan);
     if (targetLimit !== null && usageBytes > targetLimit) {
       return badRequest(
-        `current usage (${usageBytes} bytes) exceeds target plan limit (${targetLimit} bytes); cannot schedule downgrade`
+        `current usage (${usageBytes} bytes) exceeds target plan limit (${targetLimit} bytes); cannot downgrade`
       );
     }
-    updates.push('billingMode = :ms', 'nextBillingAt = :nb', 'pendingPlan = :pp', 'cancelAtPeriodEnd = :f');
+    updates.push('billingMode = :ms', 'nextBillingAt = :nb', 'currentPlan = :cp', 'pendingPlan = :null', 'cancelAtPeriodEnd = :f');
     values[':ms'] = BILLING_MODE_SUBSCRIPTION;
     values[':nb'] = nextBillingAt;
-    values[':pp'] = targetPlan;
+    values[':cp'] = targetPlan;
   } else if (action === 'cancel') {
     if (currentMode !== BILLING_MODE_SUBSCRIPTION) return badRequest('cancel is available only in subscription mode');
     updates.push('billingMode = :ms', 'nextBillingAt = :nb', 'cancelAtPeriodEnd = :t');
@@ -2415,7 +2417,7 @@ async function changeTeamSubscription(event, user, room, authz, ctx) {
 
   const secretKey = process.env.STRIPE_SECRET_KEY || '';
   const stripeSubId = String(authz.billing?.stripeSubscriptionId || '').trim();
-  const needsImmediateStripe = action === 'upgrade' || action === 'cancel' || action === 'resume' || action === 'free';
+  const needsImmediateStripe = action === 'upgrade' || action === 'downgrade' || action === 'cancel' || action === 'resume' || action === 'free';
   if (needsImmediateStripe && (!secretKey || !stripeSubId)) {
     auditLog({
       requestId: ctx?.requestId || null,
@@ -2437,9 +2439,10 @@ async function changeTeamSubscription(event, user, room, authz, ctx) {
   }
   try {
     if (secretKey && stripeSubId) {
-      if (action === 'upgrade') {
+      if (action === 'upgrade' || action === 'downgrade') {
         const targetPriceId = subscriptionPriceIdForPlan(targetPlan);
-        const stripeSub = await stripeUpdateSubscriptionPlan(secretKey, stripeSubId, targetPriceId, 'always_invoice');
+        const prorationBehavior = action === 'upgrade' ? 'always_invoice' : 'none';
+        const stripeSub = await stripeUpdateSubscriptionPlan(secretKey, stripeSubId, targetPriceId, prorationBehavior);
         const itemId = stripeSub?.items?.data?.[0]?.id || null;
         const stripePlan = planCodeFromSubscriptionPriceId(stripeSub?.items?.data?.[0]?.price?.id) || targetPlan;
         values[':cp'] = stripePlan;
