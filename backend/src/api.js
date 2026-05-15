@@ -75,6 +75,13 @@ const PDF_FONT_PATH = path.resolve(__dirname, 'fonts', 'NotoSansCJKjp-Regular.ot
 const PDF_PAGE_WIDTH = 960;
 const PDF_PAGE_HEIGHT = 540;
 const PPT_TO_PDF_SCALE = 72;
+const MAX_ORIGINAL_UPLOAD_BYTES = 25 * 1024 * 1024;
+const MAX_PREVIEW_UPLOAD_BYTES = 8 * 1024 * 1024;
+const UPLOAD_SESSION_TTL_SECONDS = 15 * 60;
+const ALLOWED_UPLOAD_CONTENT_TYPES = new Map([
+  ['image/jpeg', 'jpg'],
+  ['image/png', 'png'],
+]);
 let cachedPdfFontBytes = null;
 let cachedWatermarkBytes = null;
 
@@ -398,6 +405,56 @@ function isConditionalCheckFailed(error) {
 
 function photoHashKey(folderId, contentSha256) {
   return { PK: `FOLDER#${folderId}`, SK: `PHOTOHASH#${contentSha256}` };
+}
+
+function uploadSessionKey(photoId) {
+  return { PK: `UPLOAD#${photoId}`, SK: 'META' };
+}
+
+function normalizeUploadContentType(value) {
+  const type = String(value || '')
+    .split(';')[0]
+    .trim()
+    .toLowerCase();
+  if (type === 'image/jpg') return 'image/jpeg';
+  return type;
+}
+
+function uploadExtensionForContentType(contentType) {
+  return ALLOWED_UPLOAD_CONTENT_TYPES.get(normalizeUploadContentType(contentType)) || null;
+}
+
+function validateUploadContentType(contentType) {
+  const normalized = normalizeUploadContentType(contentType || 'image/jpeg');
+  const extension = uploadExtensionForContentType(normalized);
+  if (!extension) return { ok: false, response: badRequest('unsupported image content type') };
+  return { ok: true, contentType: normalized, extension };
+}
+
+function normalizeUploadSize(value) {
+  const size = Number(value || 0);
+  if (!Number.isFinite(size) || size <= 0) return 0;
+  return Math.floor(size);
+}
+
+function validateUploadSize(size, maxBytes, label) {
+  const normalized = normalizeUploadSize(size);
+  if (normalized > maxBytes) {
+    return { ok: false, response: badRequest(`${label} is too large`) };
+  }
+  return { ok: true, size: normalized };
+}
+
+function expectedUploadKeys(folderId, photoId, extension) {
+  return {
+    originalS3Key: `${folderId}/${photoId}.orig.${extension}`,
+    previewS3Key: `${folderId}/${photoId}.preview.jpg`,
+  };
+}
+
+function isUploadSessionExpired(item, nowEpoch = Math.floor(Date.now() / 1000)) {
+  const expiresAt = Number(item?.expiresAtEpoch || item?.ttl || 0);
+  return !Number.isFinite(expiresAt) || expiresAt <= nowEpoch;
 }
 
 function normalizeQuestStatus(value) {
@@ -756,6 +813,15 @@ async function tryDeletePhotoHashMapping(folderId, contentSha256) {
     );
   } catch (_) {
     // Keep delete/purge resilient even if mapping cleanup fails.
+  }
+}
+
+async function tryDeleteUploadSession(photoId) {
+  if (!photoId) return;
+  try {
+    await ddb.send(new DeleteCommand({ TableName: TABLE_NAME, Key: uploadSessionKey(photoId) }));
+  } catch (_) {
+    // Upload session cleanup is best-effort; TTL also removes stale items.
   }
 }
 
@@ -3834,11 +3900,16 @@ async function createUploadUrl(event, folderId, body, user, room, authz) {
     });
   }
 
-  const contentType = body.contentType || 'image/jpeg';
-  const extension = (body.fileName || 'image.jpg').split('.').pop();
+  const typeCheck = validateUploadContentType(body.contentType || 'image/jpeg');
+  if (!typeCheck.ok) return typeCheck.response;
+  const sizeCheck = validateUploadSize(body.size || body.fileSize, MAX_ORIGINAL_UPLOAD_BYTES, 'file');
+  if (!sizeCheck.ok) return sizeCheck.response;
+  const contentType = typeCheck.contentType;
+  const extension = typeCheck.extension;
   const photoId = randomUUID();
-  const originalKey = `${folderId}/${photoId}.orig.${extension}`;
-  const previewKey = `${folderId}/${photoId}.preview.jpg`;
+  const { originalS3Key: originalKey, previewS3Key: previewKey } = expectedUploadKeys(folderId, photoId, extension);
+  const nowEpoch = Math.floor(Date.now() / 1000);
+  const expiresAtEpoch = nowEpoch + UPLOAD_SESSION_TTL_SECONDS;
 
   const originalCmd = new PutObjectCommand({
     Bucket: PHOTO_BUCKET,
@@ -3850,6 +3921,31 @@ async function createUploadUrl(event, folderId, body, user, room, authz) {
     Key: previewKey,
     ContentType: 'image/jpeg',
   });
+
+  await ddb.send(
+    new PutCommand({
+      TableName: TABLE_NAME,
+      Item: {
+        ...uploadSessionKey(photoId),
+        type: 'photo_upload_session',
+        photoId,
+        folderId,
+        roomName: room.roomName,
+        createdBy: user.userKey,
+        originalS3Key: originalKey,
+        previewS3Key: previewKey,
+        originalContentType: contentType,
+        originalExtension: extension,
+        declaredOriginalBytes: sizeCheck.size || null,
+        maxOriginalBytes: MAX_ORIGINAL_UPLOAD_BYTES,
+        maxPreviewBytes: MAX_PREVIEW_UPLOAD_BYTES,
+        createdAt: new Date().toISOString(),
+        expiresAtEpoch,
+        ttl: expiresAtEpoch,
+      },
+      ConditionExpression: 'attribute_not_exists(PK) and attribute_not_exists(SK)',
+    })
+  );
 
   const originalUploadUrl = await getSignedUrl(s3, originalCmd, { expiresIn: 300 });
   const previewUploadUrl = await getSignedUrl(s3, previewCmd, { expiresIn: 300 });
@@ -3866,10 +3962,11 @@ async function createUploadUrl(event, folderId, body, user, room, authz) {
 }
 
 async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
-  const originalS3Key = body.originalS3Key || body.s3Key || null;
-  const previewS3Key = body.previewS3Key || null;
+  const photoId = String(body.photoId || '').trim();
+  const originalS3Key = String(body.originalS3Key || body.s3Key || '').trim();
+  const previewS3Key = body.previewS3Key ? String(body.previewS3Key || '').trim() : null;
   const questId = String(body.questId || '').trim();
-  if (!body.photoId || !originalS3Key) return badRequest('photoId and originalS3Key are required');
+  if (!photoId || !originalS3Key) return badRequest('photoId and originalS3Key are required');
   const fileName = String(body.fileName || '').trim();
   const initialComment = String(body.initialComment || '').trim();
   if (!fileName) return badRequest('fileName is required');
@@ -3908,22 +4005,57 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
     });
   }
 
+  const uploadSessionRes = await ddb.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: uploadSessionKey(photoId),
+      ConsistentRead: true,
+    })
+  );
+  const uploadSession = uploadSessionRes.Item || null;
+  if (!uploadSession) return badRequest('upload session not found');
+  if (isUploadSessionExpired(uploadSession)) return badRequest('upload session expired');
+  if (
+    uploadSession.folderId !== folderId ||
+    !isRoomMatch(uploadSession.roomName, room.roomName) ||
+    uploadSession.createdBy !== user.userKey
+  ) {
+    return json(403, { message: 'forbidden' });
+  }
+  if (uploadSession.originalS3Key !== originalS3Key) return badRequest('originalS3Key does not match issued upload');
+  if (previewS3Key && uploadSession.previewS3Key !== previewS3Key) {
+    return badRequest('previewS3Key does not match issued upload');
+  }
+
   // Count original + derived objects (e.g., preview/thumbnail) toward usage.
   let originalBytes = 0;
   let previewBytes = 0;
+  let originalHead = null;
   try {
-    const head = await s3.send(new HeadObjectCommand({ Bucket: PHOTO_BUCKET, Key: originalS3Key }));
-    originalBytes = Number(head.ContentLength || 0);
+    originalHead = await s3.send(new HeadObjectCommand({ Bucket: PHOTO_BUCKET, Key: originalS3Key }));
   } catch (_) {
     return badRequest('original object not found (upload may not be completed)');
   }
+  originalBytes = Number(originalHead.ContentLength || 0);
+  const actualContentType = normalizeUploadContentType(originalHead.ContentType || uploadSession.originalContentType || '');
+  if (actualContentType !== uploadSession.originalContentType) {
+    return badRequest('original object content type does not match issued upload');
+  }
+  if (originalBytes <= 0 || originalBytes > Number(uploadSession.maxOriginalBytes || MAX_ORIGINAL_UPLOAD_BYTES)) {
+    return badRequest('original object size is invalid');
+  }
   if (previewS3Key) {
+    let previewHead = null;
     try {
-      const head = await s3.send(new HeadObjectCommand({ Bucket: PHOTO_BUCKET, Key: previewS3Key }));
-      previewBytes = Number(head.ContentLength || 0);
+      previewHead = await s3.send(new HeadObjectCommand({ Bucket: PHOTO_BUCKET, Key: previewS3Key }));
     } catch (_) {
-      // Preview is optional; tolerate missing for backward compatibility.
-      previewBytes = 0;
+      return badRequest('preview object not found (upload may not be completed)');
+    }
+    previewBytes = Number(previewHead.ContentLength || 0);
+    const previewType = normalizeUploadContentType(previewHead.ContentType || 'image/jpeg');
+    if (previewType !== 'image/jpeg') return badRequest('preview object content type is invalid');
+    if (previewBytes <= 0 || previewBytes > Number(uploadSession.maxPreviewBytes || MAX_PREVIEW_UPLOAD_BYTES)) {
+      return badRequest('preview object size is invalid');
     }
   }
   const totalBytes = originalBytes + previewBytes;
@@ -3940,7 +4072,7 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
     type: 'photo_hash',
     folderId,
     roomName: room.roomName,
-    photoId: body.photoId,
+    photoId,
     originalS3Key,
     createdAt: now,
   };
@@ -3955,6 +4087,7 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
   } catch (error) {
     if (isConditionalCheckFailed(error)) {
       await tryDeleteUploadedObjects(originalS3Key, previewS3Key);
+      await tryDeleteUploadSession(photoId);
       return json(409, { message: 'duplicate photo already exists in this folder' });
     }
     throw error;
@@ -3964,10 +4097,10 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
   const photoCode = await nextPhotoCode(folderId, folderCode);
 
   const item = {
-    PK: `PHOTO#${body.photoId}`,
+    PK: `PHOTO#${photoId}`,
     SK: 'META',
     type: 'photo',
-    photoId: body.photoId,
+    photoId,
     folderId,
     folderCode,
     roomName: room.roomName,
@@ -3984,7 +4117,7 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
     createdByName: user.userName,
     createdAt: now,
     GSI1PK: `FOLDER#${folderId}`,
-    GSI1SK: `PHOTO#${now}#${body.photoId}`,
+    GSI1SK: `PHOTO#${now}#${photoId}`,
   };
   if (initialComment) {
     item.latestCommentAt = now;
@@ -4018,17 +4151,17 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
       new PutCommand({
         TableName: TABLE_NAME,
         Item: {
-          PK: `PHOTO#${body.photoId}`,
+          PK: `PHOTO#${photoId}`,
           SK: `COMMENT#${now}#${commentId}`,
           type: 'comment',
-          photoId: body.photoId,
+          photoId,
           commentId,
           roomName: room.roomName,
           text: initialComment,
           createdBy: user.userKey,
           createdByName: user.userName,
           createdAt: now,
-          GSI1PK: `PHOTO#${body.photoId}`,
+          GSI1PK: `PHOTO#${photoId}`,
           GSI1SK: `COMMENT#${now}#${commentId}`,
         },
       })
@@ -4050,20 +4183,21 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
         ExpressionAttributeValues: {
           ':status': nextStatus,
           ':u': now,
-          ':photoId': body.photoId,
+          ':photoId': photoId,
           ':zero': 0,
           ':one': 1,
         },
       })
     );
   }
+  await tryDeleteUploadSession(photoId);
   auditLog({
     requestId: ctx.requestId,
     action: 'photo.create',
     actor: user.userKey,
     actorName: user.userName,
     folderId,
-    photoId: body.photoId,
+    photoId,
     photoCode,
     roomName: room.roomName,
     bytes: totalBytes,
@@ -4075,7 +4209,7 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
       action: 'comment.create',
       actor: user.userKey,
       actorName: user.userName,
-      photoId: body.photoId,
+      photoId,
       commentId,
       result: 'success',
     });

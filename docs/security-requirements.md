@@ -187,8 +187,8 @@
 
 #### 優先度A
 
-- `finalizePhoto` で `originalS3Key`, `previewS3Key`, `photoId` の対応関係をサーバー側で検証する
-- アップロード URL 発行時に、許可 MIME タイプ、拡張子、ファイルサイズ上限をサーバー側で強制する
+- `[対応済み 2026-05-15]` `finalizePhoto` で `originalS3Key`, `previewS3Key`, `photoId` の対応関係をサーバー側で検証する
+- `[対応済み 2026-05-15]` アップロード URL 発行時に、許可 MIME タイプ、拡張子、ファイルサイズ上限をサーバー側で強制する
 - 監査ログに招待トークンの生値を出さず、ハッシュまたは末尾数文字だけを記録する
 
 #### 優先度B
@@ -201,6 +201,14 @@
 
 - S3 アクセスログ、マルウェアスキャン、WAF レート制限を運用要件として具体化する
 - Stripe API 障害時の再試行、手動復旧、課金状態の突合手順を `docs/production-ops.md` に追記する
+
+### 対応記録（2026-05-15）
+
+- `createUploadUrl` で JPEG/PNG のみを許可し、元画像 25MB 上限、プレビュー 8MB 上限を定義した
+- アップロード URL 発行時に `photo_upload_session` を DynamoDB へ 15 分 TTL 付きで保存し、発行済み `photoId` と期待 S3 キーを記録するようにした
+- `finalizePhoto` で `photoId`, `folderId`, `roomName`, `createdBy`, `originalS3Key`, `previewS3Key` を発行記録と照合するようにした
+- `finalizePhoto` で S3 `HeadObject` の Content-Type と Content-Length を再確認し、MIME 不一致、0 bytes、サイズ超過を拒否するようにした
+- `AuditTable` に `ttl` の `TimeToLiveSpecification` を明示し、招待・アップロード発行記録の期限切れ掃除を有効化した
 
 ### 優先度A
 

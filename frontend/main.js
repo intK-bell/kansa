@@ -2765,7 +2765,7 @@ async function uploadFiles() {
         const up = await api(`/folders/${folderId}/photos/upload-url`, {
           method: 'POST',
           headers: { ...folderPasswordHeader(folderId) },
-          body: JSON.stringify({ fileName: file.name, contentType: file.type || 'image/jpeg' }),
+          body: JSON.stringify({ fileName: file.name, contentType: file.type || 'image/jpeg', size: file.size || 0 }),
         });
 
         let putRes;
