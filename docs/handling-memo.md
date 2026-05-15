@@ -12,7 +12,8 @@ cd /Users/aokikensaku/Documents/Devapps/kansa
 
 ### 確認
 aws cloudformation describe-stacks \
-  --stack-name kansa-backend \
+  --stack-nam
+  e kansa-backend \
   --region ap-northeast-1 \
   --query 'Stacks[0].StackStatus' \
   --output text
