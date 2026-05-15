@@ -1059,6 +1059,36 @@ function parseApiErrorBody(error) {
   }
 }
 
+function uploadErrorMessage(error, fileName = '') {
+  const body = parseApiErrorBody(error);
+  const message = String(body?.message || asMessage(error) || '');
+  const prefix = fileName ? `${fileName}: ` : '';
+  if (message.includes('duplicate photo already exists')) {
+    return `${prefix}${t('同じ写真は同じフォルダにアップロードできません（重複を検知しました）。')}`;
+  }
+  if (
+    message.includes('file is too large') ||
+    message.includes('original object size is invalid') ||
+    message.includes('preview object size is invalid')
+  ) {
+    return `${prefix}${t('画像サイズが上限を超えています。25MB以下の画像を選んでください。')}`;
+  }
+  if (
+    message.includes('unsupported image content type') ||
+    message.includes('content type') ||
+    message.includes('preview object')
+  ) {
+    return `${prefix}${t('JPEGまたはPNGの画像を選んでください。')}`;
+  }
+  if (message.includes('upload session')) {
+    return `${prefix}${t('アップロードの有効期限が切れました。もう一度アップロードしてください。')}`;
+  }
+  if (message.includes('storage credits depleted') || (error && error.status === 402)) {
+    return `${prefix}${t('アップロード停止中です（残量不足）。管理者が容量チケットを追加するか、写真を削除してください。')}`;
+  }
+  return `${prefix}${tf('写真アップロード失敗: {message}', { message })}`;
+}
+
 function currentFolderLimit() {
   const mode = String(state.billing?.billingMode || 'prepaid').toLowerCase();
   const currentPlan = String(state.billing?.subscription?.currentPlan || 'FREE').toUpperCase();
@@ -1417,6 +1447,11 @@ function clearUploadDrafts() {
   renderUploadDrafts();
 }
 
+function setUploadMetaStatus(message) {
+  if (!els.uploadMetaStatus) return;
+  els.uploadMetaStatus.textContent = message || '';
+}
+
 function rebuildUploadDrafts(files, questId = null) {
   revokeAllUploadDraftPreviews();
   state.uploadTargetQuestId = questId || null;
@@ -1428,6 +1463,17 @@ function rebuildUploadDrafts(files, questId = null) {
     initialComment: '',
     previewUrl: URL.createObjectURL(file),
   }));
+  renderUploadDrafts();
+}
+
+function removeUploadedDrafts(uploadedDraftIds) {
+  const ids = new Set(uploadedDraftIds || []);
+  if (!ids.size) return;
+  state.uploadDrafts.forEach((draft) => {
+    if (ids.has(draft.localId)) revokeUploadDraftPreview(draft);
+  });
+  state.uploadDrafts = state.uploadDrafts.filter((draft) => !ids.has(draft.localId));
+  if (!state.uploadDrafts.length) state.uploadTargetQuestId = null;
   renderUploadDrafts();
 }
 
@@ -2700,7 +2746,8 @@ async function uploadFiles() {
   if (!drafts.length) return;
   const validationErrors = validateUploadDrafts();
   if (validationErrors.length) {
-    throw new Error(validationErrors[0]);
+    setUploadMetaStatus(validationErrors[0]);
+    return;
   }
 
   setUploadLoading(true);
@@ -2708,7 +2755,9 @@ async function uploadFiles() {
     const totalFiles = drafts.length;
     let uploadedCount = 0;
     let duplicateCount = 0;
+    const uploadedDraftIds = [];
     const targetQuestId = state.uploadTargetQuestId || null;
+    let activeDraft = null;
 
     const resizeToJpeg = async (file, maxLongSide = 2048, quality = 0.82) => {
       // Best-effort client-side resize; if anything fails, fall back to original.
@@ -2759,6 +2808,7 @@ async function uploadFiles() {
     };
 
     for (const draft of drafts) {
+      activeDraft = draft;
       const file = draft.file;
       try {
         const folderId = state.selectedFolder.folderId;
@@ -2812,6 +2862,7 @@ async function uploadFiles() {
           }),
         });
         uploadedCount += 1;
+        uploadedDraftIds.push(draft.localId);
       } catch (error) {
         const message = asMessage(error);
         if (message.includes('APIエラー(409)')) {
@@ -2822,12 +2873,16 @@ async function uploadFiles() {
       }
     }
 
-    clearUploadDrafts();
     if (uploadedCount > 0) {
+      if (duplicateCount > 0) {
+        removeUploadedDrafts(uploadedDraftIds);
+      } else {
+        clearUploadDrafts();
+      }
       await loadFolderContent();
       await scrollToActiveList();
       if (duplicateCount > 0) {
-        showToast(tf('{uploaded}/{total}件アップロード完了。{duplicate}件は重複のためスキップしました。', {
+        setUploadMetaStatus(tf('{uploaded}/{total}件アップロード完了。{duplicate}件は重複のためスキップしました。', {
           uploaded: uploadedCount,
           total: totalFiles,
           duplicate: duplicateCount,
@@ -2838,24 +2893,24 @@ async function uploadFiles() {
     }
     if (duplicateCount > 0) {
       if (totalFiles === 1) {
-        showError(t('同じ写真は同じフォルダにアップロードできません（重複を検知しました）。'));
+        setUploadMetaStatus(t('同じ写真は同じフォルダにアップロードできません（重複を検知しました）。'));
         return;
       }
       if (duplicateCount === totalFiles) {
-        showError(t('すべて重複なのでアップロードができません。'));
+        setUploadMetaStatus(t('すべて重複なのでアップロードができません。'));
         return;
       }
-      if (uploadedCount === 0) showToast(tf('{duplicate}件は重複のためスキップしました。', { duplicate: duplicateCount }));
+      if (uploadedCount === 0) {
+        setUploadMetaStatus(tf('{duplicate}件は重複のためスキップしました。', { duplicate: duplicateCount }));
+      }
     }
   } catch (error) {
-    const message = asMessage(error);
-    if (message.includes('APIエラー(402)')) {
+    if (error && error.status === 402) {
       await loadTeamMe();
       if (els.uploadBtn) els.uploadBtn.disabled = Boolean(state.uploadBlocked);
-      showError(t('アップロード停止中です（残量不足）。管理者が容量チケットを追加するか、写真を削除してください。'));
-      return;
     }
-    throw error;
+    setUploadMetaStatus(uploadErrorMessage(error, activeDraft?.originalName || ''));
+    console.error(error);
   } finally {
     setUploadLoading(false);
   }

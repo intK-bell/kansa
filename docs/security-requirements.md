@@ -209,6 +209,7 @@
 - `finalizePhoto` で `photoId`, `folderId`, `roomName`, `createdBy`, `originalS3Key`, `previewS3Key` を発行記録と照合するようにした
 - `finalizePhoto` で S3 `HeadObject` の Content-Type と Content-Length を再確認し、MIME 不一致、0 bytes、サイズ超過を拒否するようにした
 - `AuditTable` に `ttl` の `TimeToLiveSpecification` を明示し、招待・アップロード発行記録の期限切れ掃除を有効化した
+- アップロード時のサイズ超過、MIME 不一致、重複検出は、グローバルエラーではなくアップロード欄の `upload-meta-status` にユーザー向け文言で表示するようにした
 
 ### 優先度A
 

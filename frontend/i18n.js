@@ -703,6 +703,11 @@
       '同じ写真は同じフォルダにアップロードできません（重複を検知しました）。':
         'The same photo cannot be uploaded to the same folder. Duplicate detected.',
       'すべて重複なのでアップロードができません。': 'All photos are duplicates, so upload cannot continue.',
+      '画像サイズが上限を超えています。25MB以下の画像を選んでください。':
+        'The image is too large. Choose an image up to 25MB.',
+      'JPEGまたはPNGの画像を選んでください。': 'Choose a JPEG or PNG image.',
+      'アップロードの有効期限が切れました。もう一度アップロードしてください。':
+        'The upload session expired. Upload the image again.',
       'アップロード停止中です（残量不足）。管理者が容量チケットを追加するか、写真を削除してください。':
         'Uploads are paused due to low storage. Ask an admin to add capacity or delete photos.',
       '表示中の写真はなかです。30日を過ぎた写真はアーカイブされとるばい。':
@@ -1473,6 +1478,9 @@
       'リサイズ画像アップロード失敗({status})': '缩放图片上传失败（{status}）',
       '同じ写真は同じフォルダにアップロードできません（重複を検知しました）。': '同一照片不能上传到同一文件夹（检测到重复）。',
       'すべて重複なのでアップロードができません。': '全部都是重复照片，无法上传。',
+      '画像サイズが上限を超えています。25MB以下の画像を選んでください。': '图片大小超过上限。请选择 25MB 以下的图片。',
+      'JPEGまたはPNGの画像を選んでください。': '请选择 JPEG 或 PNG 图片。',
+      'アップロードの有効期限が切れました。もう一度アップロードしてください。': '上传已过期。请重新上传。',
       'アップロード停止中です（残量不足）。管理者が容量チケットを追加するか、写真を削除してください。':
         '因容量不足，上传已暂停。请让管理员增加容量或删除照片。',
       '表示中の写真はなかです。30日を過ぎた写真はアーカイブされとるばい。':
@@ -2286,6 +2294,11 @@
       '同じ写真は同じフォルダにアップロードできません（重複を検知しました）。':
         'Không thể tải cùng một ảnh vào cùng thư mục (đã phát hiện trùng).',
       'すべて重複なのでアップロードができません。': 'Tất cả đều trùng nên không thể tải lên.',
+      '画像サイズが上限を超えています。25MB以下の画像を選んでください。':
+        'Ảnh vượt quá giới hạn. Hãy chọn ảnh không quá 25MB.',
+      'JPEGまたはPNGの画像を選んでください。': 'Hãy chọn ảnh JPEG hoặc PNG.',
+      'アップロードの有効期限が切れました。もう一度アップロードしてください。':
+        'Phiên tải lên đã hết hạn. Hãy tải lên lại.',
       'アップロード停止中です（残量不足）。管理者が容量チケットを追加するか、写真を削除してください。':
         'Đang tạm dừng tải lên do thiếu dung lượng. Quản trị viên cần thêm dung lượng hoặc xóa ảnh.',
       '表示中の写真はなかです。30日を過ぎた写真はアーカイブされとるばい。':
