@@ -8,8 +8,8 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https: http://localhost:5173 http://127.0.0.1:5173; form-action 'self' https:;"
     />
-    <title>フォトスマ</title>
-    <link rel="icon" type="image/png" href="./img/favicon.png" />
+    <title>Cong | Container Log</title>
+    <link rel="icon" type="image/png" href="./img/cong-favicon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -22,7 +22,7 @@
     <main class="container">
       <div class="page-header">
         <div class="brand-logo-mini">
-          <img class="i18n-logo" src="./img/photosma-logo.png" alt="フォトスマ" />
+          <img src="./img/cong-logo.png" alt="Cong Container Log" />
         </div>
         <div class="menu-wrap hidden" id="global-menu-wrap">
           <button id="menu-btn" class="menu-btn" type="button" aria-label="menu">☰</button>
@@ -36,7 +36,7 @@
               </div>
             </details>
             <details class="menu-group" data-menu-group>
-              <summary class="menu-group-summary" data-i18n="フォルダ">フォルダ</summary>
+              <summary class="menu-group-summary">コンテナ番号</summary>
               <div class="menu-group-items">
                 <button id="open-folder-create-btn" type="button" data-i18n="作成">作成</button>
                 <button id="open-folder-password-btn" type="button" class="hidden" data-i18n="パスワード">パスワード</button>
@@ -105,9 +105,9 @@
                 </select>
               </label>
               <label class="app-header-field">
-                <span data-i18n="現在のフォルダ">現在のフォルダ</span>
+                <span>現在のコンテナ番号</span>
                 <select id="current-folder-select">
-                  <option value="" data-i18n="フォルダを選択してください">フォルダを選択してください</option>
+                  <option value="">コンテナ番号を選択してください</option>
                 </select>
               </label>
             </div>
@@ -155,7 +155,7 @@
           </div>
 
           <div class="card admin-card">
-            <h3 data-i18n="フォルダ">フォルダ</h3>
+            <h3>コンテナ番号</h3>
             <div id="folder-admin-list" style="margin-top:10px;"></div>
           </div>
 
@@ -192,6 +192,22 @@
 
         <section id="folder-detail" class="card hidden">
           <h2 id="folder-detail-title"></h2>
+          <div id="log-tag-summary" class="log-tag-summary"></div>
+          <div id="photo-search-panel" class="photo-search-panel">
+            <div class="search-scope-toggle" role="group" aria-label="検索範囲">
+              <button id="search-scope-folder-btn" type="button" class="search-scope-btn is-active">このコンテナ</button>
+              <button id="search-scope-room-btn" type="button" class="search-scope-btn">このお部屋</button>
+            </div>
+            <label class="search-field">
+              <span class="muted">タグ</span>
+              <select id="log-tag-filter"></select>
+            </label>
+            <label class="search-field search-keyword-field">
+              <span class="muted">検索語</span>
+              <input id="photo-search-keyword" type="search" placeholder="コンテナ番号・コメント・投稿者" />
+            </label>
+            <button id="photo-search-btn" type="button">検索</button>
+          </div>
           <p id="photo-archive-note" class="muted" style="margin:6px 0 10px;"></p>
           <div id="photo-mode-panel">
             <div class="row">
@@ -217,7 +233,6 @@
           <div id="photo-upload-meta-slot">
             <div id="upload-meta-card" class="upload-meta-card hidden">
               <div class="upload-meta-actions">
-                <button id="apply-name-sequence-btn" type="button" data-i18n="1つ目の写真名を連番で反映">1つ目の写真名を連番で反映</button>
                 <button id="apply-comment-bulk-btn" type="button" data-i18n="1つ目のコメントを全件に反映">1つ目のコメントを全件に反映</button>
                 <button id="cancel-upload-drafts-btn" type="button" class="danger" data-i18n="キャンセル">キャンセル</button>
                 <button id="upload-btn" data-i18n="アップロード">アップロード</button>
@@ -251,22 +266,22 @@
       </div>
     </div>
 
-    <div id="folder-create-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="フォルダ作成" data-i18n-attr="aria-label:フォルダ作成">
+    <div id="folder-create-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="コンテナ番号登録">
       <div class="modal-card">
         <div class="modal-header">
-          <h3 style="margin:0;" data-i18n="フォルダ作成">フォルダ作成</h3>
+          <h3 style="margin:0;">コンテナ番号登録</h3>
           <button id="folder-create-close-btn" type="button" class="danger" data-i18n="閉じる">閉じる</button>
         </div>
         <div class="row" style="align-items:stretch;">
-          <input id="folder-title" placeholder="〇〇工場_yyyymmdd" data-i18n-attr="placeholder:〇〇工場_yyyymmdd" />
-          <select id="folder-mode" aria-label="フォルダモード" data-i18n-attr="aria-label:フォルダモード">
-            <option value="photo">フォトフォルダ</option>
-            <option value="quest">クエストフォルダ</option>
+          <input id="folder-title" placeholder="TCLU1234567" />
+          <select id="folder-mode" aria-label="記録モード">
+            <option value="photo">通常記録</option>
+            <option value="quest">クエスト記録</option>
           </select>
-          <input id="folder-password" placeholder="フォルダパスワード（任意）" type="password" data-i18n-attr="placeholder:フォルダパスワード（任意）" />
+          <input id="folder-password" placeholder="コンテナ番号パスワード（任意）" type="password" />
           <button id="create-folder-btn" data-i18n="作成">作成</button>
         </div>
-        <p id="folder-title-error" class="form-field-error hidden" aria-live="polite" data-i18n="フォルダ名を入力してください。">フォルダ名を入力してください。</p>
+        <p id="folder-title-error" class="form-field-error hidden" aria-live="polite">コンテナ番号を入力してください。</p>
       </div>
     </div>
 
@@ -297,19 +312,19 @@
       </div>
     </div>
 
-    <div id="folder-password-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="フォルダパスワード" data-i18n-attr="aria-label:フォルダパスワード">
+    <div id="folder-password-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="コンテナ番号パスワード">
       <div class="modal-card">
         <div class="modal-header">
-          <h3 style="margin:0;" data-i18n="フォルダパスワード">フォルダパスワード</h3>
+          <h3 style="margin:0;">コンテナ番号パスワード</h3>
           <button id="folder-password-close-btn" type="button" class="danger" data-i18n="閉じる">閉じる</button>
         </div>
         <p class="folder-password-target" aria-live="polite">
-          <span data-i18n="対象フォルダ">対象フォルダ</span>
+          <span>対象コンテナ番号</span>
           <strong id="folder-password-target-name">-</strong>
         </p>
-        <p class="muted" style="margin:8px 0 10px;" data-i18n="現在のフォルダに設定します。空で保存すると解除されます。">現在のフォルダに設定します。空で保存すると解除されます。</p>
+        <p class="muted" style="margin:8px 0 10px;">現在のコンテナ番号に設定します。空で保存すると解除されます。</p>
         <div class="row" style="align-items:stretch;">
-          <input id="folder-password-set" placeholder="フォルダパスワード（空で解除）" type="password" data-i18n-attr="placeholder:フォルダパスワード（空で解除）" />
+          <input id="folder-password-set" placeholder="コンテナ番号パスワード（空で解除）" type="password" />
           <button id="set-folder-password-btn" type="button" class="hidden" data-i18n="鍵を設定/解除">鍵を設定/解除</button>
         </div>
       </div>
@@ -326,7 +341,7 @@
           <ol class="help-list">
             <li data-i18n="新規登録後、ログイン（初回は表示名を設定）">新規登録後、ログイン（初回は表示名を設定）</li>
             <li data-i18n="ログイン後、お部屋を作成">ログイン後、お部屋を作成</li>
-            <li data-i18n="フォルダ作成 → 写真アップロード → コメント追加 → 出力">フォルダ作成 → 写真アップロード → コメント追加 → 出力</li>
+            <li>コンテナ番号登録 → 写真アップロード → コメント追加 → 出力</li>
           </ol>
           <p><strong data-i18n="マニュアル：">マニュアル：</strong><a class="help-link" href="./manuals/kansa-manual.html" target="_blank" rel="noopener noreferrer" data-i18n="こちら">こちら</a></p>
 

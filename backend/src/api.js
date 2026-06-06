@@ -82,6 +82,15 @@ const ALLOWED_UPLOAD_CONTENT_TYPES = new Map([
   ['image/jpeg', 'jpg'],
   ['image/png', 'png'],
 ]);
+const LOG_TAGS = {
+  container_number: { label: 'コンテナ番号', color: '06224A' },
+  inbound: { label: '搬入', color: '1E90FF' },
+  outbound: { label: '搬出', color: '2E7D32' },
+  seal: { label: 'シール', color: '7C4DFF' },
+  damage: { label: '損傷', color: 'E53935' },
+  other: { label: 'その他', color: '607D8B' },
+};
+const DEFAULT_LOG_TAG = 'container_number';
 let cachedPdfFontBytes = null;
 let cachedWatermarkBytes = null;
 
@@ -285,13 +294,13 @@ function freePlanConstraintMessage(constraints, i18n = createExportI18n('ja')) {
   const lines = [
     i18n.t('フリープランへの切り替えは、以下を満たす必要があります。'),
     i18n.t('・容量が512MB未満'),
-    i18n.t('・フォルダの数が2つ以下'),
+    i18n.t('・コンテナ番号の数が2つ以下'),
   ];
   if (constraints.unmet.includes('usageBytes')) {
     lines.push(i18n.format('・現在の容量: {bytes} bytes', { bytes: constraints.usageBytes }));
   }
   if (constraints.unmet.includes('folderCount')) {
-    lines.push(i18n.format('・現在のフォルダ数: {count}', { count: constraints.folderCount }));
+    lines.push(i18n.format('・現在のコンテナ番号数: {count}', { count: constraints.folderCount }));
   }
   return lines.join('\n');
 }
@@ -653,14 +662,14 @@ async function buildExportPdf(options) {
       borderColor: hexToRgbColor('BFD2B7'),
       borderWidth: 1,
     });
-    page.drawText(i18n.t('フォトスマレポート'), {
+    page.drawText('Cong Report', {
       x: pptUnit(0.82),
       y: PDF_PAGE_HEIGHT - pptUnit(0.58),
       size: 10,
       font: jpFont,
       color: hexToRgbColor(PALETTE.brandText),
     });
-    drawMixedPdfText(page, `${folder.folderCode || 'F000'} ${folder.title}`, {
+    drawMixedPdfText(page, `コンテナ番号: ${folder.title || folder.folderCode || 'F000'}`, {
       x: pptUnit(0.55),
       y: PDF_PAGE_HEIGHT - pptUnit(1.18),
       size: 21,
@@ -668,13 +677,13 @@ async function buildExportPdf(options) {
       latinFont,
       color: hexToRgbColor(PALETTE.ink),
     });
-    drawMixedPdfText(page, `${photo.photoCode || '-'} ${photo.fileName || photo.photoId}`, {
+    drawMixedPdfText(page, `タグ: ${photo.logTagLabel || 'その他'}`, {
       x: pptUnit(0.55),
       y: PDF_PAGE_HEIGHT - pptUnit(1.44),
       size: 11,
       jpFont,
       latinFont,
-      color: hexToRgbColor(PALETTE.muted),
+      color: hexToRgbColor(photo.logTagColor || PALETTE.muted),
     });
     if (photo.questText) {
       drawMixedPdfText(page, `${i18n.t('クエスト')}: ${photo.questText}`, {
@@ -1438,6 +1447,59 @@ function isUploadBlocked(billing) {
 
 function pad3(num) {
   return String(num).padStart(3, '0');
+}
+
+function normalizeLogTag(value, fallback = DEFAULT_LOG_TAG) {
+  const tag = String(value || '').trim();
+  return Object.prototype.hasOwnProperty.call(LOG_TAGS, tag) ? tag : fallback;
+}
+
+function logTagLabel(value) {
+  return LOG_TAGS[normalizeLogTag(value, 'other')]?.label || LOG_TAGS.other.label;
+}
+
+function logTagColor(value) {
+  return LOG_TAGS[normalizeLogTag(value, 'other')]?.color || LOG_TAGS.other.color;
+}
+
+function withNormalizedLogTag(photo) {
+  if (!photo) return photo;
+  const logTag = normalizeLogTag(photo.logTag, 'other');
+  return {
+    ...photo,
+    logTag,
+    logTagLabel: logTagLabel(logTag),
+    logTagColor: logTagColor(logTag),
+  };
+}
+
+function sanitizeGeneratedFilePart(value, fallback = 'item') {
+  const normalized = String(value || '')
+    .normalize('NFKC')
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')
+    .replace(/\s+/g, '')
+    .trim()
+    .replace(/[. ]+$/g, '');
+  return normalized || fallback;
+}
+
+async function nextLogPhotoFileName(folder, logTag) {
+  const normalizedTag = normalizeLogTag(logTag);
+  const attrName = `logSeq_${normalizedTag}`;
+  const res = await ddb.send(
+    new UpdateCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: `FOLDER#${folder.folderId}`, SK: 'META#LOG_TAG_COUNTER' },
+      UpdateExpression: 'ADD #seq :inc',
+      ExpressionAttributeNames: { '#seq': attrName },
+      ExpressionAttributeValues: { ':inc': 1 },
+      ReturnValues: 'UPDATED_NEW',
+    })
+  );
+  const seq = Number(res.Attributes?.[attrName] || 1);
+  const containerNumber = sanitizeGeneratedFilePart(folder.title || folder.folderCode || folder.folderId, 'container');
+  const tagName = sanitizeGeneratedFilePart(logTagLabel(normalizedTag), 'tag');
+  return `${containerNumber}_${tagName}_${pad3(seq)}`;
 }
 
 async function nextFolderCode() {
@@ -3348,7 +3410,7 @@ async function createFolder(event, user, room, ctx) {
     const folderCount = await countRoomFolders(room.roomName);
     if (folderCount >= 2) {
       return json(409, {
-        message: ctx.i18n.t('フリープランではフォルダは2つまでです。有料プランで無制限になります。'),
+        message: ctx.i18n.t('フリープランではコンテナ番号は2つまでです。有料プランで無制限になります。'),
         code: 'FREE_PLAN_FOLDER_LIMIT_EXCEEDED',
         constraints: {
           folderCount,
@@ -3449,7 +3511,9 @@ async function listQuests(event, folderId, user, room, authz) {
   ]);
 
   const quests = (questsRes.Items || []).filter((item) => isRoomMatch(item.roomName, room.roomName));
-  const allQuestPhotos = (photosRes.Items || []).filter((item) => isRoomMatch(item.roomName, room.roomName) && item.questId);
+  const allQuestPhotos = (photosRes.Items || [])
+    .filter((item) => isRoomMatch(item.roomName, room.roomName) && item.questId)
+    .map(withNormalizedLogTag);
   const photos = splitArchivedPhotosForFreePlan(allQuestPhotos, isFreePlanBilling(authz.billing)).visible;
   const questIds = new Set(quests.map((q) => q.questId));
   const nameMap = await loadDisplayNameMap([
@@ -3470,7 +3534,7 @@ async function listQuests(event, folderId, user, room, authz) {
             { expiresIn: 600 }
           );
         }
-        return { ...applyResolvedDisplayName(photo, nameMap), viewUrl };
+        return { ...withNormalizedLogTag(applyResolvedDisplayName(photo, nameMap)), viewUrl };
       })
   );
   photoItems.forEach((photo) => {
@@ -3846,7 +3910,9 @@ async function listPhotos(event, folderId, user, room, authz) {
     })
   );
 
-  const items = (res.Items || []).filter((item) => isRoomMatch(item.roomName, room.roomName) && !item.questId);
+  const items = (res.Items || [])
+    .filter((item) => isRoomMatch(item.roomName, room.roomName) && !item.questId)
+    .map(withNormalizedLogTag);
   const isFreePlan = isFreePlanBilling(authz.billing);
   const split = splitArchivedPhotosForFreePlan(items, isFreePlan);
   const visibleItems = split.visible;
@@ -3862,7 +3928,7 @@ async function listPhotos(event, folderId, user, room, authz) {
         new GetObjectCommand({ Bucket: PHOTO_BUCKET, Key: keyForView }),
         { expiresIn: 600 }
       );
-      return { ...photo, viewUrl };
+      return { ...withNormalizedLogTag(photo), viewUrl };
     })
   );
 
@@ -3871,6 +3937,142 @@ async function listPhotos(event, folderId, user, room, authz) {
     archivedCount: split.archivedCount,
     archiveMode: isFreePlan ? 'hidden' : 'visible',
     archiveDays: FREE_PLAN_ARCHIVE_DAYS,
+  });
+}
+
+function clampSearchLimit(value) {
+  const n = Number(value || 30);
+  if (!Number.isFinite(n)) return 30;
+  return Math.max(1, Math.min(100, Math.floor(n)));
+}
+
+function decodeSearchOffset(token) {
+  if (!token) return 0;
+  try {
+    const raw = Buffer.from(String(token), 'base64url').toString('utf8');
+    const parsed = JSON.parse(raw);
+    const offset = Number(parsed.offset || 0);
+    return Number.isFinite(offset) && offset > 0 ? Math.floor(offset) : 0;
+  } catch (_) {
+    return 0;
+  }
+}
+
+function encodeSearchOffset(offset) {
+  return Buffer.from(JSON.stringify({ offset }), 'utf8').toString('base64url');
+}
+
+async function listPhotosForFolderSearch(folder, room) {
+  const photos = [];
+  let lastEvaluatedKey = null;
+  do {
+    const res = await ddb.send(
+      new QueryCommand({
+        TableName: TABLE_NAME,
+        IndexName: 'GSI1',
+        KeyConditionExpression: 'GSI1PK = :pk and begins_with(GSI1SK, :sk)',
+        ExpressionAttributeValues: {
+          ':pk': `FOLDER#${folder.folderId}`,
+          ':sk': 'PHOTO#',
+        },
+        ExclusiveStartKey: lastEvaluatedKey || undefined,
+      })
+    );
+    (res.Items || []).forEach((item) => {
+      if (!isRoomMatch(item.roomName, room.roomName)) return;
+      photos.push({
+        ...withNormalizedLogTag(item),
+        containerNumber: folder.title || folder.folderId,
+        folderTitle: folder.title || '',
+        folderHasPassword: folderHasPassword(folder),
+        folderMode: normalizeFolderMode(folder.mode),
+      });
+    });
+    lastEvaluatedKey = res.LastEvaluatedKey || null;
+  } while (lastEvaluatedKey);
+  return photos;
+}
+
+async function searchRoomPhotos(event, roomId, user, room, authz) {
+  if (roomId && room.roomId && roomId !== room.roomId) return json(404, { message: 'room not found' });
+  const q = event.queryStringParameters || {};
+  const requestedTag = String(q.logTag || 'all').trim();
+  const logTag = requestedTag === 'all' || !requestedTag ? 'all' : normalizeLogTag(requestedTag, '');
+  if (!logTag) return badRequest('invalid logTag');
+  const containerNumber = String(q.containerNumber || '').trim().toLowerCase();
+  const keyword = String(q.keyword || '').trim().toLowerCase();
+  const sort = String(q.sort || 'newest').trim() === 'oldest' ? 'oldest' : 'newest';
+  const limit = clampSearchLimit(q.limit);
+  const offset = decodeSearchOffset(q.nextToken);
+
+  const foldersRes = await ddb.send(
+    new QueryCommand({
+      TableName: TABLE_NAME,
+      KeyConditionExpression: 'PK = :pk and begins_with(SK, :sk)',
+      ExpressionAttributeValues: {
+        ':pk': 'ORG#DEFAULT',
+        ':sk': 'FOLDER#',
+      },
+      ScanIndexForward: false,
+    })
+  );
+  const folders = (foldersRes.Items || [])
+    .filter((folder) => isRoomMatch(folder.roomName, room.roomName))
+    .filter((folder) => canAccessFolder(folder, user, authz))
+    .filter((folder) => {
+      if (!containerNumber) return true;
+      return String(folder.title || folder.folderId || '').toLowerCase().includes(containerNumber);
+    })
+    .filter((folder) => {
+      if (!folderHasPassword(folder)) return true;
+      return verifyFolderPassword(folder, event).ok;
+    });
+
+  const allPhotos = (await Promise.all(folders.map((folder) => listPhotosForFolderSearch(folder, room)))).flat();
+  const filtered = allPhotos
+    .filter((photo) => (logTag === 'all' ? true : normalizeLogTag(photo.logTag, 'other') === logTag))
+    .filter((photo) => {
+      if (!keyword) return true;
+      const haystack = [
+        photo.containerNumber,
+        photo.fileName,
+        photo.createdByName,
+        photo.createdBy,
+        photo.initialComment,
+        photo.latestCommentByName,
+        photo.questText,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(keyword);
+    })
+    .sort((a, b) => {
+      const cmp = String(a.createdAt || '').localeCompare(String(b.createdAt || ''));
+      return sort === 'oldest' ? cmp : -cmp;
+    });
+
+  const page = filtered.slice(offset, offset + limit);
+  const nextOffset = offset + page.length;
+  const nameMap = await loadDisplayNameMap(page.map((item) => item.createdBy));
+  const items = await Promise.all(
+    page.map(async (photo) => {
+      const keyForView = photo.previewKey || photo.s3Key;
+      let viewUrl = '';
+      if (keyForView) {
+        viewUrl = await getSignedUrl(
+          s3,
+          new GetObjectCommand({ Bucket: PHOTO_BUCKET, Key: keyForView }),
+          { expiresIn: 600 }
+        );
+      }
+      return { ...withNormalizedLogTag(applyResolvedDisplayName(photo, nameMap)), viewUrl };
+    })
+  );
+
+  return json(200, {
+    items,
+    nextToken: nextOffset < filtered.length ? encodeSearchOffset(nextOffset) : null,
   });
 }
 
@@ -3966,11 +4168,9 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
   const originalS3Key = String(body.originalS3Key || body.s3Key || '').trim();
   const previewS3Key = body.previewS3Key ? String(body.previewS3Key || '').trim() : null;
   const questId = String(body.questId || '').trim();
+  const logTag = normalizeLogTag(body.logTag);
   if (!photoId || !originalS3Key) return badRequest('photoId and originalS3Key are required');
-  const fileName = String(body.fileName || '').trim();
   const initialComment = String(body.initialComment || '').trim();
-  if (!fileName) return badRequest('fileName is required');
-  if (fileName.length > 20) return badRequest('fileName must be 20 chars or less');
   if (initialComment.length > 50) return badRequest('initialComment must be 50 chars or less');
   const folderRes = await ddb.send(
     new GetCommand({
@@ -4095,6 +4295,7 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
 
   const folderCode = folder.folderCode || 'F000';
   const photoCode = await nextPhotoCode(folderId, folderCode);
+  const fileName = await nextLogPhotoFileName(folder, logTag);
 
   const item = {
     PK: `PHOTO#${photoId}`,
@@ -4112,6 +4313,9 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
     totalBytes,
     contentSha256,
     fileName,
+    logTag,
+    logTagLabel: logTagLabel(logTag),
+    logTagColor: logTagColor(logTag),
     questId: questId || null,
     createdBy: user.userKey,
     createdByName: user.userName,
@@ -4201,6 +4405,8 @@ async function finalizePhoto(event, folderId, body, user, room, authz, ctx) {
     photoCode,
     roomName: room.roomName,
     bytes: totalBytes,
+    logTag,
+    fileName,
     result: 'success',
   });
   if (commentId) {
@@ -4281,8 +4487,8 @@ async function deletePhoto(photoId, user, room, authz, ctx) {
 }
 
 async function updatePhoto(photoId, body, user, room, authz, ctx) {
-  const nextFileName = (body.fileName || '').trim();
-  if (!nextFileName) return badRequest('fileName is required');
+  const nextLogTag = normalizeLogTag(body.logTag, '');
+  if (!nextLogTag) return badRequest('logTag is required');
 
   const getRes = await ddb.send(
     new GetCommand({
@@ -4308,14 +4514,32 @@ async function updatePhoto(photoId, body, user, room, authz, ctx) {
     return json(403, { message: 'forbidden' });
   }
 
+  const folderRes = await ddb.send(
+    new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { PK: 'ORG#DEFAULT', SK: `FOLDER#${item.folderId}` },
+    })
+  );
+  const folder = folderRes.Item;
+  if (!folder || !isRoomMatch(folder.roomName, room.roomName)) return json(404, { message: 'folder not found' });
+  const previousLogTag = normalizeLogTag(item.logTag, 'other');
+  if (previousLogTag === nextLogTag) {
+    return json(200, { ok: true, item: withNormalizedLogTag(item) });
+  }
+  const previousFileName = item.fileName || '';
+  const nextFileName = await nextLogPhotoFileName(folder, nextLogTag);
   const updatedAt = new Date().toISOString();
   await ddb.send(
     new UpdateCommand({
       TableName: TABLE_NAME,
       Key: { PK: `PHOTO#${photoId}`, SK: 'META' },
-      UpdateExpression: 'SET fileName = :fileName, updatedAt = :updatedAt',
+      UpdateExpression:
+        'SET fileName = :fileName, logTag = :logTag, logTagLabel = :logTagLabel, logTagColor = :logTagColor, updatedAt = :updatedAt',
       ExpressionAttributeValues: {
         ':fileName': nextFileName,
+        ':logTag': nextLogTag,
+        ':logTagLabel': logTagLabel(nextLogTag),
+        ':logTagColor': logTagColor(nextLogTag),
         ':updatedAt': updatedAt,
       },
     })
@@ -4327,11 +4551,16 @@ async function updatePhoto(photoId, body, user, room, authz, ctx) {
     actorName: user.userName,
     photoId,
     photoCode: item.photoCode || null,
-    updates: { fileName: nextFileName },
+    updates: {
+      previousLogTag,
+      logTag: nextLogTag,
+      previousFileName,
+      fileName: nextFileName,
+    },
     result: 'success',
   });
 
-  return json(200, { ok: true });
+  return json(200, { ok: true, item: withNormalizedLogTag({ ...item, fileName: nextFileName, logTag: nextLogTag, updatedAt }) });
 }
 
 async function listComments(photoId, room) {
@@ -4574,11 +4803,13 @@ async function exportFolder(event, folderId, user, room, authz, ctx) {
     })
   );
 
-  const photos = (photosRes.Items || []).filter((item) => {
-    if (!isRoomMatch(item.roomName, room.roomName)) return false;
-    if (mode === 'quest') return Boolean(item.questId);
-    return !item.questId;
-  });
+  const photos = (photosRes.Items || [])
+    .filter((item) => {
+      if (!isRoomMatch(item.roomName, room.roomName)) return false;
+      if (mode === 'quest') return Boolean(item.questId);
+      return !item.questId;
+    })
+    .map(withNormalizedLogTag);
   const questIds = [...new Set(photos.map((photo) => String(photo.questId || '')).filter(Boolean))];
   const questMap = new Map();
   if (questIds.length) {
@@ -5007,6 +5238,10 @@ exports.handler = async (event) => {
     }
     if (method === 'POST' && path === '/team/leave') return finish(await teamLeave(user, room, authz, ctx));
     if (method === 'POST' && path === '/team/delete') return finish(await teamDelete(event, user, room, authz, ctx));
+
+    if (method === 'GET' && p.roomId && path.endsWith(`/rooms/${p.roomId}/photos/search`)) {
+      return finish(await searchRoomPhotos(event, p.roomId, user, room, authz));
+    }
 
     if (method === 'GET' && path === '/folders') return finish(await listFolders(room, user, authz));
     if (method === 'POST' && path === '/folders') return finish(await createFolder(event, user, room, ctx));

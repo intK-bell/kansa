@@ -58,9 +58,9 @@ function addFreePlanWatermarks(slide, imageBox) {
 function createPresentation(i18n = createExportI18n('ja')) {
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_WIDE';
-  pptx.author = i18n.t('フォトスマ');
-  pptx.company = i18n.t('フォトスマ');
-  pptx.subject = 'Folder export';
+  pptx.author = 'Cong';
+  pptx.company = 'Cong';
+  pptx.subject = 'Container Log export';
   pptx.lang = i18n.locale;
   return pptx;
 }
@@ -87,7 +87,7 @@ async function addExportPhotoSlide(pptx, options) {
     fill: { color: PALETTE.brandSoft },
     line: { color: 'BFD2B7', pt: 1 },
   });
-  slide.addText(i18n.t('フォトスマレポート'), {
+  slide.addText('Cong Report', {
     x: 0.82,
     y: 0.45,
     w: 1.35,
@@ -98,7 +98,7 @@ async function addExportPhotoSlide(pptx, options) {
     color: PALETTE.brandText,
   });
 
-  slide.addText(`${folder.folderCode || 'F000'} ${folder.title}`, {
+  slide.addText(`コンテナ番号: ${folder.title || folder.folderCode || 'F000'}`, {
     x: 0.55,
     y: 0.9,
     w: 8.2,
@@ -108,14 +108,15 @@ async function addExportPhotoSlide(pptx, options) {
     bold: true,
     color: PALETTE.ink,
   });
-  slide.addText(`${photo.photoCode || '-'} ${photo.fileName || photo.photoId}`, {
+  slide.addText(`タグ: ${photo.logTagLabel || 'その他'}`, {
     x: 0.55,
     y: 1.23,
     w: 7.8,
     h: 0.22,
     fontFace: 'Yu Gothic',
     fontSize: 11,
-    color: PALETTE.muted,
+    bold: true,
+    color: photo.logTagColor || PALETTE.muted,
   });
   if (photo.questText) {
     slide.addText(`${i18n.t('クエスト')}: ${photo.questText}`, {
