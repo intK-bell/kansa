@@ -9,6 +9,14 @@ const PDF_PAGE_WIDTH = 960;
 const PDF_PAGE_HEIGHT = 540;
 const PPT_TO_PDF_SCALE = 72;
 const PDF_FONT_PATH = path.resolve(__dirname, '../backend/src/fonts/NotoSansCJKjp-Regular.otf');
+const DEMO_LOG_TAGS = {
+  container_number: { label: 'コンテナ番号', color: '#06224A', toneA: '#06224A', toneB: '#dcecff' },
+  inbound: { label: '搬入', color: '#1E90FF', toneA: '#1E90FF', toneB: '#dcecff' },
+  seal: { label: 'シール', color: '#7C4DFF', toneA: '#7C4DFF', toneB: '#e7ddff' },
+  damage: { label: '損傷', color: '#E53935', toneA: '#E53935', toneB: '#ffe0de' },
+  outbound: { label: '搬出', color: '#2E7D32', toneA: '#2E7D32', toneB: '#d9f0df' },
+  other: { label: 'その他', color: '#607D8B', toneA: '#607D8B', toneB: '#dfe7eb' },
+};
 
 function pptUnit(value) {
   return Number(value || 0) * PPT_TO_PDF_SCALE;
@@ -287,6 +295,38 @@ function normalizeImageData(uri) {
   return `data:image/svg+xml;base64,${Buffer.from(svgText, 'utf8').toString('base64')}`;
 }
 
+function demoSequenceFromPhoto(photo) {
+  const match = String(photo?.fileName || '').match(/_(\d+)$/);
+  if (match) return match[1];
+  const codeMatch = String(photo?.photoCode || '').match(/(\d+)$/);
+  return codeMatch ? codeMatch[1].padStart(3, '0') : '001';
+}
+
+function localizeDemoExportFolder(folder, i18n, demoSvgFn) {
+  return {
+    ...folder,
+    photos: (folder.photos || []).map((photo) => {
+      const tag = DEMO_LOG_TAGS[photo.logTag] || DEMO_LOG_TAGS.other;
+      const tagLabel = i18n.t(tag.label);
+      const fileName = `${folder.title}_${tagLabel}_${demoSequenceFromPhoto(photo)}`;
+      return {
+        ...photo,
+        fileName,
+        originalName: fileName,
+        logTagLabel: tag.label,
+        logTagColor: tag.color,
+        viewUrl: demoSvgFn ? demoSvgFn(tagLabel, tag.toneA, tag.toneB) : photo.viewUrl,
+        previewUrl: demoSvgFn ? demoSvgFn(tagLabel, tag.toneA, tag.toneB) : photo.previewUrl,
+        comments: (photo.comments || []).map((comment) => ({
+          ...comment,
+          text: i18n.t(comment.text),
+          createdByName: i18n.t(comment.createdByName),
+        })),
+      };
+    }),
+  };
+}
+
 function parseArgs(argv) {
   const result = {};
   for (let i = 0; i < argv.length; i += 1) {
@@ -301,7 +341,7 @@ function parseArgs(argv) {
 }
 
 async function main() {
-  const { createDemoStore, DEMO_PLAN_BYTES } = await import(path.resolve(__dirname, './demo-seed.mjs'));
+  const { createDemoStore, DEMO_PLAN_BYTES, demoSvg } = await import(path.resolve(__dirname, './demo-seed.mjs'));
   const args = parseArgs(process.argv.slice(2));
   const language = normalizeLanguage(args.language || process.env.KANSA_LANGUAGE || 'ja');
   const i18n = createExportI18n(language);
@@ -312,6 +352,7 @@ async function main() {
   const folderId = args.folderId || room.folders[0]?.folderId;
   const folder = room.folders.find((item) => item.folderId === folderId);
   if (!folder) throw new Error(`folder not found: ${folderId}`);
+  const exportFolder = localizeDemoExportFolder(folder, i18n, demoSvg);
 
   const currentPlan = String(room.subscriptionPlan || 'FREE').toUpperCase();
   const isFreePlan = currentPlan === 'FREE';
@@ -329,7 +370,7 @@ async function main() {
   if (format === 'pdf') {
     const pdfBuffer = await buildDemoPdf({
       folder,
-      photos: folder.photos,
+      photos: exportFolder.photos,
       currentPlan,
       usageBytes: room.billing?.usageBytes || 0,
       capacityBytes: DEMO_PLAN_BYTES[currentPlan] || DEMO_PLAN_BYTES.FREE,
@@ -339,7 +380,7 @@ async function main() {
   } else {
     const pptx = await buildExportPresentation({
       folder,
-      photos: folder.photos,
+      photos: exportFolder.photos,
       isFreePlanExport: isFreePlan,
       resolveImage: async (photo) => ({
         data: normalizeImageData(photo.previewUrl || photo.viewUrl),

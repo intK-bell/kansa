@@ -1,6 +1,7 @@
-# Hướng Dẫn Sử Dụng (Photosma)
+# Hướng Dẫn Sử Dụng (Cong)
 
-Hướng dẫn này mô tả quy trình cơ bản cho người dùng hiện trường và quản trị viên.
+Cong là dịch vụ ghi nhận ảnh container cho hoạt động cảng và logistics.
+Dịch vụ sắp xếp ảnh theo số container, giúp giảm việc gửi, phân loại và kiểm tra ảnh.
 
 ## 1. Đăng nhập
 1. Mở URL của ứng dụng.
@@ -8,97 +9,76 @@ Hướng dẫn này mô tả quy trình cơ bản cho người dùng hiện trư
 3. Lần đầu sử dụng, nhập tên hiển thị.
 
 ## 2. Phòng
+Phòng được dùng theo từng công ty hoặc cơ sở.
 
 ### Tạo phòng
-1. Nhập tên phòng trong `Tạo mới`.
-2. Nhấn `Tạo phòng`, hoặc mở `Phòng > Tạo` từ menu.
+1. Nhập tên công ty hoặc cơ sở trên màn hình phòng.
+2. Nhấn `Tạo phòng`.
 3. Sau khi tạo, bạn sẽ vào phòng đó.
 
 Lưu ý:
 - Mỗi người dùng chỉ có thể tạo một phòng.
-- Bạn vẫn có thể tạo phòng của mình ngay cả khi đã tham gia phòng khác bằng lời mời.
+- Thành viên có thể tham gia bằng URL mời.
+- URL mời có hiệu lực trong 7 ngày.
 
-### Tham gia bằng lời mời
-1. Mở URL mời do quản trị viên gửi.
-2. Sau khi đăng nhập, bạn sẽ tự động tham gia phòng được mời.
+## 3. Container
+Trong Cong, thư mục được dùng như hồ sơ container.
+Hãy đăng ký số container làm tên thư mục.
 
-### Chuyển phòng
-1. Mở danh sách `Phòng hiện tại` ở đầu màn hình.
-2. Chọn phòng muốn vào.
-3. Nhấn `OK` trong hộp thoại xác nhận.
+Ví dụ:
+- ABCU1234567
+- MSCU9876543
 
-### Rời khỏi phòng
-1. Mở menu góc trên bên phải và nhấn `Rời khỏi`.
-2. Xác nhận hộp thoại cảnh báo.
+Dự kiến hỗ trợ nhập tự động bằng OCR trong tương lai.
 
-Lưu ý:
-- Sau khi rời khỏi, bạn không thể tham gia lại phòng nếu không có URL mời.
-- Quản trị viên không thể rời khỏi phòng của chính mình. Hãy xóa phòng từ màn hình quản lý phòng.
+## 4. Thư mục ảnh
+Thư mục ảnh dùng để ghi nhận ảnh container.
+Hãy gắn thẻ cho từng ảnh.
 
-## 3. Thư mục
+Thẻ khuyến nghị:
+- Số container
+- Nhập bãi
+- Seal
+- Hư hỏng
+- Xuất bãi
+- Khác
 
-### Tạo thư mục
-1. Mở `Thư mục > Tạo` từ menu góc trên bên phải.
-2. Nhập tiêu đề thư mục.
-3. Chọn `Thư mục ảnh` hoặc `Thư mục nhiệm vụ`, rồi nhấn `Tạo`.
-4. Đặt mật khẩu thư mục nếu cần.
+Bạn cũng có thể để lại bình luận cho từng ảnh.
 
-Số lượng thư mục:
-- Miễn phí: 2 thư mục
-- Trả phí: không giới hạn
+## 5. Thư mục quest
+Thư mục quest dùng cho yêu cầu chụp ảnh và ngăn chụp thiếu.
 
-Loại thư mục:
-- Thư mục ảnh
-- Thư mục nhiệm vụ
+Ví dụ:
+- Số container
+- Seal
+- Mặt trái
+- Mặt phải
+- Vị trí hư hỏng
 
-### Thư mục ảnh
-1. Chọn thư mục từ danh sách `Thư mục hiện tại`.
-2. Tải lên ảnh tùy ý.
-3. Thành viên trong nhóm có thể để lại bình luận cho các ảnh đã tải lên.
+Chuẩn bị trước các ảnh cần chụp, sau đó thành viên hiện trường tải ảnh lên.
 
-### Thư mục nhiệm vụ
-1. Chọn thư mục nhiệm vụ từ danh sách `Thư mục hiện tại`.
-2. Dùng văn bản để yêu cầu ảnh cần chụp.
-3. Thành viên trong nhóm tải lên ảnh được yêu cầu.
-4. Thành viên trong nhóm có thể để lại bình luận cho các ảnh đã tải lên.
+## 6. Ảnh và bình luận
+Có thể tải ảnh lên từng ảnh hoặc hàng loạt.
+Có thể gắn thẻ sau khi chụp.
 
-### Bình luận
-1. Mở `Bình luận` trong thẻ ảnh.
-2. Nhập bình luận và nhấn `Thêm`.
-3. Bạn có thể sửa hoặc xóa bình luận của mình. Quản trị viên có thể quản lý mọi bình luận.
+Ví dụ bình luận:
+- Seal bị hỏng
+- Mặt trái bị móp
+- Đã xuất bãi
 
-### Xuất
-1. Chọn thư mục mục tiêu từ `Thư mục hiện tại`.
-2. Mở `Thư mục > Xuất` từ menu góc trên bên phải.
-3. Chọn định dạng xuất.
-4. `PDF`: ổn định nhất để xem.
-5. `PPT nhẹ`: tệp PowerPoint nhỏ hơn. Một số điện thoại có thể không hiển thị được.
-6. `PPT chất lượng cao`: tệp PowerPoint chất lượng cao hơn. Một số điện thoại có thể không hiển thị được.
-7. Xuất PDF sẽ hiển thị tiến trình trên màn hình ban đầu.
-8. Tệp xuất được lưu tạm thời và sẽ tự động xóa sau 7 ngày.
+## 7. Tìm kiếm
+Dùng tab Tìm kiếm để tìm ảnh đã lưu theo thẻ, từ khóa và phạm vi.
+Bạn có thể tìm trong container hiện tại hoặc trong phòng hiện tại.
+
+## 8. Xuất
+Có thể xuất PowerPoint theo từng container.
+Dùng để tạo tài liệu báo cáo container.
 
 Thứ tự khuyến nghị:
-- Bắt đầu với `PDF`
-- Sau đó dùng `PPT nhẹ`
-- Dùng `PPT chất lượng cao` để kiểm tra trên PC hoặc nộp chính thức
+- PDF để xem ổn định
+- PPT nhẹ khi cần giảm dung lượng tệp
+- PPT chất lượng cao để kiểm tra trên PC hoặc nộp chính thức
 
-## 4. Menu quản trị
-
-Quản trị viên có thể dùng `Quản lý phòng` để:
-- Tạo hoặc thu hồi URL mời
-- Thiết lập phạm vi xem của thành viên
-- Xóa phòng và toàn bộ dữ liệu
-- Thêm dung lượng lưu trữ
-
-## 5. Xử lý sự cố
-
-### Không thấy phòng
-- Mở danh sách `Phòng hiện tại` và kiểm tra danh sách.
-- Nếu bạn chưa tham gia phòng nào, hãy xin URL mời từ quản trị viên.
-
-### Không tải ảnh lên được
-- Tải lên có thể đang bị tạm dừng do hết dung lượng. Hãy liên hệ quản trị viên.
-
-### Không đăng nhập được
-- Kiểm tra mã MFA có phải mã mới nhất không.
-- Nếu đồng hồ thiết bị bị lệch, xác thực dễ thất bại. Hãy bật cài đặt thời gian tự động.
+## 9. Quyền
+Quản trị viên quản lý phòng, thành viên và thư mục.
+Thành viên đăng ký ảnh và bình luận.

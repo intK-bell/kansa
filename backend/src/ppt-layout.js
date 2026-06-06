@@ -87,7 +87,7 @@ async function addExportPhotoSlide(pptx, options) {
     fill: { color: PALETTE.brandSoft },
     line: { color: 'BFD2B7', pt: 1 },
   });
-  slide.addText('Cong Report', {
+  slide.addText(i18n.t('Cong Report'), {
     x: 0.82,
     y: 0.45,
     w: 1.35,
@@ -98,7 +98,7 @@ async function addExportPhotoSlide(pptx, options) {
     color: PALETTE.brandText,
   });
 
-  slide.addText(`コンテナ番号: ${folder.title || folder.folderCode || 'F000'}`, {
+  slide.addText(`${i18n.t('コンテナ番号')}: ${folder.title || folder.folderCode || 'F000'}`, {
     x: 0.55,
     y: 0.9,
     w: 8.2,
@@ -108,7 +108,7 @@ async function addExportPhotoSlide(pptx, options) {
     bold: true,
     color: PALETTE.ink,
   });
-  slide.addText(`タグ: ${photo.logTagLabel || 'その他'}`, {
+  slide.addText(`${i18n.t('タグ')}: ${i18n.t(photo.logTagLabel || 'その他')}`, {
     x: 0.55,
     y: 1.23,
     w: 7.8,

@@ -1,6 +1,7 @@
-# User Guide (Photosma Audit)
+# User Guide (Cong)
 
-This guide explains the basic workflow for field users and admins.
+Cong is a container photo logging service for port and logistics operations.
+It organizes photos by container number and reduces the work of sending, sorting, and checking photos.
 
 ## 1. Login
 1. Open the app URL.
@@ -8,97 +9,76 @@ This guide explains the basic workflow for field users and admins.
 3. On first use, enter your display name.
 
 ## 2. Rooms
+Rooms are used by company or site.
 
 ### Create a Room
-1. Enter a room name in `Create new`.
-2. Press `Create room`, or open `Rooms > Create` from the menu.
+1. Enter a company or site name on the room screen.
+2. Press `Create room`.
 3. After creation, you enter that room.
 
 Notes:
 - Each user can create one room.
-- You can still create your own room even if you have joined another room by invitation.
+- Members can join from an invitation URL.
+- Invitation URLs are valid for 7 days.
 
-### Join by Invitation
-1. Open the invitation URL from an admin.
-2. After login, you automatically join the invited room.
+## 3. Containers
+Cong uses folders as container records.
+Register the container number as the folder name.
 
-### Switch Rooms
-1. Open the `Current room` dropdown at the top of the screen.
-2. Select the room you want to enter.
-3. Press `OK` in the confirmation dialog.
+Examples:
+- ABCU1234567
+- MSCU9876543
 
-### Leave a Room
-1. Open the top-right menu and press `Leave`.
-2. Confirm the warning dialog.
+OCR-based automatic input is planned for the future.
 
-Notes:
-- You cannot rejoin a room without an invitation URL after leaving.
-- Admins cannot leave their own room. Delete the room from room management instead.
+## 4. Photo Folders
+Photo folders are used to record container photos.
+Assign a tag to each photo.
 
-## 3. Folders
+Recommended tags:
+- Container number
+- Gate in
+- Seal
+- Damage
+- Gate out
+- Other
 
-### Create a Folder
-1. Open `Folders > Create` from the top-right menu.
-2. Enter a folder title.
-3. Select `Photo folder` or `Quest folder`, then press `Create`.
-4. Set a folder password if needed.
+You can also leave comments on each photo.
 
-Folder count:
-- Free: 2 folders
-- Paid: unlimited
+## 5. Quest Folders
+Quest folders are used for photo capture requests and missed-shot prevention.
 
-Folder types:
-- Photo folder
-- Quest folder
+Examples:
+- Container number
+- Seal
+- Left side
+- Right side
+- Damaged area
 
-### Photo Folders
-1. Select a folder from the `Current folder` dropdown.
-2. Upload any photos you choose.
-3. Team members can leave comments on the uploaded photos.
+Prepare the required photos in advance, then field members upload them.
 
-### Quest Folders
-1. Select a quest folder from the `Current folder` dropdown.
-2. Request the photos you want taken using text.
-3. Team members upload the requested photos.
-4. Team members can leave comments on the uploaded photos.
+## 6. Photos and Comments
+Photos can be uploaded one by one or in bulk.
+Tags can be added after shooting.
 
-### Comments
-1. Open `Comments` on a photo card.
-2. Enter a comment and press `Add`.
-3. You can edit or delete your own comments. Admins can manage all comments.
+Comment examples:
+- Seal is damaged
+- Dent on the left side
+- Gate-out completed
 
-### Export
-1. Select the target folder from `Current folder`.
-2. Open `Folders > Export` from the top-right menu.
-3. Choose an export format.
-4. `PDF`: most stable for viewing.
-5. `Light PPT`: smaller PowerPoint file. It may not display on some phones.
-6. `High-quality PPT`: higher-quality PowerPoint file. It may not display on some phones.
-7. PDF export shows progress on the original screen.
-8. Generated export files are temporary and are deleted after 7 days.
+## 7. Search
+Use the Search tab to find saved photos by tag, keyword, and scope.
+You can search within the current container or across the current room.
+
+## 8. Export
+Export PowerPoint files by container.
+Use this for container report materials.
 
 Recommended order:
-- Start with `PDF`
-- Use `Light PPT` next
-- Use `High-quality PPT` for PC review or formal submission
+- PDF for stable viewing
+- Light PPT when file size matters
+- High-quality PPT for PC review or formal submission
 
-## 4. Admin Menu
-
-Admins can use `Room management` to:
-- Issue or revoke invitation URLs
-- Set member viewing scope
-- Delete the room and all data
-- Add storage capacity
-
-## 5. Troubleshooting
-
-### Rooms Do Not Appear
-- Open the `Current room` dropdown and check the list.
-- If you have no joined rooms, ask an admin for an invitation URL.
-
-### Images Cannot Be Uploaded
-- Uploads may be paused because storage is full. Contact an admin.
-
-### Login Fails
-- Check that your MFA code is current.
-- If your device clock is out of sync, authentication may fail. Enable automatic time settings.
+## 9. Permissions
+Admins manage rooms, members, and folders.
+Members register photos and comments.

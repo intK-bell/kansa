@@ -36,7 +36,7 @@
               </div>
             </details>
             <details class="menu-group" data-menu-group>
-              <summary class="menu-group-summary">コンテナ</summary>
+              <summary class="menu-group-summary" data-i18n="コンテナ">コンテナ</summary>
               <div class="menu-group-items">
                 <button id="open-folder-create-btn" type="button" data-i18n="作成">作成</button>
                 <button id="open-folder-password-btn" type="button" class="hidden" data-i18n="パスワード">パスワード</button>
@@ -104,9 +104,9 @@
                 </select>
               </label>
               <label class="app-header-field">
-                <span>現在のコンテナ</span>
+                <span data-i18n="現在のコンテナ">現在のコンテナ</span>
                 <select id="current-folder-select">
-                  <option value="">コンテナ番号を選択してください</option>
+                  <option value="" data-i18n="コンテナ番号を選択してください">コンテナ番号を選択してください</option>
                 </select>
               </label>
             </div>
@@ -154,7 +154,7 @@
           </div>
 
           <div class="card admin-card">
-            <h3>コンテナ</h3>
+            <h3 data-i18n="コンテナ">コンテナ</h3>
             <div id="folder-admin-list" style="margin-top:10px;"></div>
           </div>
 
@@ -190,7 +190,7 @@
         </section>
 
         <div id="folder-detail" class="folder-detail-shell hidden">
-          <div id="folder-detail-tabs" class="folder-detail-tabs" role="tablist" aria-label="コンテナ詳細">
+          <div id="folder-detail-tabs" class="folder-detail-tabs" role="tablist" aria-label="コンテナ詳細" data-i18n-attr="aria-label:コンテナ詳細">
             <button
               id="record-tab-btn"
               class="folder-detail-tab is-active"
@@ -199,7 +199,7 @@
               aria-selected="true"
               aria-controls="record-panel"
             >
-              記録
+              <span data-i18n="記録">記録</span>
             </button>
             <button
               id="search-tab-btn"
@@ -209,7 +209,7 @@
               aria-selected="false"
               aria-controls="search-panel"
             >
-              検索
+              <span data-i18n="検索">検索</span>
             </button>
           </div>
           <section class="card folder-detail-card">
@@ -224,16 +224,16 @@
               </div>
               <div id="quest-mode-panel" class="hidden">
                 <div class="quest-create">
-                  <textarea id="quest-text" rows="3" maxlength="100" placeholder="撮ってきてほしい写真を入力"></textarea>
-                  <button id="create-quest-btn" type="button">クエスト作成</button>
+                  <textarea id="quest-text" rows="3" maxlength="100" placeholder="撮ってきてほしい写真を入力" data-i18n-attr="placeholder:撮ってきてほしい写真を入力"></textarea>
+                  <button id="create-quest-btn" type="button" data-i18n="クエスト作成">クエスト作成</button>
                 </div>
                 <div class="quest-toolbar">
                   <label>
-                    <span class="muted">並び順</span>
+                    <span class="muted" data-i18n="並び順">並び順</span>
                     <select id="quest-sort">
-                      <option value="status">対応順</option>
-                      <option value="newest">新しい順</option>
-                      <option value="oldest">古い順</option>
+                      <option value="status" data-i18n="対応順">対応順</option>
+                      <option value="newest" data-i18n="新しい順">新しい順</option>
+                      <option value="oldest" data-i18n="古い順">古い順</option>
                     </select>
                   </label>
                 </div>
@@ -257,23 +257,23 @@
             </div>
             <div id="search-panel" class="folder-detail-panel hidden" role="tabpanel" aria-labelledby="search-tab-btn">
               <div class="search-panel-head">
-                <h2>検索</h2>
-                <p class="muted">保存済み写真をタグ・検索語・範囲で探します。</p>
+                <h2 data-i18n="検索">検索</h2>
+                <p class="muted" data-i18n="保存済み写真をタグ・検索語・範囲で探します。">保存済み写真をタグ・検索語・範囲で探します。</p>
               </div>
-              <div id="photo-search-panel" class="photo-search-panel" aria-label="保存済み写真の検索">
-                <div class="search-scope-toggle" role="group" aria-label="検索範囲">
-                  <button id="search-scope-folder-btn" type="button" class="search-scope-btn is-active">このコンテナ</button>
-                  <button id="search-scope-room-btn" type="button" class="search-scope-btn">このお部屋</button>
+              <div id="photo-search-panel" class="photo-search-panel" aria-label="保存済み写真の検索" data-i18n-attr="aria-label:保存済み写真の検索">
+                <div class="search-scope-toggle" role="group" aria-label="検索範囲" data-i18n-attr="aria-label:検索範囲">
+                  <button id="search-scope-folder-btn" type="button" class="search-scope-btn is-active" data-i18n="このコンテナ">このコンテナ</button>
+                  <button id="search-scope-room-btn" type="button" class="search-scope-btn" data-i18n="このお部屋">このお部屋</button>
                 </div>
                 <label class="search-field">
-                  <span class="muted">タグ</span>
+                  <span class="muted" data-i18n="タグ">タグ</span>
                   <select id="log-tag-filter"></select>
                 </label>
                 <label class="search-field search-keyword-field">
-                  <span class="muted">検索語</span>
-                  <input id="photo-search-keyword" type="search" placeholder="コンテナ・コメント・投稿者" />
+                  <span class="muted" data-i18n="検索語">検索語</span>
+                  <input id="photo-search-keyword" type="search" placeholder="コンテナ・コメント・投稿者" data-i18n-attr="placeholder:コンテナ・コメント・投稿者" />
                 </label>
-                <button id="photo-search-btn" type="button">検索</button>
+                <button id="photo-search-btn" type="button" data-i18n="検索">検索</button>
               </div>
               <div id="search-photo-list" class="photo-grid"></div>
             </div>
@@ -298,38 +298,38 @@
       </div>
     </div>
 
-    <div id="folder-create-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="コンテナ登録">
+    <div id="folder-create-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="コンテナ登録" data-i18n-attr="aria-label:コンテナ登録">
       <div class="modal-card">
         <div class="modal-header">
-          <h3 style="margin:0;">コンテナ登録</h3>
+          <h3 style="margin:0;" data-i18n="コンテナ登録">コンテナ登録</h3>
           <button id="folder-create-close-btn" type="button" class="danger" data-i18n="閉じる">閉じる</button>
         </div>
         <div class="row" style="align-items:stretch;">
           <input id="folder-title" placeholder="TCLU1234567" />
-          <select id="folder-mode" aria-label="記録モード">
-            <option value="photo">通常記録</option>
-            <option value="quest">クエスト記録</option>
+          <select id="folder-mode" aria-label="記録モード" data-i18n-attr="aria-label:記録モード">
+            <option value="photo" data-i18n="通常記録">通常記録</option>
+            <option value="quest" data-i18n="クエスト記録">クエスト記録</option>
           </select>
-          <input id="folder-password" placeholder="コンテナパスワード（任意）" type="password" />
+          <input id="folder-password" placeholder="コンテナパスワード（任意）" type="password" data-i18n-attr="placeholder:コンテナパスワード（任意）" />
           <button id="create-folder-btn" data-i18n="作成">作成</button>
         </div>
-        <p id="folder-title-error" class="form-field-error hidden" aria-live="polite">コンテナ番号を入力してください。</p>
+        <p id="folder-title-error" class="form-field-error hidden" aria-live="polite" data-i18n="コンテナ番号を入力してください。">コンテナ番号を入力してください。</p>
       </div>
     </div>
 
-    <div id="folder-password-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="コンテナパスワード">
+    <div id="folder-password-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="コンテナパスワード" data-i18n-attr="aria-label:コンテナパスワード">
       <div class="modal-card">
         <div class="modal-header">
-          <h3 style="margin:0;">コンテナパスワード</h3>
+          <h3 style="margin:0;" data-i18n="コンテナパスワード">コンテナパスワード</h3>
           <button id="folder-password-close-btn" type="button" class="danger" data-i18n="閉じる">閉じる</button>
         </div>
         <p class="folder-password-target" aria-live="polite">
-          <span>対象コンテナ</span>
+          <span data-i18n="対象コンテナ">対象コンテナ</span>
           <strong id="folder-password-target-name">-</strong>
         </p>
-        <p class="muted" style="margin:8px 0 10px;">現在のコンテナに設定します。空で保存すると解除されます。</p>
+        <p class="muted" style="margin:8px 0 10px;" data-i18n="現在のコンテナに設定します。空で保存すると解除されます。">現在のコンテナに設定します。空で保存すると解除されます。</p>
         <div class="row" style="align-items:stretch;">
-          <input id="folder-password-set" placeholder="コンテナパスワード（空で解除）" type="password" />
+          <input id="folder-password-set" placeholder="コンテナパスワード（空で解除）" type="password" data-i18n-attr="placeholder:コンテナパスワード（空で解除）" />
           <button id="set-folder-password-btn" type="button" class="hidden" data-i18n="鍵を設定/解除">鍵を設定/解除</button>
         </div>
       </div>
@@ -346,7 +346,7 @@
           <ol class="help-list">
             <li data-i18n="新規登録後、ログイン（初回は表示名を設定）">新規登録後、ログイン（初回は表示名を設定）</li>
             <li data-i18n="ログイン後、お部屋を作成">ログイン後、お部屋を作成</li>
-            <li>コンテナ登録 → 写真アップロード → コメント追加 → 出力</li>
+            <li data-i18n="コンテナ登録 → 写真アップロード → コメント追加 → 出力">コンテナ登録 → 写真アップロード → コメント追加 → 出力</li>
           </ol>
           <p><strong data-i18n="マニュアル：">マニュアル：</strong><a class="help-link" href="./manuals/kansa-manual.html" target="_blank" rel="noopener noreferrer" data-i18n="こちら">こちら</a></p>
 
@@ -442,7 +442,7 @@
       </div>
     </div>
     <script src="./config.js?v=20260606-add4"></script>
-    <script src="./i18n.js?v=20260502-1"></script>
+    <script src="./i18n.js?v=20260607-cong-i18n1"></script>
     <script src="./main.js?v=20260606-add4" type="module"></script>
   </body>
 </html>
