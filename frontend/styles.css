@@ -18,166 +18,32 @@
   --danger-active: #b84454;
 }
 
-body.dark {
-  --bg: #0f1722;
-  --bg-glow: #243042;
-  --card: #1a2430;
-  --card-soft: #13202b;
-  --text: #e5e7eb;
-  --muted: #9ca3af;
-  --primary: #8fcb7a;
-  --danger: #e06a78;
-  --border: #374151;
-  --input-border: #475569;
-  --hover-bg: #162131;
-  --primary-hover: #81ba6f;
-  --primary-active: #73a963;
-  --danger-hover: #d5606d;
-  --danger-active: #c45663;
-}
-
-body[data-season="spring"] {
-  --bg: #eef3f7;
-  --bg-glow: #f6e6ea;
-  --card: #faf6ee;
-  --card-soft: #fffaf2;
-  --primary: #7baf6a;
-  --danger: #d85a6a;
-  --border: #d8e0d2;
-  --hover-bg: #f4f7ef;
-  --primary-hover: #6ea15f;
-  --primary-active: #5f8d52;
-  --danger-hover: #c94f5f;
-  --danger-active: #b84454;
-}
-
-body.dark[data-season="spring"] {
-  --bg: #0f1722;
-  --bg-glow: #243042;
-  --card: #1a2430;
-  --card-soft: #13202b;
-  --primary: #8fcb7a;
-  --danger: #e06a78;
-  --border: #334155;
-  --hover-bg: #162131;
-  --primary-hover: #81ba6f;
-  --primary-active: #73a963;
-  --danger-hover: #d5606d;
-  --danger-active: #c45663;
-}
-
-body[data-season="summer"] {
-  --bg: #e7f4f8;
-  --bg-glow: #cdeef6;
-  --card: #f8fcfd;
-  --card-soft: #f1f8fa;
-  --primary: #2f8f83;
-  --danger: #c93f3a;
-  --border: #c9e3e0;
-  --hover-bg: #eff9f9;
-  --primary-hover: #277a70;
-  --primary-active: #21685f;
-  --danger-hover: #b63834;
-  --danger-active: #a5312d;
-}
-
-body.dark[data-season="summer"] {
-  --bg: #0c1b24;
-  --bg-glow: #163244;
-  --card: #142836;
-  --card-soft: #102330;
-  --primary: #45a89a;
-  --danger: #e05550;
-  --border: #2c4557;
-  --hover-bg: #19303e;
-  --primary-hover: #3a9388;
-  --primary-active: #318178;
-  --danger-hover: #ca4f4a;
-  --danger-active: #b44642;
-}
-
-body[data-season="autumn"] {
-  --bg: #f5eedc;
-  --bg-glow: #f4dfbe;
-  --card: #fff7e8;
-  --card-soft: #fff3df;
-  --primary: #a86f22;
-  --danger: #a74624;
-  --border: #dcc29a;
-  --hover-bg: #fbf1dd;
-  --primary-hover: #945f1d;
-  --primary-active: #7f5019;
-  --danger-hover: #943f20;
-  --danger-active: #84371c;
-}
-
-body.dark[data-season="autumn"] {
-  --bg: #1c1612;
-  --bg-glow: #3a2a1f;
-  --card: #2a221c;
-  --card-soft: #231d18;
-  --text: #f3eee6;
-  --primary: #e2b369;
-  --danger: #d97a56;
-  --border: #5a4638;
-  --hover-bg: #32271f;
-  --primary-hover: #cfa45f;
-  --primary-active: #be9453;
-  --danger-hover: #c76f4e;
-  --danger-active: #b56243;
-}
-
-body[data-season="winter"] {
-  --bg: #edf2fa;
-  --bg-glow: #dbe7f7;
-  --card: #f7f9fc;
-  --card-soft: #f1f5fb;
-  --primary: #5f79a9;
-  --danger: #7d2f52;
-  --border: #c3cfe2;
-  --hover-bg: #eef3fa;
-  --primary-hover: #546c98;
-  --primary-active: #4a6088;
-  --danger-hover: #6d2848;
-  --danger-active: #5f2240;
-}
-
-body.dark[data-season="winter"] {
-  --bg: #0b1320;
-  --bg-glow: #1c2b43;
-  --card: #151f30;
-  --card-soft: #101a2a;
-  --primary: #a8bee9;
-  --danger: #c46b92;
-  --border: #3e5374;
-  --hover-bg: #1a263b;
-  --primary-hover: #96abd6;
-  --primary-active: #889cc6;
-  --danger-hover: #b86389;
-  --danger-active: #a6577b;
-}
-
 :root {
   --cong-navy: #06224A;
+  --cong-deep-navy: #031326;
+  --cong-panel-navy: #071F42;
   --cong-blue: #1E90FF;
   --cong-white: #FFFFFF;
   --cong-bg: #F5F5F5;
 }
 
 body,
-body.dark,
-body[data-season],
-body.dark[data-season] {
-  --bg: var(--cong-bg);
-  --bg-glow: #e8f3ff;
-  --card: var(--cong-white);
-  --card-soft: #f8fbff;
-  --text: #122033;
+body.dark {
+  --bg: var(--cong-deep-navy);
+  --bg-glow: var(--cong-navy);
+  --card: #08264f;
+  --card-soft: #061d3d;
+  --text: #eef6ff;
+  --muted: #b8c9de;
   --primary: var(--cong-blue);
-  --primary-hover: #1878d8;
-  --primary-active: #1266bd;
-  --border: #d8e2ef;
-  --hover-bg: #eef7ff;
+  --primary-hover: #58adff;
+  --primary-active: #1677d3;
+  --danger: #f06464;
+  --danger-hover: #e34f4f;
+  --danger-active: #cb3f3f;
+  --border: #21466f;
+  --input-border: #365d88;
+  --hover-bg: #0d315f;
 }
 
 * {
@@ -188,7 +54,8 @@ body {
   margin: 0;
   font-family: var(--font-ui);
   color: var(--text);
-  background: radial-gradient(circle at top left, var(--bg-glow), var(--bg));
+  background: radial-gradient(circle at top left, #0b315f 0, var(--cong-navy) 28%, var(--bg) 72%);
+  min-height: 100vh;
 }
 
 .brand-logo-mini {
@@ -207,6 +74,7 @@ body {
   max-width: 1100px;
   margin: 0 auto;
   padding: 24px;
+  background: transparent;
 }
 
 h1 {
@@ -761,12 +629,16 @@ button:disabled {
   align-items: flex-start;
   justify-content: flex-start;
   flex-wrap: wrap;
+  margin-top: 10px;
 }
 
 .upload-meta-list {
-  margin-top: 10px;
   display: grid;
   gap: 10px;
+}
+
+.upload-meta-status {
+  margin: 8px 0 0;
 }
 
 .upload-submit-area {
@@ -862,6 +734,7 @@ button:disabled {
   flex-wrap: wrap;
   align-items: end;
   gap: 8px;
+  margin-top: 14px;
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -887,7 +760,7 @@ button:disabled {
 }
 
 .search-scope-btn.is-active {
-  background: var(--cong-navy);
+  background: var(--cong-blue);
   color: #fff;
 }
 
@@ -1071,6 +944,14 @@ button.is-loading::before {
   border-radius: 10px;
   padding: 10px;
   background: var(--card);
+}
+
+.photo-card-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
 .photo-card img {

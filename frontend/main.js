@@ -66,7 +66,6 @@ const state = {
   questSort: 'status',
   openAccordions: new Set(),
   restoreScrollY: null,
-  season: 'spring',
   isUploading: false,
   isCreatingQuest: false,
   uploadDrafts: [],
@@ -79,8 +78,6 @@ const state = {
 
 let exportLoadingTimer = null;
 let exportResult = null;
-
-const SEASONS = new Set(['spring', 'summer', 'autumn', 'winter']);
 
 function el(tag, attrs = {}, text = null) {
   const node = document.createElement(tag);
@@ -118,18 +115,6 @@ function createLogTagSelect(value = DEFAULT_LOG_TAG) {
   });
   select.value = normalizeLogTag(value);
   return select;
-}
-
-function detectCurrentSeason() {
-  const month = new Date().getMonth() + 1;
-  if (month >= 3 && month <= 5) return 'spring';
-  if (month >= 6 && month <= 8) return 'summer';
-  if (month >= 9 && month <= 11) return 'autumn';
-  return 'winter';
-}
-
-function normalizeSeason(value) {
-  return SEASONS.has(value) ? value : detectCurrentSeason();
 }
 
 function readStateKey() {
@@ -400,9 +385,6 @@ const els = {
   folderPasswordCloseBtn: document.querySelector('#folder-password-close-btn'),
   openFolderPasswordBtn: document.querySelector('#open-folder-password-btn'),
   folderPasswordTargetName: document.querySelector('#folder-password-target-name'),
-  themeModal: document.querySelector('#theme-modal'),
-  themeCloseBtn: document.querySelector('#theme-close-btn'),
-  openThemeBtn: document.querySelector('#open-theme-btn'),
   developerDashboardBtn: document.querySelector('#developer-dashboard-btn'),
   developerModal: document.querySelector('#developer-modal'),
   developerCloseBtn: document.querySelector('#developer-close-btn'),
@@ -412,8 +394,6 @@ const els = {
   menuBtn: document.querySelector('#menu-btn'),
   menuPanel: document.querySelector('#menu-panel'),
   helpMenuBtn: document.querySelector('#help-menu-btn'),
-  seasonSelect: document.querySelector('#season-select'),
-  themeModeSelect: document.querySelector('#theme-mode-select'),
   resetUserBtn: document.querySelector('#reset-user-btn'),
   teamAdminBtn: document.querySelector('#team-admin-btn'),
   teamAdminCard: document.querySelector('#team-admin'),
@@ -542,12 +522,6 @@ function closeFolderPasswordModal() {
   }
   if (els.folderPasswordTargetName) {
     els.folderPasswordTargetName.textContent = '-';
-  }
-}
-
-function closeThemeModal() {
-  if (els.themeModal) {
-    els.themeModal.classList.add('hidden');
   }
 }
 
@@ -775,7 +749,6 @@ function showAuthSetup() {
   closeMenu();
   closeFolderCreateModal();
   closeFolderPasswordModal();
-  closeThemeModal();
   closeDeveloperModal();
 }
 
@@ -919,17 +892,6 @@ function openFolderCreateModal() {
   }
 }
 
-function openThemeModal() {
-  if (!els.themeModal) return;
-  if (els.themeModeSelect) {
-    els.themeModeSelect.value = document.body.classList.contains('dark') ? 'dark' : 'light';
-  }
-  if (els.seasonSelect) {
-    els.seasonSelect.value = normalizeSeason(state.season);
-  }
-  els.themeModal.classList.remove('hidden');
-}
-
 function openFolderPasswordModal() {
   if (!els.folderPasswordModal) return;
   if (!state.selectedFolder) {
@@ -1047,9 +1009,6 @@ function setMenuActionVisibility(showActions, options = {}) {
   }
   if (els.openFolderPasswordBtn) {
     els.openFolderPasswordBtn.classList.toggle('hidden', !showActions || !state.isAdmin);
-  }
-  if (els.openThemeBtn) {
-    els.openThemeBtn.classList.toggle('hidden', !showActions);
   }
   if (els.developerDashboardBtn) {
     els.developerDashboardBtn.classList.toggle('hidden', !state.isDeveloper);
@@ -1366,31 +1325,8 @@ function maybePromptLowStorage() {
   localStorage.setItem(key, '1');
 }
 
-function applyTheme(theme) {
-  if (theme === 'dark') {
-    document.body.classList.add('dark');
-  } else {
-    document.body.classList.remove('dark');
-  }
-  if (els.themeModeSelect) {
-    els.themeModeSelect.value = theme === 'dark' ? 'dark' : 'light';
-  }
-}
-
-function applySeason(season) {
-  const normalized = normalizeSeason(season);
-  state.season = normalized;
-  document.body.setAttribute('data-season', normalized);
-  if (els.seasonSelect && els.seasonSelect.value !== normalized) {
-    els.seasonSelect.value = normalized;
-  }
-}
-
-function initTheme() {
-  const theme = localStorage.getItem('kansa_theme') || 'light';
-  applyTheme(theme);
-  const season = normalizeSeason(localStorage.getItem('kansa_season'));
-  applySeason(season);
+function initFixedAppearance() {
+  document.body.classList.add('dark');
 }
 
 function showToast(message) {
@@ -1824,7 +1760,7 @@ function preserveCurrentView(photoId) {
 }
 
 async function initUser() {
-  initTheme();
+  initFixedAppearance();
   setMenuActionVisibility(false);
   if (els.logoutBtn) els.logoutBtn.classList.add('hidden');
   if (els.globalMenuWrap) els.globalMenuWrap.classList.add('hidden');
@@ -1905,7 +1841,6 @@ function showRoomSetup() {
   closeMenu();
   closeFolderCreateModal();
   closeFolderPasswordModal();
-  closeThemeModal();
   closeDeveloperModal();
 }
 
@@ -3197,6 +3132,11 @@ async function renderPhotos() {
   for (const photo of photos) {
     const card = el('div', { class: 'photo-card' });
 
+    const codeRow = el('div', { class: 'photo-card-meta-row' });
+    codeRow.appendChild(el('strong', {}, photo.photoCode || 'P---'));
+    codeRow.appendChild(createLogTagBadge(photo.logTag));
+    card.appendChild(codeRow);
+
     const img = el('img', {
       class: 'photo-card-image',
       src: photo.viewUrl || '',
@@ -3215,12 +3155,6 @@ async function renderPhotos() {
     img.setAttribute('role', 'button');
     img.setAttribute('aria-label', tf('{name} を全体表示', { name: photo.fileName || photo.photoId }));
     card.appendChild(img);
-
-    const codeRow = el('div');
-    codeRow.appendChild(el('strong', {}, photo.photoCode || 'P---'));
-    codeRow.appendChild(document.createTextNode(' '));
-    codeRow.appendChild(createLogTagBadge(photo.logTag));
-    card.appendChild(codeRow);
 
     if (photo.containerNumber && state.photoSearchScope === 'room') {
       card.appendChild(el('div', { class: 'muted' }, `コンテナ番号: ${photo.containerNumber}`));
@@ -3482,7 +3416,6 @@ if (els.logoutBtn) {
     closeRoomCreateModal();
     closeFolderCreateModal();
     closeFolderPasswordModal();
-    closeThemeModal();
     closeHelpModal();
     closeExportOptionsModal();
     closePhotoPreviewModal();
@@ -3537,20 +3470,6 @@ if (els.folderPasswordModal) {
   els.folderPasswordModal.onclick = (e) => {
     if (e && e.target === els.folderPasswordModal) {
       closeFolderPasswordModal();
-    }
-  };
-}
-
-if (els.themeCloseBtn) {
-  els.themeCloseBtn.onclick = () => {
-    closeThemeModal();
-  };
-}
-
-if (els.themeModal) {
-  els.themeModal.onclick = (e) => {
-    if (e && e.target === els.themeModal) {
-      closeThemeModal();
     }
   };
 }
@@ -3726,13 +3645,6 @@ if (els.openFolderPasswordBtn) {
     closeMenu();
     openFolderPasswordModal();
   }, 'コンテナ番号パスワード');
-}
-
-if (els.openThemeBtn) {
-  els.openThemeBtn.onclick = safeAction(async () => {
-    closeMenu();
-    openThemeModal();
-  }, 'テーマ変更');
 }
 
 if (els.developerDashboardBtn) {
@@ -4122,24 +4034,6 @@ window.addEventListener('error', (event) => {
 window.addEventListener('resize', () => {
   syncTopStorageGraphWidth();
 });
-
-if (els.seasonSelect) {
-  els.seasonSelect.onchange = () => {
-    const next = normalizeSeason(els.seasonSelect.value);
-    localStorage.setItem('kansa_season', next);
-    applySeason(next);
-    renderTopStorageGraph();
-  };
-}
-
-if (els.themeModeSelect) {
-  els.themeModeSelect.onchange = () => {
-    const next = els.themeModeSelect.value === 'dark' ? 'dark' : 'light';
-    localStorage.setItem('kansa_theme', next);
-    applyTheme(next);
-    renderTopStorageGraph();
-  };
-}
 
 if (els.menuBtn && els.menuPanel) {
   els.menuBtn.onclick = (event) => {
