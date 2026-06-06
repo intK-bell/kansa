@@ -18,5 +18,7 @@
   };
 
   const host = String(window.location.hostname || '').toLowerCase();
-  window.KANSA_CONFIG = host === 'dev.d3vej31wy18srw.amplifyapp.com' ? dev : prod;
+  const isLocal = host === 'localhost' || host === '127.0.0.1';
+  const isDevHost = host === 'dev.d3vej31wy18srw.amplifyapp.com';
+  window.KANSA_CONFIG = isLocal || isDevHost ? dev : prod;
 })();

@@ -734,12 +734,74 @@ button:disabled {
   white-space: nowrap;
 }
 
+.folder-detail-shell {
+  margin-bottom: 16px;
+}
+
+.folder-detail-tabs {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin: 0 0 -1px 10px;
+}
+
+.folder-detail-tab {
+  min-width: 96px;
+  padding: 10px 18px;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  background: var(--card-soft);
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.folder-detail-tab.is-active {
+  position: relative;
+  transform: translateY(1px);
+  background: var(--card);
+  color: var(--text);
+}
+
+.folder-detail-tab.is-active::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 12px;
+  right: 12px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--cong-blue);
+}
+
+.folder-detail-card {
+  border-top-left-radius: 8px;
+}
+
+.folder-detail-panel.hidden {
+  display: none;
+}
+
+.search-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.search-panel-head h2 {
+  margin: 0;
+}
+
 .photo-search-panel {
   display: flex;
   flex-wrap: wrap;
   align-items: end;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 12px;
   padding: 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1491,6 +1553,29 @@ body.dark .room-row {
 
   .card {
     padding: 12px;
+  }
+
+  .folder-detail-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+    margin: 0 0 -1px;
+  }
+
+  .folder-detail-tab {
+    width: 100%;
+    min-width: 0;
+    padding: 10px 8px;
+  }
+
+  .folder-detail-card {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+
+  .search-panel-head {
+    display: grid;
+    gap: 4px;
   }
 
   .row {

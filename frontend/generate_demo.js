@@ -87,11 +87,11 @@ function wrapPdfText(text, maxWidth, size, jpFont, latinFont) {
 
 function toneSet(seedText) {
   const presets = [
-    ['7baf6a', 'dff0d8'],
-    ['5f79a9', 'dbe7f7'],
-    ['d85a6a', 'f6e6ea'],
-    ['a86f22', 'f4dfbe'],
-    ['2f8f83', 'cdeef6'],
+    ['06224A', 'dcecff'],
+    ['1E90FF', 'dcecff'],
+    ['7C4DFF', 'e7ddff'],
+    ['E53935', 'ffe0de'],
+    ['2E7D32', 'd9f0df'],
   ];
   const source = Array.from(String(seedText || 'demo'));
   const hash = source.reduce((sum, ch) => sum + ch.codePointAt(0), 0);
@@ -152,7 +152,7 @@ async function buildDemoPdf(options) {
       borderColor: hexToRgbColor('BFD2B7'),
       borderWidth: 1,
     });
-    page.drawText(i18n.t('フォトスマレポート'), {
+    page.drawText(i18n.t('Congレポート'), {
       x: pptUnit(0.82),
       y: PDF_PAGE_HEIGHT - pptUnit(0.58),
       size: 10,

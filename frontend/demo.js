@@ -1,4 +1,4 @@
-import { DEMO_PLAN_BYTES, DEMO_USER_KEY, createDemoPhoto, createDemoStore, demoNow, demoSvg } from './demo-seed.mjs';
+import { DEMO_PLAN_BYTES, DEMO_USER_KEY, createDemoPhoto, createDemoStore, demoNow, demoSvg } from './demo-seed.mjs?v=20260606-cong2';
 
 const APP_CONFIG = window.KANSA_CONFIG || {};
 const API_BASE =
@@ -31,6 +31,15 @@ const tf = (key, values = {}) =>
         Object.prototype.hasOwnProperty.call(values, name) ? String(values[name]) : match
       );
 const appLocale = I18N?.language || 'ja-JP';
+const LOG_TAGS = [
+  { value: 'container_number', label: 'コンテナ番号', color: '#06224A' },
+  { value: 'inbound', label: '搬入', color: '#1E90FF' },
+  { value: 'outbound', label: '搬出', color: '#2E7D32' },
+  { value: 'seal', label: 'シール', color: '#7C4DFF' },
+  { value: 'damage', label: '損傷', color: '#E53935' },
+  { value: 'other', label: 'その他', color: '#607D8B' },
+];
+const DEFAULT_LOG_TAG = 'container_number';
 
 if (I18N && !window.__KANSA_DEMO_DIALOG_I18N__) {
   window.__KANSA_DEMO_DIALOG_I18N__ = true;
@@ -73,6 +82,12 @@ const state = {
   isCreatingQuest: false,
   uploadDrafts: [],
   uploadTargetQuestId: null,
+  folderDetailTab: 'record',
+  photoSearchScope: 'folder',
+  photoSearchTag: 'all',
+  photoSearchKeyword: '',
+  searchPhotos: [],
+  roomSearchNextToken: null,
 };
 
 let exportLoadingTimer = null;
@@ -91,6 +106,31 @@ function el(tag, attrs = {}, text = null) {
   });
   if (text !== null && text !== undefined) node.textContent = String(text);
   return node;
+}
+
+function normalizeLogTag(value, fallback = DEFAULT_LOG_TAG) {
+  const tag = String(value || '').trim();
+  return LOG_TAGS.some((item) => item.value === tag) ? tag : fallback;
+}
+
+function logTagMeta(value) {
+  return LOG_TAGS.find((item) => item.value === normalizeLogTag(value, 'other')) || LOG_TAGS[LOG_TAGS.length - 1];
+}
+
+function createLogTagBadge(value, suffix = '') {
+  const meta = logTagMeta(value);
+  const badge = el('span', { class: 'tag-badge' }, `${t(meta.label)}${suffix}`);
+  badge.style.setProperty('--tag-color', meta.color);
+  return badge;
+}
+
+function createLogTagSelect(value = DEFAULT_LOG_TAG) {
+  const select = el('select', { class: 'js-log-tag-select' });
+  LOG_TAGS.forEach((tag) => {
+    select.appendChild(el('option', { value: tag.value }, t(tag.label)));
+  });
+  select.value = normalizeLogTag(value);
+  return select;
 }
 
 function detectCurrentSeason() {
@@ -450,7 +490,20 @@ const els = {
   folderPassword: document.querySelector('#folder-password'),
   createFolderBtn: document.querySelector('#create-folder-btn'),
   folderDetail: document.querySelector('#folder-detail'),
+  folderDetailTabs: document.querySelector('#folder-detail-tabs'),
+  recordTabBtn: document.querySelector('#record-tab-btn'),
+  searchTabBtn: document.querySelector('#search-tab-btn'),
+  exportTabBtn: document.querySelector('#export-tab-btn'),
+  recordPanel: document.querySelector('#record-panel'),
+  searchPanel: document.querySelector('#search-panel'),
   folderDetailTitle: document.querySelector('#folder-detail-title'),
+  logTagSummary: document.querySelector('#log-tag-summary'),
+  photoSearchPanel: document.querySelector('#photo-search-panel'),
+  searchScopeFolderBtn: document.querySelector('#search-scope-folder-btn'),
+  searchScopeRoomBtn: document.querySelector('#search-scope-room-btn'),
+  logTagFilter: document.querySelector('#log-tag-filter'),
+  photoSearchKeyword: document.querySelector('#photo-search-keyword'),
+  photoSearchBtn: document.querySelector('#photo-search-btn'),
   photoArchiveNote: document.querySelector('#photo-archive-note'),
   folderPasswordSet: document.querySelector('#folder-password-set'),
   setFolderPasswordBtn: document.querySelector('#set-folder-password-btn'),
@@ -467,10 +520,10 @@ const els = {
   uploadMetaList: document.querySelector('#upload-meta-list'),
   uploadMetaStatus: document.querySelector('#upload-meta-status'),
   applyCommentBulkBtn: document.querySelector('#apply-comment-bulk-btn'),
-  applyNameSequenceBtn: document.querySelector('#apply-name-sequence-btn'),
   cancelUploadDraftsBtn: document.querySelector('#cancel-upload-drafts-btn'),
   exportBtn: document.querySelector('#export-btn'),
   photoList: document.querySelector('#photo-list'),
+  searchPhotoList: document.querySelector('#search-photo-list'),
   questList: document.querySelector('#quest-list'),
   errorBox: document.querySelector('#error-box'),
   toast: document.querySelector('#toast'),
@@ -774,7 +827,7 @@ function openThemeModal() {
 function openFolderPasswordModal() {
   if (!els.folderPasswordModal) return;
   if (!state.selectedFolder) {
-    window.alert(t('先にフォルダを選択してください。'));
+    window.alert(t('先にコンテナを選択してください。'));
     return;
   }
   if (els.folderPasswordTargetName) {
@@ -813,7 +866,7 @@ function buildDemoExportUrl(format) {
 
 async function requestFolderExport(format) {
   if (!state.selectedFolder) {
-    window.alert(t('先にフォルダを選択してください。'));
+    window.alert(t('先にコンテナを選択してください。'));
     return;
   }
   const formatLabel = format === 'pdf' ? 'PDF' : format === 'pptx_light' ? t('軽量PPT') : t('高画質PPT');
@@ -949,24 +1002,24 @@ function currentFolderLimit() {
 function folderUsageSummary() {
   const count = Array.isArray(state.folders) ? state.folders.length : 0;
   const limit = currentFolderLimit();
-  return limit === null ? `フォルダ ${count} / 無制限` : `フォルダ ${count} / ${limit}`;
+  return limit === null ? `コンテナ ${count} / 無制限` : `コンテナ ${count} / ${limit}`;
 }
 
 function freePlanGuideText() {
   const limit = currentFolderLimit();
   return limit === null
-    ? '1GB〜10GBプラン: フォルダ無制限 / 3年保存 / PPT透かしなし'
-    : 'フリープラン: フォルダ2個 / 30日保存 / PPT透かしあり';
+    ? '1GB〜10GBプラン: コンテナ無制限 / 3年保存 / PPT透かしなし'
+    : 'フリープラン: コンテナ2個 / 30日保存 / PPT透かしあり';
 }
 
 function freePlanRequirementDialogText(constraints = {}) {
-  const lines = ['フリープランへの切り替えは、以下を満たす必要があります。', '・容量が512MB未満', '・フォルダの数が2つ以下'];
+  const lines = ['フリープランへの切り替えは、以下を満たす必要があります。', '・容量が512MB未満', '・コンテナの数が2つ以下'];
   const unmet = Array.isArray(constraints.unmet) ? constraints.unmet : [];
   if (unmet.includes('usageBytes')) {
     lines.push(`・現在の容量: ${formatBytes(Number(constraints.usageBytes || 0))}`);
   }
   if (unmet.includes('folderCount')) {
-    lines.push(`・現在のフォルダ数: ${Number(constraints.folderCount || 0)}`);
+    lines.push(`・現在のコンテナ数: ${Number(constraints.folderCount || 0)}`);
   }
   return lines.join('\n');
 }
@@ -977,7 +1030,7 @@ function freePlanReturnConfirmText() {
     '',
     t('実行するとStripeの定期課金は今すぐ停止します。'),
     t('当月の残り期間分の返金はありません。'),
-    t('フリープランへ戻すには、容量512MB未満・フォルダ2個以下である必要があります。'),
+    t('フリープランへ戻すには、容量512MB未満・コンテナ2個以下である必要があります。'),
   ].join('\n');
 }
 
@@ -987,7 +1040,7 @@ function freePlanReturnSuccessText() {
     '',
     t('Stripeの定期課金は停止しました。'),
     t('当月の残り期間分の返金はありません。'),
-    t('現在の上限は、容量512MB未満・フォルダ2個までです。'),
+    t('現在の上限は、容量512MB未満・コンテナ2個までです。'),
   ].join('\n');
 }
 
@@ -1241,19 +1294,10 @@ function setUploadLoading(isLoading) {
     els.photoFiles.disabled = isLoading;
   }
   if (els.applyCommentBulkBtn) els.applyCommentBulkBtn.disabled = isLoading;
-  if (els.applyNameSequenceBtn) els.applyNameSequenceBtn.disabled = isLoading;
   if (els.cancelUploadDraftsBtn) els.cancelUploadDraftsBtn.disabled = isLoading;
   if (els.uploadLoading) {
     els.uploadLoading.classList.toggle('hidden', !isLoading);
   }
-}
-
-function sanitizePhotoName(rawValue, fallbackName = '') {
-  const source = String(rawValue || fallbackName || '').trim();
-  if (!source) return '';
-  const lastDot = source.lastIndexOf('.');
-  const base = lastDot > 0 ? source.slice(0, lastDot) : source;
-  return base.trim().slice(0, 20);
 }
 
 function revokeUploadDraftPreview(draft) {
@@ -1289,7 +1333,7 @@ function rebuildUploadDrafts(files, questId = null) {
     localId: `${Date.now()}_${index}_${file.name}`,
     file,
     originalName: file.name,
-    photoName: sanitizePhotoName(file.name),
+    logTag: DEFAULT_LOG_TAG,
     initialComment: '',
     previewUrl: URL.createObjectURL(file),
   }));
@@ -1300,6 +1344,12 @@ function padSequenceNumber(value) {
   return String(value).padStart(3, '0');
 }
 
+function buildDemoPhotoFileName(draft, index) {
+  const container = String(state.selectedFolder?.title || 'CONTAINER').trim() || 'CONTAINER';
+  const tag = logTagMeta(draft.logTag).label;
+  return `${container}_${tag}_${padSequenceNumber(index + 1)}`;
+}
+
 function syncUploadDraftsFromDom() {
   if (!els.uploadMetaList) return;
   const rowNodes = els.uploadMetaList.querySelectorAll('.upload-draft-row[data-draft-id]');
@@ -1308,9 +1358,9 @@ function syncUploadDraftsFromDom() {
     if (!draftId) return;
     const draft = state.uploadDrafts.find((item) => item.localId === draftId);
     if (!draft) return;
-    const nameInput = row.querySelector('.js-upload-draft-name');
+    const tagSelect = row.querySelector('.js-log-tag-select');
     const commentInput = row.querySelector('.js-upload-draft-comment');
-    if (nameInput) draft.photoName = String(nameInput.value || '').slice(0, 20);
+    if (tagSelect) draft.logTag = normalizeLogTag(tagSelect.value);
     if (commentInput) draft.initialComment = String(commentInput.value || '').slice(0, 50);
   });
 }
@@ -1319,12 +1369,9 @@ function validateUploadDrafts() {
   syncUploadDraftsFromDom();
   const errors = [];
   state.uploadDrafts.forEach((draft, index) => {
-    const photoName = String(draft.photoName || '').trim();
     const initialComment = String(draft.initialComment || '').trim();
-    if (!photoName) {
-      errors.push(`${index + 1}行目: 写真名は必須です。`);
-    } else if (photoName.length > 20) {
-      errors.push(`${index + 1}行目: 写真名は20文字以内にしてください。`);
+    if (!normalizeLogTag(draft.logTag, '')) {
+      errors.push(`${index + 1}行目: タグは必須です。`);
     }
     if (initialComment.length > 50) {
       errors.push(`${index + 1}行目: 初回コメントは50文字以内にしてください。`);
@@ -1355,7 +1402,6 @@ function renderUploadDrafts() {
   const showBulkActions = state.uploadDrafts.length >= 2;
   els.uploadMetaCard.classList.toggle('hidden', !hasDrafts);
   if (els.applyCommentBulkBtn) els.applyCommentBulkBtn.classList.toggle('hidden', !showBulkActions || Boolean(state.uploadTargetQuestId));
-  if (els.applyNameSequenceBtn) els.applyNameSequenceBtn.classList.toggle('hidden', !showBulkActions);
   els.uploadMetaList.innerHTML = '';
   if (!hasDrafts) {
     els.uploadMetaStatus.textContent = '';
@@ -1407,22 +1453,16 @@ function renderUploadDrafts() {
 
     const grid = el('div', { class: 'upload-draft-grid' });
 
-    const nameField = el('label', { class: 'upload-draft-field' });
-    nameField.appendChild(el('span', { class: 'upload-draft-label' }, '写真名'));
-    const nameInput = el('input', {
-      class: 'js-upload-draft-name',
-      type: 'text',
-      maxlength: '20',
-      value: draft.photoName,
-      placeholder: '写真名',
-    });
-    const syncName = (event) => {
-      draft.photoName = String(event.target.value || '').slice(0, 20);
+    const tagField = el('label', { class: 'upload-draft-field' });
+    tagField.appendChild(el('span', { class: 'upload-draft-label' }, 'タグ'));
+    const tagSelect = createLogTagSelect(draft.logTag);
+    const syncTag = (event) => {
+      draft.logTag = normalizeLogTag(event.target.value);
     };
-    nameInput.addEventListener('input', syncName);
-    nameInput.addEventListener('change', syncName);
-    nameField.appendChild(nameInput);
-    grid.appendChild(nameField);
+    tagSelect.addEventListener('input', syncTag);
+    tagSelect.addEventListener('change', syncTag);
+    tagField.appendChild(tagSelect);
+    grid.appendChild(tagField);
 
     const commentField = el('label', { class: 'upload-draft-field' });
     commentField.appendChild(el('span', { class: 'upload-draft-label' }, '初回コメント'));
@@ -1457,23 +1497,6 @@ function applyBulkComment() {
   if (!window.confirm(t('1つ目のコメントを全件に反映してよかですか？既存入力は上書きされます。'))) return;
   state.uploadDrafts.forEach((draft) => {
     draft.initialComment = nextComment;
-  });
-  renderUploadDrafts();
-}
-
-function applySequencedPhotoNames() {
-  if (!state.uploadDrafts.length) return;
-  syncUploadDraftsFromDom();
-  const baseName = String(state.uploadDrafts[0]?.photoName || '').trim();
-  if (!baseName) {
-    window.alert(t('1行目の写真名を先に入力してください。'));
-    return;
-  }
-  if (!window.confirm(t('1つ目の写真名を連番で反映してよかですか？既存入力は上書きされます。'))) return;
-  const suffixLength = 4;
-  const baseForSequence = baseName.slice(0, Math.max(0, 20 - suffixLength));
-  state.uploadDrafts.forEach((draft, index) => {
-    draft.photoName = `${baseForSequence}_${padSequenceNumber(index + 1)}`;
   });
   renderUploadDrafts();
 }
@@ -1961,11 +1984,11 @@ async function loadAdminPanel() {
 
           const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
           if (m.folderScope === 'invited') {
-            actions.appendChild(el('span', { class: 'muted' }, t('フォルダ招待')));
+            actions.appendChild(el('span', { class: 'muted' }, t('コンテナ招待')));
           } else {
             const scopeSelect = el('select', { style: 'min-width:120px;' });
-            scopeSelect.appendChild(el('option', { value: 'own' }, t('自分のフォルダのみ')));
-            scopeSelect.appendChild(el('option', { value: 'all' }, t('全フォルダ表示')));
+            scopeSelect.appendChild(el('option', { value: 'own' }, t('自分のコンテナのみ')));
+            scopeSelect.appendChild(el('option', { value: 'all' }, t('全コンテナ表示')));
             scopeSelect.value = m.role === 'admin' ? 'all' : m.folderScope || 'all';
             scopeSelect.disabled = m.role === 'admin' || m.userKey === state.ownerUserKey;
             scopeSelect.onchange = safeAction(async () => {
@@ -2021,14 +2044,14 @@ async function loadAdminPanel() {
       els.folderAdminList.innerHTML = '';
       if (!folders.length) {
         state.adminFolderId = '';
-        els.folderAdminList.appendChild(el('div', { class: 'muted' }, t('フォルダがなかです')));
+        els.folderAdminList.appendChild(el('div', { class: 'muted' }, t('コンテナがなかです')));
       } else {
         if (state.adminFolderId && !folders.some((f) => f.folderId === state.adminFolderId)) {
           state.adminFolderId = '';
         }
         const pickerRow = el('div', { class: 'row folder-admin-picker' });
         const folderSelect = el('select');
-        folderSelect.appendChild(el('option', { value: '' }, t('フォルダを選択してください')));
+        folderSelect.appendChild(el('option', { value: '' }, t('コンテナを選択してください')));
         folders.forEach((f) => {
           const locked = Boolean(f.hasPassword);
           const modeLabel = normalizeFolderMode(f.mode) === 'quest' ? 'クエスト' : 'フォト';
@@ -2039,7 +2062,7 @@ async function loadAdminPanel() {
         folderSelect.onchange = safeAction(async () => {
           state.adminFolderId = folderSelect.value;
           await loadAdminPanel();
-        }, '管理フォルダ選択');
+        }, '管理コンテナ選択');
         pickerRow.appendChild(folderSelect);
         pickerRow.appendChild(el('span', { class: 'muted' }, tf('{count}件', { count: folders.length })));
         els.folderAdminList.appendChild(pickerRow);
@@ -2064,14 +2087,14 @@ async function loadAdminPanel() {
 
           const inviteRow = el('div', { class: 'row folder-admin-actions' });
           const folderInviteInput = el('input', {
-            placeholder: t('フォルダ招待URL'),
+            placeholder: t('コンテナ招待URL'),
             readonly: 'readonly',
           });
           const folderInviteCell = el('div', { class: 'invite-url-cell' });
           const copyFolderInviteBtn = el('button', { type: 'button' }, t('コピー'));
           copyFolderInviteBtn.onclick = safeAction(async () => {
             await copyInviteUrlFromInput(folderInviteInput);
-          }, 'フォルダ招待URLコピー');
+          }, 'コンテナ招待URLコピー');
           const createFolderInviteBtn = el('button', { type: 'button' }, t('招待URL発行（7日）'));
           createFolderInviteBtn.onclick = safeAction(async () => {
             const res = await api('/invites/create', {
@@ -2085,7 +2108,7 @@ async function loadAdminPanel() {
             const url = `${base}?invite=${encodeURIComponent(token)}`;
             if (revokeFolderInviteBtn) revokeFolderInviteBtn.classList.remove('hidden');
             await setInviteUrlText(url, folderInviteInput);
-          }, 'フォルダ招待URL発行');
+          }, 'コンテナ招待URL発行');
           inviteRow.appendChild(createFolderInviteBtn);
 
           const revokeFolderInviteBtn = el('button', { type: 'button', class: 'danger hidden' }, t('招待URL失効'));
@@ -2095,14 +2118,14 @@ async function loadAdminPanel() {
               showError(t('失効する招待URLがなかです（先に発行してください）'));
               return;
             }
-            const ok = window.confirm(tf('フォルダ「{folder}」の招待URLを失効してよかですか？', { folder: f.title || f.folderId }));
+            const ok = window.confirm(tf('コンテナ「{folder}」の招待URLを失効してよかですか？', { folder: f.title || f.folderId }));
             if (!ok) return;
             await api('/invites/revoke', { method: 'POST', body: JSON.stringify({ token }) });
             delete state.lastFolderInviteTokens[f.folderId];
             folderInviteInput.value = '';
             revokeFolderInviteBtn.classList.add('hidden');
-            showToast(t('フォルダ招待URLを失効しました。'));
-          }, 'フォルダ招待URL失効');
+            showToast(t('コンテナ招待URLを失効しました。'));
+          }, 'コンテナ招待URL失効');
           inviteRow.appendChild(revokeFolderInviteBtn);
           folderInviteCell.appendChild(folderInviteInput);
           folderInviteCell.appendChild(copyFolderInviteBtn);
@@ -2111,7 +2134,7 @@ async function loadAdminPanel() {
 
           const passwordRow = el('div', { class: 'row folder-admin-actions folder-admin-password' });
           const passwordInput = el('input', {
-            placeholder: t('フォルダパスワード（空で解除）'),
+            placeholder: t('コンテナパスワード（空で解除）'),
             type: 'password',
           });
           const passwordBtn = el('button', { type: 'button' }, t('設定/解除'));
@@ -2119,8 +2142,8 @@ async function loadAdminPanel() {
             const next = String(passwordInput.value || '').trim();
             const ok = window.confirm(
               next
-                ? tf('フォルダ「{folder}」のパスワードを設定してよかですか？', { folder: f.title || f.folderId })
-                : tf('フォルダ「{folder}」のパスワードを解除してよかですか？', { folder: f.title || f.folderId })
+                ? tf('コンテナ「{folder}」のパスワードを設定してよかですか？', { folder: f.title || f.folderId })
+                : tf('コンテナ「{folder}」のパスワードを解除してよかですか？', { folder: f.title || f.folderId })
             );
             if (!ok) return;
             await api(`/folders/${f.folderId}/password`, {
@@ -2131,10 +2154,10 @@ async function loadAdminPanel() {
             if (next) state.folderPasswordById[f.folderId] = next;
             else delete state.folderPasswordById[f.folderId];
             passwordInput.value = '';
-            window.alert(next ? t('フォルダのパスワードを設定しました。') : t('フォルダのパスワードを解除しました。'));
+            window.alert(next ? t('コンテナのパスワードを設定しました。') : t('コンテナのパスワードを解除しました。'));
             await loadFolders();
             await loadAdminPanel();
-          }, 'フォルダパスワード設定');
+          }, 'コンテナパスワード設定');
           passwordRow.appendChild(passwordInput);
           passwordRow.appendChild(passwordBtn);
           wrap.appendChild(passwordRow);
@@ -2142,15 +2165,15 @@ async function loadAdminPanel() {
           const deleteRow = el('div', { class: 'row folder-admin-actions' });
           const delBtn = el('button', { type: 'button', class: 'danger' }, t('削除'));
           delBtn.onclick = safeAction(async () => {
-            const ok = window.confirm(tf('フォルダ「{folder}」を削除してよかですか？（写真とコメントも消えます）', { folder: f.title || f.folderId }));
+            const ok = window.confirm(tf('コンテナ「{folder}」を削除してよかですか？（写真とコメントも消えます）', { folder: f.title || f.folderId }));
             if (!ok) return;
             await api(`/folders/${f.folderId}`, { method: 'DELETE' });
             state.adminFolderId = '';
-            window.alert(t('フォルダを削除しました。'));
+            window.alert(t('コンテナを削除しました。'));
             await loadFolders();
             await loadTeamMe();
             await loadAdminPanel();
-          }, 'フォルダ削除');
+          }, 'コンテナ削除');
           deleteRow.appendChild(delBtn);
           wrap.appendChild(deleteRow);
 
@@ -2168,9 +2191,9 @@ async function loadAdminPanel() {
               }
               const reasonLabel = {
                 admin: t('管理者'),
-                all: t('全フォルダ'),
+                all: t('全コンテナ'),
                 owner: t('作成者'),
-                invited: t('フォルダ招待'),
+                invited: t('コンテナ招待'),
               };
               membersBox.appendChild(el('h3', {}, t('メンバー')));
               items.forEach((m) => {
@@ -2185,17 +2208,17 @@ async function loadAdminPanel() {
                 );
                 const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
                 if (m.accessReason === 'invited' && m.folderScope === 'invited') {
-                  const removeBtn = el('button', { type: 'button', class: 'danger' }, t('このフォルダから外す'));
+                  const removeBtn = el('button', { type: 'button', class: 'danger' }, t('このコンテナから外す'));
                   removeBtn.onclick = safeAction(async () => {
-                    const ok = window.confirm(tf('メンバー「{name}」をこのフォルダから外してよかですか？', { name }));
+                    const ok = window.confirm(tf('メンバー「{name}」をこのコンテナから外してよかですか？', { name }));
                     if (!ok) return;
                     await api(
                       `/folders/${encodeURIComponent(f.folderId)}/members/${encodeURIComponent(m.userKey)}`,
                       { method: 'DELETE' }
                     );
-                    window.alert(t('フォルダメンバーを外しました。'));
+                    window.alert(t('コンテナメンバーを外しました。'));
                     await loadAdminPanel();
-                  }, 'フォルダメンバー解除');
+                  }, 'コンテナメンバー解除');
                   actions.appendChild(removeBtn);
                 }
                 row.appendChild(actions);
@@ -2211,7 +2234,7 @@ async function loadAdminPanel() {
   } catch (error) {
     if (els.folderAdminList) {
       els.folderAdminList.innerHTML = '';
-      els.folderAdminList.appendChild(el('div', { class: 'muted' }, `フォルダ取得失敗: ${asMessage(error)}`));
+      els.folderAdminList.appendChild(el('div', { class: 'muted' }, `コンテナ取得失敗: ${asMessage(error)}`));
     }
   }
 
@@ -2321,9 +2344,9 @@ async function loadFolders() {
     renderFolders();
     const message = error?.message || 'unknown';
     if (message.includes('Failed to fetch') || message.includes('Type error')) {
-      showError('フォルダ取得失敗: ネットワーク/CORSエラーの可能性があります');
+      showError('コンテナ取得失敗: ネットワーク/CORSエラーの可能性があります');
     } else {
-      showError(`フォルダ取得失敗: ${message}`);
+      showError(`コンテナ取得失敗: ${message}`);
     }
   }
 }
@@ -2394,7 +2417,7 @@ function renderFolders() {
   if (!state.folders.length) {
     const empty = document.createElement('option');
     empty.value = '';
-    empty.textContent = 'まだフォルダがなかです';
+    empty.textContent = 'まだコンテナがなかです';
     els.currentFolderSelect.appendChild(empty);
     els.currentFolderSelect.value = '';
     els.currentFolderSelect.disabled = true;
@@ -2405,7 +2428,7 @@ function renderFolders() {
 
   const head = document.createElement('option');
   head.value = '';
-  head.textContent = 'フォルダを選択してください';
+  head.textContent = 'コンテナ番号を選択してください';
   els.currentFolderSelect.appendChild(head);
 
   state.folders.forEach((folder) => {
@@ -2413,8 +2436,8 @@ function renderFolders() {
     option.value = folder.folderId;
     const unread = state.folderUnreadMap[folder.folderId];
     const locked = Boolean(folder.hasPassword);
-    const modeLabel = normalizeFolderMode(folder.mode) === 'quest' ? 'クエスト' : 'フォト';
-    option.textContent = `${folder.folderCode || 'F---'} ${folder.title} [${modeLabel}]${locked ? ' [鍵]' : ''}${unread ? ' ●新着' : ''}`;
+    const modeLabel = normalizeFolderMode(folder.mode) === 'quest' ? 'クエスト' : '通常';
+    option.textContent = `${folder.title} [${modeLabel}]${locked ? ' [鍵]' : ''}${unread ? ' ●新着' : ''}`;
     els.currentFolderSelect.appendChild(option);
   });
 
@@ -2428,16 +2451,19 @@ function renderFolders() {
 
 async function selectFolder(folder) {
   clearUploadDrafts();
+  state.searchPhotos = [];
+  state.roomSearchNextToken = null;
+  state.folderDetailTab = 'record';
   const folderId = folder.folderId;
   if (folder.hasPassword && !state.folderPasswordById[folder.folderId]) {
-    const entered = window.prompt(t('このフォルダは鍵付きです。パスワードを入力してください。'), '');
+    const entered = window.prompt(t('このコンテナは鍵付きです。パスワードを入力してください。'), '');
     if (entered === null) {
       renderFolders();
       return;
     }
     const pw = String(entered || '').trim();
     if (!pw) {
-      showError('フォルダパスワードが必要です。');
+      showError('コンテナパスワードが必要です。');
       renderFolders();
       return;
     }
@@ -2446,10 +2472,11 @@ async function selectFolder(folder) {
   state.selectedFolder = folder;
   renderFolders();
   els.folderDetail.classList.remove('hidden');
-  const modeLabel = normalizeFolderMode(folder.mode) === 'quest' ? 'クエスト' : 'フォト';
-  els.folderDetailTitle.textContent = `フォルダ: ${folder.folderCode || 'F---'} ${folder.title} [${modeLabel}]`;
+  const modeLabel = normalizeFolderMode(folder.mode) === 'quest' ? 'クエスト' : '通常';
+  els.folderDetailTitle.textContent = `コンテナ: ${folder.title} [${modeLabel}]`;
   try {
     await loadFolderContent();
+    setFolderDetailTab('record');
   } catch (error) {
     const body = parseApiErrorBody(error);
     if (error?.status === 403 && body?.message === 'invalid folder password') {
@@ -2459,7 +2486,7 @@ async function selectFolder(folder) {
       els.folderDetail.classList.add('hidden');
       renderPhotoArchiveNote();
       renderFolders();
-      showError('フォルダパスワードが違います。');
+      showError('コンテナパスワードが違います。');
       return;
     }
     throw error;
@@ -2496,6 +2523,7 @@ async function loadPhotos() {
   };
   renderPhotoArchiveNote();
   await renderPhotos();
+  renderLogTagSummary();
   await refreshFolderUnread([state.selectedFolder.folderId]);
   renderFolders();
   await loadTeamMe();
@@ -2514,6 +2542,7 @@ async function loadQuests() {
   });
   state.quests = data.items || [];
   renderQuests();
+  renderLogTagSummary();
   await refreshFolderUnread([folderId]);
   renderFolderMode();
   renderFolders();
@@ -2530,6 +2559,9 @@ async function loadFolderContent() {
     await loadPhotos();
   }
   renderFolderMode();
+  if (state.folderDetailTab === 'search') {
+    await runPhotoSearch();
+  }
 }
 
 async function uploadFiles() {
@@ -2597,7 +2629,7 @@ async function uploadFiles() {
       return blob || null;
     };
 
-    for (const draft of drafts) {
+    for (const [index, draft] of drafts.entries()) {
       const file = draft.file;
       try {
         const folderId = state.selectedFolder.folderId;
@@ -2645,7 +2677,8 @@ async function uploadFiles() {
             photoId: up.photoId,
             originalS3Key: up.originalS3Key,
             previewS3Key: resized ? up.previewS3Key : null,
-            fileName: String(draft.photoName || '').trim(),
+            fileName: buildDemoPhotoFileName(draft, index),
+            logTag: normalizeLogTag(draft.logTag),
             initialComment: targetQuestId ? null : String(draft.initialComment || '').trim() || null,
             questId: targetQuestId,
           }),
@@ -2673,7 +2706,7 @@ async function uploadFiles() {
     }
     if (duplicateCount > 0) {
       if (totalFiles === 1) {
-        showError('同じ写真は同じフォルダにアップロードできません（重複を検知しました）。');
+        showError('同じ写真は同じコンテナにアップロードできません（重複を検知しました）。');
         return;
       }
       if (duplicateCount === totalFiles) {
@@ -2710,12 +2743,162 @@ function formatDateTime(value) {
   return new Date(value).toLocaleString(appLocale);
 }
 
+function setFolderDetailTab(tab) {
+  const nextTab = tab === 'search' ? 'search' : 'record';
+  state.folderDetailTab = nextTab;
+  const isSearch = nextTab === 'search';
+  if (els.recordTabBtn) {
+    els.recordTabBtn.classList.toggle('is-active', !isSearch);
+    els.recordTabBtn.setAttribute('aria-selected', isSearch ? 'false' : 'true');
+  }
+  if (els.searchTabBtn) {
+    els.searchTabBtn.classList.toggle('is-active', isSearch);
+    els.searchTabBtn.setAttribute('aria-selected', isSearch ? 'true' : 'false');
+  }
+  if (els.recordPanel) els.recordPanel.classList.toggle('hidden', isSearch);
+  if (els.searchPanel) els.searchPanel.classList.toggle('hidden', !isSearch);
+  renderFolderMode();
+}
+
 function renderFolderMode() {
   const mode = currentFolderMode();
   if (els.photoModePanel) els.photoModePanel.classList.toggle('hidden', mode !== 'photo');
   if (els.questModePanel) els.questModePanel.classList.toggle('hidden', mode !== 'quest');
   if (els.photoList) els.photoList.classList.toggle('hidden', mode !== 'photo');
   if (els.questList) els.questList.classList.toggle('hidden', mode !== 'quest');
+}
+
+function photosForCurrentSummary() {
+  if (currentFolderMode() === 'quest') {
+    return (state.quests || []).flatMap((quest) => quest.photos || []);
+  }
+  return state.photos || [];
+}
+
+function renderLogTagSummary(photos = photosForCurrentSummary()) {
+  if (!els.logTagSummary) return;
+  els.logTagSummary.innerHTML = '';
+  const counts = Object.fromEntries(LOG_TAGS.map((tag) => [tag.value, 0]));
+  (photos || []).forEach((photo) => {
+    const tag = normalizeLogTag(photo.logTag, 'other');
+    counts[tag] = (counts[tag] || 0) + 1;
+  });
+  LOG_TAGS.forEach((tag) => {
+    els.logTagSummary.appendChild(createLogTagBadge(tag.value, ` ${counts[tag.value] || 0}`));
+  });
+}
+
+function demoSearchablePhotosForCurrentRoom() {
+  const room = demoGetActiveRoom();
+  if (!room) return [];
+  return (room.folders || []).flatMap((folder) =>
+    (folder.photos || []).map((photo) => ({
+      ...demoPhotoSummary(photo),
+      containerNumber: folder.title,
+      folderTitle: folder.title,
+      folderMode: normalizeFolderMode(folder.mode),
+      commentText: (photo.comments || []).map((comment) => comment.text).join(' '),
+    }))
+  );
+}
+
+function photoMatchesSearch(photo) {
+  const tag = state.photoSearchTag || 'all';
+  if (tag !== 'all' && normalizeLogTag(photo.logTag, 'other') !== tag) return false;
+  const keyword = String(state.photoSearchKeyword || '').trim().toLowerCase();
+  if (!keyword) return true;
+  return [
+    photo.containerNumber,
+    photo.folderTitle,
+    photo.fileName,
+    photo.originalName,
+    photo.createdByName,
+    photo.createdBy,
+    photo.questText,
+    photo.commentText,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+    .includes(keyword);
+}
+
+function filteredFolderPhotos() {
+  const folderTitle = state.selectedFolder?.title || '';
+  return (photosForCurrentSummary() || [])
+    .map((photo) => ({ ...photo, containerNumber: folderTitle, folderTitle }))
+    .filter(photoMatchesSearch);
+}
+
+function syncSearchControls() {
+  if (els.searchScopeFolderBtn) {
+    els.searchScopeFolderBtn.classList.toggle('is-active', state.photoSearchScope === 'folder');
+  }
+  if (els.searchScopeRoomBtn) {
+    els.searchScopeRoomBtn.classList.toggle('is-active', state.photoSearchScope === 'room');
+  }
+  if (els.logTagFilter && !els.logTagFilter.options.length) {
+    els.logTagFilter.appendChild(el('option', { value: 'all' }, t('すべて')));
+    LOG_TAGS.forEach((tag) => {
+      els.logTagFilter.appendChild(el('option', { value: tag.value }, t(tag.label)));
+    });
+  }
+  if (els.logTagFilter) els.logTagFilter.value = state.photoSearchTag || 'all';
+  if (els.photoSearchKeyword) els.photoSearchKeyword.value = state.photoSearchKeyword || '';
+}
+
+async function runPhotoSearch() {
+  state.photoSearchTag = els.logTagFilter?.value || 'all';
+  state.photoSearchKeyword = String(els.photoSearchKeyword?.value || '').trim();
+  state.roomSearchNextToken = null;
+  syncSearchControls();
+  if (state.photoSearchScope === 'room') {
+    state.searchPhotos = demoSearchablePhotosForCurrentRoom().filter(photoMatchesSearch);
+  } else {
+    state.searchPhotos = filteredFolderPhotos();
+  }
+  renderSearchResults();
+}
+
+function renderSearchResults() {
+  if (!els.searchPhotoList) return;
+  els.searchPhotoList.innerHTML = '';
+  syncSearchControls();
+  const photos = state.searchPhotos || [];
+  if (!photos.length) {
+    els.searchPhotoList.appendChild(el('div', { class: 'muted' }, t('条件に合う写真はなかです。')));
+    return;
+  }
+  photos.forEach((photo) => {
+    const card = el('div', { class: 'photo-card search-photo-card' });
+    const codeRow = el('div', { class: 'photo-card-meta-row' });
+    codeRow.appendChild(el('strong', {}, photo.photoCode || 'P---'));
+    codeRow.appendChild(createLogTagBadge(photo.logTag));
+    card.appendChild(codeRow);
+
+    const img = el('img', {
+      class: 'photo-card-image',
+      src: photo.viewUrl || '',
+      alt: photo.fileName || photo.photoId,
+      loading: 'lazy',
+    });
+    img.onclick = () => openPhotoPreview(photo);
+    img.onkeydown = (event) => {
+      if (!event || (event.key !== 'Enter' && event.key !== ' ')) return;
+      event.preventDefault();
+      openPhotoPreview(photo);
+    };
+    img.tabIndex = 0;
+    img.setAttribute('role', 'button');
+    img.setAttribute('aria-label', `${photo.fileName || photo.photoId} を全体表示`);
+    card.appendChild(img);
+
+    if (photo.containerNumber || photo.folderTitle) {
+      card.appendChild(el('div', { class: 'muted' }, `コンテナ: ${photo.containerNumber || photo.folderTitle}`));
+    }
+    card.appendChild(el('div', { class: 'muted' }, `投稿: ${photo.createdByName || '-'}`));
+    els.searchPhotoList.appendChild(card);
+  });
 }
 
 function sortQuests(items) {
@@ -2796,7 +2979,7 @@ async function renderQuests() {
       });
       img.onclick = () => openPhotoPreview(photo);
       tile.appendChild(img);
-      tile.appendChild(el('span', { class: 'muted' }, photo.fileName || photo.photoCode || ''));
+      tile.appendChild(createLogTagBadge(photo.logTag));
       if (canDelete(photo)) {
         const deletePhotoBtn = el('button', { class: 'icon-btn danger', type: 'button', title: '写真削除' }, '🗑');
         deletePhotoBtn.onclick = safeAction(async () => {
@@ -2886,6 +3069,11 @@ async function renderPhotos() {
   for (const photo of state.photos) {
     const card = el('div', { class: 'photo-card' });
 
+    const codeRow = el('div', { class: 'photo-card-meta-row' });
+    codeRow.appendChild(el('strong', {}, photo.photoCode || 'P---'));
+    codeRow.appendChild(createLogTagBadge(photo.logTag));
+    card.appendChild(codeRow);
+
     const img = el('img', {
       class: 'photo-card-image',
       src: photo.viewUrl || '',
@@ -2905,15 +3093,6 @@ async function renderPhotos() {
     img.setAttribute('aria-label', `${photo.fileName || photo.photoId} を全体表示`);
     card.appendChild(img);
 
-    const codeRow = el('div');
-    codeRow.appendChild(el('strong', {}, photo.photoCode || 'P---'));
-    card.appendChild(codeRow);
-
-    const titleRow = el('div');
-    const photoTitle = el('strong', { class: 'js-photo-title' }, photo.fileName || photo.photoId);
-    titleRow.appendChild(photoTitle);
-    card.appendChild(titleRow);
-
     card.appendChild(el('div', { class: 'muted' }, `投稿: ${photo.createdByName}`));
 
     const photoEditWrap = el('div', { class: 'inline-edit js-photo-edit-wrap hidden' });
@@ -2921,8 +3100,8 @@ async function renderPhotos() {
       const actions = el('div', { class: 'comment-actions' });
       const editPhotoBtn = el(
         'button',
-        { class: 'icon-btn js-edit-photo', type: 'button', title: '写真名修正' },
-        '✎ 写真名'
+        { class: 'icon-btn js-edit-photo', type: 'button', title: 'タグ修正' },
+        '✎ タグ'
       );
       const delBtn = el(
         'button',
@@ -3084,28 +3263,20 @@ async function renderPhotos() {
         if (!photoEditWrap.classList.contains('hidden')) return;
         photoEditWrap.classList.remove('hidden');
         photoEditWrap.innerHTML = '';
-        const input = el('input', { class: 'js-photo-name-input' });
-        input.value = photo.fileName || '';
-        const clearBtn = el('button', { class: 'icon-btn js-photo-name-clear', type: 'button', title: '入力を消去' }, '×');
+        const input = createLogTagSelect(photo.logTag);
         const saveBtn = el('button', { class: 'js-photo-name-save', type: 'button' }, '保存');
         const cancelBtn = el('button', { class: 'js-photo-name-cancel danger', type: 'button' }, '取消');
         photoEditWrap.appendChild(input);
-        photoEditWrap.appendChild(clearBtn);
         photoEditWrap.appendChild(saveBtn);
         photoEditWrap.appendChild(cancelBtn);
 
-        clearBtn.onclick = () => {
-          input.value = '';
-          input.focus();
-        };
-
         saveBtn.onclick = async () => {
-          const nextFileName = input.value.trim();
-          if (!nextFileName) return;
+          const nextLogTag = normalizeLogTag(input.value, '');
+          if (!nextLogTag) return;
           preserveCurrentView(photo.photoId);
           await api(`/photos/${photo.photoId}`, {
             method: 'PUT',
-            body: JSON.stringify({ fileName: nextFileName }),
+            body: JSON.stringify({ logTag: nextLogTag }),
           });
           await loadPhotos();
         };
@@ -3113,7 +3284,6 @@ async function renderPhotos() {
         cancelBtn.onclick = () => {
           photoEditWrap.classList.add('hidden');
           photoEditWrap.innerHTML = '';
-          photoTitle.textContent = photo.fileName || photo.photoId;
         };
       };
     }
@@ -3399,14 +3569,14 @@ if (els.openFolderCreateBtn) {
   els.openFolderCreateBtn.onclick = safeAction(async () => {
     closeMenu();
     openFolderCreateModal();
-  }, 'フォルダ作成');
+  }, 'コンテナ登録');
 }
 
 if (els.openFolderPasswordBtn) {
   els.openFolderPasswordBtn.onclick = safeAction(async () => {
     closeMenu();
     openFolderPasswordModal();
-  }, 'フォルダパスワード');
+  }, 'コンテナパスワード');
 }
 
 if (els.openThemeBtn) {
@@ -3497,7 +3667,7 @@ els.createFolderBtn.onclick = safeAction(async () => {
   const title = els.folderTitle.value.trim();
   if (!title) {
     if (els.folderTitleError) {
-      els.folderTitleError.textContent = t('フォルダ名を入力してください。');
+      els.folderTitleError.textContent = t('コンテナ番号を入力してください。');
       els.folderTitleError.classList.remove('hidden');
     }
     if (els.folderTitle) els.folderTitle.focus();
@@ -3515,7 +3685,7 @@ els.createFolderBtn.onclick = safeAction(async () => {
   } catch (error) {
     const body = parseApiErrorBody(error);
     if (body?.code === 'FREE_PLAN_FOLDER_LIMIT_EXCEEDED') {
-      window.alert(body.message || t('フリープランではフォルダは2つまでです。有料プランで無制限になります。'));
+      window.alert(body.message || t('フリープランではコンテナは2つまでです。有料プランで無制限になります。'));
       return;
     }
     throw error;
@@ -3524,10 +3694,10 @@ els.createFolderBtn.onclick = safeAction(async () => {
   if (els.folderMode) els.folderMode.value = 'photo';
   if (els.folderPassword) els.folderPassword.value = '';
   closeFolderCreateModal();
-  showToast(`フォルダ：${created.title} を作成しました。`);
+  showToast(`コンテナ：${created.title} を登録しました。`);
   await loadFolders();
   await selectFolderById(created.folderId);
-}, 'フォルダ作成');
+}, 'コンテナ登録');
 
 els.uploadBtn.onclick = safeAction(async () => {
   if (state.isUploading) return;
@@ -3588,42 +3758,33 @@ if (els.applyCommentBulkBtn) {
   };
 }
 
-if (els.applyNameSequenceBtn) {
-  els.applyNameSequenceBtn.onclick = () => {
-    applySequencedPhotoNames();
-  };
-}
-
 if (els.cancelUploadDraftsBtn) {
   els.cancelUploadDraftsBtn.onclick = () => {
     cancelUploadDrafts();
   };
 }
 
-// els.exportBtn.onclick = safeAction(async () => {
-//   if (!state.selectedFolder) {
-//     window.alert(t('先にフォルダを選択してください。'));
-//     return;
-//   }
-//   closeMenu();
-//   openExportOptionsModal();
-// }, 'PPT出力');
-
-els.exportBtn.onclick = safeAction(async () => {
+async function openExportForSelectedContainer() {
   if (!state.selectedFolder) {
-    window.alert(t('先にフォルダを選択してください。'));
+    window.alert(t('先にコンテナを選択してください。'));
     return;
   }
 
-  // クエストフォルダは出力不可
+  // クエスト記録は出力不可
   if (normalizeFolderMode(state.selectedFolder.mode) === 'quest') {
-    window.alert(t('デモではクエストフォルダは出力できません。'));
+    window.alert(t('デモではクエスト記録は出力できません。'));
     return;
   }
 
   closeMenu();
   openExportOptionsModal();
-}, 'PPT出力');
+}
+
+els.exportBtn.onclick = safeAction(openExportForSelectedContainer, 'PPT出力');
+
+if (els.exportTabBtn) {
+  els.exportTabBtn.onclick = safeAction(openExportForSelectedContainer, '出力');
+}
 
 if (els.teamAdminBtn && els.teamAdminCard) {
   els.teamAdminBtn.onclick = safeAction(async () => {
@@ -3727,7 +3888,7 @@ if (els.lowStorageChargeBtn) {
 if (els.deleteTeamBtn) {
   els.deleteTeamBtn.onclick = safeAction(async () => {
     const ok = window.confirm(
-      t('このお部屋を削除すると、フォルダ/写真/コメント/課金情報が全て削除され、Stripeの定期課金も即時停止されます。よかですか？')
+      t('このお部屋を削除すると、コンテナ/写真/コメント/課金情報が全て削除され、Stripeの定期課金も即時停止されます。よかですか？')
     );
     if (!ok) return;
     const ok2 = window.confirm(t('本当によかですか？（取り消せません）'));
@@ -3774,17 +3935,17 @@ if (els.accountDeleteBtn) {
 if (els.folderDeleteBtn) {
   els.folderDeleteBtn.onclick = safeAction(async () => {
     if (!state.selectedFolder) return;
-    const ok = window.confirm(t('このフォルダを削除すると、写真とコメントも消えます。よかですか？'));
+    const ok = window.confirm(t('このコンテナを削除すると、写真とコメントも消えます。よかですか？'));
     if (!ok) return;
     const folderId = state.selectedFolder.folderId;
     await api(`/folders/${folderId}`, { method: 'DELETE', headers: { ...folderPasswordHeader(folderId) } });
-    window.alert(t('フォルダを削除しました。'));
+    window.alert(t('コンテナを削除しました。'));
     state.selectedFolder = null;
     els.folderDetail.classList.add('hidden');
     await loadFolders();
     await loadTeamMe();
     await loadAdminPanel();
-  }, 'フォルダ削除');
+  }, 'コンテナ削除');
 }
 
 if (els.setFolderPasswordBtn) {
@@ -3801,7 +3962,7 @@ if (els.setFolderPasswordBtn) {
     else delete state.folderPasswordById[folderId];
     if (els.folderPasswordSet) els.folderPasswordSet.value = '';
     closeFolderPasswordModal();
-    showToast('フォルダの鍵を更新しました。');
+    showToast('コンテナの鍵を更新しました。');
     await loadFolders();
   }, '鍵設定');
 }
@@ -3862,7 +4023,57 @@ if (els.currentFolderSelect) {
     await safeAction(async () => {
       const folderId = event.target.value;
       await selectFolderById(folderId);
-    }, 'フォルダ選択')();
+    }, 'コンテナ選択')();
+  });
+}
+
+if (els.recordTabBtn) {
+  els.recordTabBtn.onclick = () => {
+    setFolderDetailTab('record');
+  };
+}
+
+if (els.searchTabBtn) {
+  els.searchTabBtn.onclick = safeAction(async () => {
+    setFolderDetailTab('search');
+    await runPhotoSearch();
+  }, '検索タブ切替');
+}
+
+if (els.searchScopeFolderBtn) {
+  els.searchScopeFolderBtn.onclick = safeAction(async () => {
+    state.photoSearchScope = 'folder';
+    state.roomSearchNextToken = null;
+    await runPhotoSearch();
+  }, '検索範囲切替');
+}
+
+if (els.searchScopeRoomBtn) {
+  els.searchScopeRoomBtn.onclick = safeAction(async () => {
+    state.photoSearchScope = 'room';
+    await runPhotoSearch();
+  }, '検索範囲切替');
+}
+
+if (els.photoSearchBtn) {
+  els.photoSearchBtn.onclick = safeAction(async () => {
+    await runPhotoSearch();
+  }, '写真検索');
+}
+
+if (els.logTagFilter) {
+  els.logTagFilter.onchange = safeAction(async () => {
+    await runPhotoSearch();
+  }, 'タグ検索');
+}
+
+if (els.photoSearchKeyword) {
+  els.photoSearchKeyword.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    safeAction(async () => {
+      await runPhotoSearch();
+    }, '写真検索')();
   });
 }
 
@@ -4023,6 +4234,7 @@ function demoPhotoSummary(photo) {
     photoCode: photo.photoCode,
     fileName: photo.fileName,
     originalName: photo.originalName || photo.fileName,
+    logTag: normalizeLogTag(photo.logTag),
     createdBy: photo.createdBy,
     createdByName: photo.createdByName,
     createdAt: photo.createdAt,
@@ -4093,7 +4305,7 @@ uploadFiles = async function () {
   setUploadLoading(true);
   try {
     const { folder } = demoFindFolder(state.selectedFolder.folderId);
-    if (!folder) throw new Error('フォルダが見つかりません。');
+    if (!folder) throw new Error('コンテナが見つかりません。');
     if (demoGetActiveRoom()?.uploadBlocked) {
       throw demoError(402, 'upload blocked');
     }
@@ -4104,16 +4316,17 @@ uploadFiles = async function () {
       quest = (folder.quests || []).find((item) => item.questId === targetQuestId);
       if (!quest) throw demoError(404, 'quest not found');
     }
-    drafts.forEach((draft) => {
+    drafts.forEach((draft, index) => {
       demoStore.photoCounter += 1;
       const photoId = `photo-demo-${demoStore.photoCounter}`;
-      const fileName = String(draft.photoName || draft.originalName || `写真${demoStore.photoCounter}`).trim();
-      const viewUrl = draft.file ? URL.createObjectURL(draft.file) : demoSvg(fileName, '#7baf6a', '#dff0d8');
+      const fileName = buildDemoPhotoFileName(draft, index);
+      const viewUrl = draft.file ? URL.createObjectURL(draft.file) : demoSvg(fileName, '#1E90FF', '#dcecff');
       const photo = createDemoPhoto({
         photoId,
         photoCode: `P-${String(demoStore.photoCounter).padStart(3, '0')}`,
         fileName,
         originalName: draft.originalName || fileName,
+        logTag: normalizeLogTag(draft.logTag),
         viewUrl,
         sizeBytes: Number(draft.file?.size || 6 * 1024 * 1024),
         questId: targetQuestId,
@@ -4338,14 +4551,14 @@ api = async function (path, options = {}) {
     if (String(activeRoom.subscriptionPlan || 'FREE').toUpperCase() === 'FREE' && activeRoom.folders.length >= 2) {
       throw demoError(400, 'folder limit exceeded', {
         code: 'FREE_PLAN_FOLDER_LIMIT_EXCEEDED',
-        message: 'フリープランではフォルダは2つまでです。有料プランで無制限になります。',
+        message: 'フリープランではコンテナは2つまでです。有料プランで無制限になります。',
       });
     }
     demoStore.folderCounter += 1;
     const folder = {
       folderId: `folder-demo-${demoStore.folderCounter}`,
       folderCode: `F-${String(demoStore.folderCounter).padStart(3, '0')}`,
-      title: String(body.title || '').trim() || `${t('新規フォルダ')}${demoStore.folderCounter}`,
+      title: String(body.title || '').trim() || `TCLU${String(demoStore.folderCounter).padStart(7, '0')}`,
       mode: normalizeFolderMode(body.mode || body.folderMode),
       createdBy: DEMO_USER_KEY,
       createdByName: demoStore.me.displayName,
@@ -4496,7 +4709,8 @@ api = async function (path, options = {}) {
       photoCode: `P-${String(demoStore.photoCounter).padStart(3, '0')}`,
       fileName: String(body.fileName || `${t('新規写真')}${demoStore.photoCounter}`).trim(),
       originalName: String(body.fileName || `${t('新規写真')}${demoStore.photoCounter}`).trim(),
-      viewUrl: demoSvg(String(body.fileName || t('新規写真')), '#7baf6a', '#dff0d8'),
+      logTag: normalizeLogTag(body.logTag),
+      viewUrl: demoSvg(String(body.fileName || t('新規写真')), '#1E90FF', '#dcecff'),
       sizeBytes: 6 * 1024 * 1024,
       questId: questId || null,
       questText: quest?.text || '',
@@ -4598,7 +4812,8 @@ api = async function (path, options = {}) {
     const photoId = path.split('/')[2];
     const { photo } = demoFindPhoto(photoId);
     if (!photo) throw demoError(404, 'photo not found');
-    photo.fileName = String(body.fileName || photo.fileName).trim() || photo.fileName;
+    if (body.fileName) photo.fileName = String(body.fileName).trim() || photo.fileName;
+    if (body.logTag) photo.logTag = normalizeLogTag(body.logTag, photo.logTag || DEFAULT_LOG_TAG);
     return demoPhotoSummary(photo);
   }
 

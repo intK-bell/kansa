@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title data-i18n="フォトスマ 使い方マニュアル">フォトスマ 使い方マニュアル</title>
+  <title data-i18n="Cong Container Log ユーザーマニュアル">Cong Container Log ユーザーマニュアル</title>
   <style>
     :root {
       color-scheme: light;
-      --bg: #f7f8fb;
+      --bg: #f5f5f5;
       --panel: #ffffff;
-      --text: #1f2933;
+      --text: #06224a;
       --muted: #52616b;
       --border: #d9dee7;
-      --header: #eef2f7;
-      --accent: #2563eb;
+      --header: #eef6ff;
+      --accent: #1e90ff;
     }
 
     * {
@@ -44,6 +44,7 @@
 
     .manual-header {
       margin-bottom: 24px;
+      border-top: 6px solid var(--accent);
     }
 
     section {
@@ -65,6 +66,7 @@
       border-bottom: 1px solid var(--border);
       padding-bottom: 8px;
       font-size: 1.35rem;
+      color: var(--text);
     }
 
     h3 {
@@ -152,24 +154,26 @@
 <body>
   <main>
     <header class="manual-header">
-      <h1 data-i18n="フォトスマ">フォトスマ</h1>
-      <p class="subtitle" data-i18n="使い方マニュアル">使い方マニュアル</p>
+      <h1 data-i18n="Cong">Cong</h1>
+      <p class="subtitle" data-i18n="Container Log ユーザーマニュアル">Container Log ユーザーマニュアル</p>
       <p class="meta">
         <strong data-i18n="作成日：">作成日：</strong><span data-i18n="2026年4月19日">2026年4月19日</span><br />
-        <strong data-i18n="改訂日：">改訂日：</strong><span data-i18n="2026年5月10日">2026年5月10日</span>
+        <strong data-i18n="改訂日：">改訂日：</strong><span data-i18n="2026年6月6日">2026年6月6日</span>
       </p>
     </header>
 
     <section>
       <h2 data-i18n="はじめに">はじめに</h2>
-      <p data-i18n="多くの企業の現場では監査や検品業務において、多くの手間と時間がかかっています。本アプリはこれらを効率化します。">多くの企業の現場では監査や検品業務において、多くの手間と時間がかかっています。本アプリはこれらを効率化します。</p>
+      <p data-i18n="Congはコンテナ写真の記録・共有・管理をシンプルにするサービスです。">Congはコンテナ写真の記録・共有・管理をシンプルにするサービスです。</p>
+      <p data-i18n="現場で撮影した写真をコンテナ番号ごとに整理し、送信・仕分け・確認業務を減らします。">現場で撮影した写真をコンテナ番号ごとに整理し、送信・仕分け・確認業務を減らします。</p>
+      <h3 data-i18n="特徴">特徴</h3>
       <ul>
-        <li data-i18n="ユーザー登録が必要">ユーザー登録が必要</li>
-        <li data-i18n="管理者・お部屋メンバー・フォルダメンバーに分類">管理者・お部屋メンバー・フォルダメンバーに分類</li>
-        <li data-i18n="3階層構造（お部屋・フォルダ・写真）">3階層構造（お部屋・フォルダ・写真）</li>
-        <li data-i18n="PowerPoint出力可能">PowerPoint出力可能</li>
-        <li data-i18n="権限管理あり">権限管理あり</li>
-        <li data-i18n="フリー／有料プラン">フリー／有料プラン</li>
+        <li data-i18n="コンテナ番号単位で管理">コンテナ番号単位で管理</li>
+        <li data-i18n="タグによる分類">タグによる分類</li>
+        <li data-i18n="写真とコメントを一元管理">写真とコメントを一元管理</li>
+        <li data-i18n="クエストによる撮影漏れ防止">クエストによる撮影漏れ防止</li>
+        <li data-i18n="PowerPoint出力">PowerPoint出力</li>
+        <li data-i18n="権限管理">権限管理</li>
       </ul>
     </section>
 
@@ -192,34 +196,61 @@
 
     <section>
       <h2 data-i18n="3. お部屋">3. お部屋</h2>
+      <p data-i18n="お部屋は企業・事業所単位で利用します。">お部屋は企業・事業所単位で利用します。</p>
       <ul>
         <li data-i18n="1ユーザー1部屋">1ユーザー1部屋</li>
-        <li data-i18n="URLで参加">URLで参加</li>
+        <li data-i18n="URL招待">URL招待</li>
         <li data-i18n="7日間有効">7日間有効</li>
       </ul>
     </section>
 
     <section>
       <h2 data-i18n="4. フォルダ">4. フォルダ</h2>
+      <p data-i18n="フォルダはコンテナ単位で利用します。">フォルダはコンテナ単位で利用します。</p>
+      <p data-i18n="コンテナ番号をフォルダ名として利用できます。">コンテナ番号をフォルダ名として利用できます。</p>
+      <h3 data-i18n="例">例</h3>
       <ul>
-        <li data-i18n="フリー：2つ">フリー：2つ</li>
-        <li data-i18n="有料：無制限">有料：無制限</li>
-        <li data-i18n="種類：フォトフォルダ、クエストフォルダ">種類：フォトフォルダ、クエストフォルダ</li>
+        <li data-i18n="ABCU1234567">ABCU1234567</li>
+        <li data-i18n="MSCU9876543">MSCU9876543</li>
       </ul>
+      <p data-i18n="将来的にはOCRによる自動入力にも対応予定です。">将来的にはOCRによる自動入力にも対応予定です。</p>
     </section>
 
     <section>
       <h2 data-i18n="5. フォトフォルダ">5. フォトフォルダ</h2>
-      <p data-i18n="まず任意の写真をアップロードします。アップロードされた写真に対して、チームメンバーでコメントを残すことができます。">まず任意の写真をアップロードします。アップロードされた写真に対して、チームメンバーでコメントを残すことができます。</p>
+      <p data-i18n="フォトフォルダでは写真を記録します。">フォトフォルダでは写真を記録します。</p>
+      <p data-i18n="写真にはタグを付与できます。">写真にはタグを付与できます。</p>
+      <h3 data-i18n="推奨タグ">推奨タグ</h3>
+      <ul>
+        <li data-i18n="コンテナ番号">コンテナ番号</li>
+        <li data-i18n="搬入">搬入</li>
+        <li data-i18n="シール">シール</li>
+        <li data-i18n="損傷">損傷</li>
+        <li data-i18n="搬出">搬出</li>
+        <li data-i18n="その他">その他</li>
+      </ul>
+      <p data-i18n="写真ごとにコメントを残せます。">写真ごとにコメントを残せます。</p>
     </section>
 
     <section>
       <h2 data-i18n="6. クエストフォルダ">6. クエストフォルダ</h2>
-      <p data-i18n="まず撮影して欲しい写真を依頼します。依頼された写真をチームメンバーがアップロードします。アップロードされた写真に対して、チームメンバーでコメントを残すことができます。">まず撮影して欲しい写真を依頼します。依頼された写真をチームメンバーがアップロードします。アップロードされた写真に対して、チームメンバーでコメントを残すことができます。</p>
+      <p data-i18n="クエストフォルダは撮影依頼に利用します。">クエストフォルダは撮影依頼に利用します。</p>
+      <h3 data-i18n="例">例</h3>
+      <ul>
+        <li data-i18n="□ コンテナ番号">□ コンテナ番号</li>
+        <li data-i18n="□ シール">□ シール</li>
+        <li data-i18n="□ 左側面">□ 左側面</li>
+        <li data-i18n="□ 右側面">□ 右側面</li>
+        <li data-i18n="□ 損傷箇所">□ 損傷箇所</li>
+      </ul>
+      <p data-i18n="必要な写真を事前に依頼できます。">必要な写真を事前に依頼できます。</p>
+      <p data-i18n="撮影漏れ防止に利用します。">撮影漏れ防止に利用します。</p>
     </section>
 
     <section>
       <h2 data-i18n="7. 写真">7. 写真</h2>
+      <p data-i18n="写真は単体または一括アップロード可能です。">写真は単体または一括アップロード可能です。</p>
+      <p data-i18n="撮影後にタグ付けできます。">撮影後にタグ付けできます。</p>
       <ul>
         <li data-i18n="カメラ / ライブラリ / ファイル">カメラ / ライブラリ / ファイル</li>
         <li data-i18n="単体 / 一括">単体 / 一括</li>
@@ -228,14 +259,19 @@
 
     <section>
       <h2 data-i18n="8. コメント">8. コメント</h2>
+      <p data-i18n="写真ごとにコメントを残せます。">写真ごとにコメントを残せます。</p>
+      <h3 data-i18n="例">例</h3>
       <ul>
-        <li data-i18n="全員閲覧可能">全員閲覧可能</li>
-        <li data-i18n="管理者は全編集可能">管理者は全編集可能</li>
+        <li data-i18n="シール破損あり">シール破損あり</li>
+        <li data-i18n="左側面にへこみあり">左側面にへこみあり</li>
+        <li data-i18n="搬出完了">搬出完了</li>
       </ul>
     </section>
 
     <section>
       <h2 data-i18n="9. 出力">9. 出力</h2>
+      <p data-i18n="フォルダ単位でPowerPoint出力できます。">フォルダ単位でPowerPoint出力できます。</p>
+      <p data-i18n="コンテナ報告資料作成に利用できます。">コンテナ報告資料作成に利用できます。</p>
       <ul>
         <li data-i18n="PowerPoint出力">PowerPoint出力</li>
         <li data-i18n="フリー：透かしあり">フリー：透かしあり</li>
@@ -245,8 +281,16 @@
 
     <section>
       <h2 data-i18n="10. 権限管理">10. 権限管理</h2>
+      <h3 data-i18n="管理者">管理者</h3>
       <ul>
-        <li data-i18n="全閲覧 / 自分のみ">全閲覧 / 自分のみ</li>
+        <li data-i18n="お部屋管理">お部屋管理</li>
+        <li data-i18n="メンバー管理">メンバー管理</li>
+        <li data-i18n="フォルダ管理">フォルダ管理</li>
+      </ul>
+      <h3 data-i18n="メンバー">メンバー</h3>
+      <ul>
+        <li data-i18n="写真登録">写真登録</li>
+        <li data-i18n="コメント登録">コメント登録</li>
       </ul>
     </section>
 
@@ -267,28 +311,39 @@
           <tr>
             <th data-i18n="機能">機能</th>
             <th data-i18n="管理者">管理者</th>
-            <th data-i18n="お部屋メンバー">お部屋メンバー</th>
-            <th data-i18n="フォルダメンバー">フォルダメンバー</th>
+            <th data-i18n="メンバー">メンバー</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td data-i18n="お部屋作成">お部屋作成</td>
+            <td data-i18n="お部屋管理">お部屋管理</td>
             <td data-i18n="可">可</td>
+            <td data-i18n="不可">不可</td>
+          </tr>
+          <tr>
+            <td data-i18n="フォルダ管理">フォルダ管理</td>
+            <td data-i18n="可">可</td>
+            <td data-i18n="不可">不可</td>
+          </tr>
+          <tr>
+            <td data-i18n="メンバー管理">メンバー管理</td>
+            <td data-i18n="可">可</td>
+            <td data-i18n="不可">不可</td>
+          </tr>
+          <tr>
+            <td data-i18n="写真登録">写真登録</td>
             <td data-i18n="可">可</td>
             <td data-i18n="可">可</td>
           </tr>
           <tr>
-            <td data-i18n="招待URL">招待URL</td>
+            <td data-i18n="コメント登録">コメント登録</td>
             <td data-i18n="可">可</td>
-            <td data-i18n="不可">不可</td>
-            <td data-i18n="不可">不可</td>
+            <td data-i18n="可">可</td>
           </tr>
           <tr>
-            <td data-i18n="削除">削除</td>
+            <td data-i18n="PowerPoint出力">PowerPoint出力</td>
             <td data-i18n="可">可</td>
-            <td data-i18n="不可">不可</td>
-            <td data-i18n="不可">不可</td>
+            <td data-i18n="可">可</td>
           </tr>
         </tbody>
       </table>

@@ -70,9 +70,11 @@ const state = {
   isCreatingQuest: false,
   uploadDrafts: [],
   uploadTargetQuestId: null,
+  folderDetailTab: 'record',
   photoSearchScope: 'folder',
   photoSearchTag: 'all',
   photoSearchKeyword: '',
+  searchPhotos: [],
   roomSearchNextToken: null,
 };
 
@@ -205,7 +207,12 @@ function resetRoomContext() {
   state.selectedFolder = null;
   state.selectedFolderArchive = null;
   state.photos = [];
+  state.searchPhotos = [];
   state.quests = [];
+  state.folderDetailTab = 'record';
+  state.photoSearchScope = 'folder';
+  state.photoSearchTag = 'all';
+  state.photoSearchKeyword = '';
   state.openAccordions.clear();
   state.restoreScrollY = null;
   if (els.folderDetail) els.folderDetail.classList.add('hidden');
@@ -461,6 +468,11 @@ const els = {
   folderPassword: document.querySelector('#folder-password'),
   createFolderBtn: document.querySelector('#create-folder-btn'),
   folderDetail: document.querySelector('#folder-detail'),
+  folderDetailTabs: document.querySelector('#folder-detail-tabs'),
+  recordTabBtn: document.querySelector('#record-tab-btn'),
+  searchTabBtn: document.querySelector('#search-tab-btn'),
+  recordPanel: document.querySelector('#record-panel'),
+  searchPanel: document.querySelector('#search-panel'),
   folderDetailTitle: document.querySelector('#folder-detail-title'),
   logTagSummary: document.querySelector('#log-tag-summary'),
   photoSearchPanel: document.querySelector('#photo-search-panel'),
@@ -488,6 +500,7 @@ const els = {
   cancelUploadDraftsBtn: document.querySelector('#cancel-upload-drafts-btn'),
   exportBtn: document.querySelector('#export-btn'),
   photoList: document.querySelector('#photo-list'),
+  searchPhotoList: document.querySelector('#search-photo-list'),
   questList: document.querySelector('#quest-list'),
   errorBox: document.querySelector('#error-box'),
   toast: document.querySelector('#toast'),
@@ -769,9 +782,9 @@ function renderDeveloperSummary(data) {
     [t('全ユーザー'), totals.users || 0],
     [t('管理者'), totals.admins || 0],
     [t('お部屋メンバー'), totals.activeRoomMembers || 0],
-    [t('コンテナ番号メンバー'), totals.folderMembers || 0],
+    [t('コンテナメンバー'), totals.folderMembers || 0],
     [t('お部屋'), totals.rooms || 0],
-    [t('コンテナ番号'), totals.folders || 0],
+    [t('コンテナ'), totals.folders || 0],
     [t('総容量'), formatBytes(totals.usageBytes || 0)],
   ].forEach(([label, value]) => {
     const item = el('div', { class: 'developer-metric' });
@@ -813,7 +826,7 @@ function renderDeveloperSummary(data) {
   const table = el('table', { class: 'developer-table' });
   const thead = el('thead');
   const headRow = el('tr');
-  ['お部屋', '容量', 'コンテナ番号', 'お部屋メンバー', 'コンテナ番号メンバー', 'メンバー（合計）', 'プラン', '作成者'].forEach((label) => {
+  ['お部屋', '容量', 'コンテナ', 'お部屋メンバー', 'コンテナメンバー', 'メンバー（合計）', 'プラン', '作成者'].forEach((label) => {
     headRow.appendChild(el('th', {}, t(label)));
   });
   thead.appendChild(headRow);
@@ -895,7 +908,7 @@ function openFolderCreateModal() {
 function openFolderPasswordModal() {
   if (!els.folderPasswordModal) return;
   if (!state.selectedFolder) {
-    window.alert(t('先にコンテナ番号を選択してください。'));
+    window.alert(t('先にコンテナを選択してください。'));
     return;
   }
   if (els.folderPasswordTargetName) {
@@ -922,7 +935,7 @@ function renderCurrentRoomHeader() {
 
 async function requestFolderExport(format) {
   if (!state.selectedFolder) {
-    window.alert(t('先にコンテナ番号を選択してください。'));
+    window.alert(t('先にコンテナを選択してください。'));
     return;
   }
   const formatLabel = format === 'pdf' ? 'PDF' : format === 'pptx_light' ? t('軽量PPT') : t('高画質PPT');
@@ -1068,7 +1081,7 @@ function uploadErrorMessage(error, fileName = '') {
   const message = String(body?.message || asMessage(error) || '');
   const prefix = fileName ? `${fileName}: ` : '';
   if (message.includes('duplicate photo already exists')) {
-    return `${prefix}${t('同じ写真は同じコンテナ番号にアップロードできません（重複を検知しました）。')}`;
+    return `${prefix}${t('同じ写真は同じコンテナにアップロードできません（重複を検知しました）。')}`;
   }
   if (
     message.includes('file is too large') ||
@@ -1103,29 +1116,29 @@ function folderUsageSummary() {
   const count = Array.isArray(state.folders) ? state.folders.length : 0;
   const limit = currentFolderLimit();
   return limit === null
-    ? tf('コンテナ番号 {count} / 無制限', { count })
-    : tf('コンテナ番号 {count} / {limit}', { count, limit });
+    ? tf('コンテナ {count} / 無制限', { count })
+    : tf('コンテナ {count} / {limit}', { count, limit });
 }
 
 function freePlanGuideText() {
   const limit = currentFolderLimit();
   return limit === null
-    ? t('1GB〜10GBプラン: コンテナ番号無制限 / 3年保存 / PPT透かしなし')
-    : t('フリープラン: コンテナ番号2個 / 30日保存 / PPT透かしあり');
+    ? t('1GB〜10GBプラン: コンテナ無制限 / 3年保存 / PPT透かしなし')
+    : t('フリープラン: コンテナ2個 / 30日保存 / PPT透かしあり');
 }
 
 function freePlanRequirementDialogText(constraints = {}) {
   const lines = [
     t('フリープランへの切り替えは、以下を満たす必要があります。'),
     t('・容量が512MB未満'),
-    t('・コンテナ番号の数が2つ以下'),
+    t('・コンテナの数が2つ以下'),
   ];
   const unmet = Array.isArray(constraints.unmet) ? constraints.unmet : [];
   if (unmet.includes('usageBytes')) {
     lines.push(tf('・現在の容量: {size}', { size: formatBytes(Number(constraints.usageBytes || 0)) }));
   }
   if (unmet.includes('folderCount')) {
-    lines.push(tf('・現在のコンテナ番号数: {count}', { count: Number(constraints.folderCount || 0) }));
+    lines.push(tf('・現在のコンテナ数: {count}', { count: Number(constraints.folderCount || 0) }));
   }
   return lines.join('\n');
 }
@@ -1136,7 +1149,7 @@ function freePlanReturnConfirmText() {
     '',
     t('実行するとStripeの定期課金は今すぐ停止します。'),
     t('当月の残り期間分の返金はありません。'),
-    t('フリープランへ戻すには、容量512MB未満・コンテナ番号2個以下である必要があります。'),
+    t('フリープランへ戻すには、容量512MB未満・コンテナ2個以下である必要があります。'),
   ].join('\n');
 }
 
@@ -1146,7 +1159,7 @@ function freePlanReturnSuccessText() {
     '',
     t('Stripeの定期課金は停止しました。'),
     t('当月の残り期間分の返金はありません。'),
-    t('現在の上限は、容量512MB未満・コンテナ番号2個までです。'),
+    t('現在の上限は、容量512MB未満・コンテナ2個までです。'),
   ].join('\n');
 }
 
@@ -2099,11 +2112,11 @@ async function loadAdminPanel() {
 
           const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
           if (m.folderScope === 'invited') {
-            actions.appendChild(el('span', { class: 'muted' }, t('コンテナ番号招待')));
+            actions.appendChild(el('span', { class: 'muted' }, t('コンテナ招待')));
           } else {
             const scopeSelect = el('select', { style: 'min-width:120px;' });
-            scopeSelect.appendChild(el('option', { value: 'own' }, t('自分のコンテナ番号のみ')));
-            scopeSelect.appendChild(el('option', { value: 'all' }, t('全コンテナ番号表示')));
+            scopeSelect.appendChild(el('option', { value: 'own' }, t('自分のコンテナのみ')));
+            scopeSelect.appendChild(el('option', { value: 'all' }, t('全コンテナ表示')));
             scopeSelect.value = m.role === 'admin' ? 'all' : m.folderScope || 'all';
             scopeSelect.disabled = m.role === 'admin' || m.userKey === state.ownerUserKey;
             scopeSelect.onchange = safeAction(async () => {
@@ -2159,14 +2172,14 @@ async function loadAdminPanel() {
       els.folderAdminList.innerHTML = '';
       if (!folders.length) {
         state.adminFolderId = '';
-        els.folderAdminList.appendChild(el('div', { class: 'muted' }, t('コンテナ番号がなかです')));
+        els.folderAdminList.appendChild(el('div', { class: 'muted' }, t('コンテナがなかです')));
       } else {
         if (state.adminFolderId && !folders.some((f) => f.folderId === state.adminFolderId)) {
           state.adminFolderId = '';
         }
         const pickerRow = el('div', { class: 'row folder-admin-picker' });
         const folderSelect = el('select');
-        folderSelect.appendChild(el('option', { value: '' }, t('コンテナ番号を選択してください')));
+        folderSelect.appendChild(el('option', { value: '' }, t('コンテナを選択してください')));
         folders.forEach((f) => {
           const locked = Boolean(f.hasPassword);
           const modeLabel = normalizeFolderMode(f.mode) === 'quest' ? 'クエスト' : 'フォト';
@@ -2177,7 +2190,7 @@ async function loadAdminPanel() {
         folderSelect.onchange = safeAction(async () => {
           state.adminFolderId = folderSelect.value;
           await loadAdminPanel();
-        }, '管理コンテナ番号選択');
+        }, '管理コンテナ選択');
         pickerRow.appendChild(folderSelect);
         pickerRow.appendChild(el('span', { class: 'muted' }, tf('{count}件', { count: folders.length })));
         els.folderAdminList.appendChild(pickerRow);
@@ -2202,14 +2215,14 @@ async function loadAdminPanel() {
 
           const inviteRow = el('div', { class: 'row folder-admin-actions' });
           const folderInviteInput = el('input', {
-            placeholder: t('コンテナ番号招待URL'),
+            placeholder: t('コンテナ招待URL'),
             readonly: 'readonly',
           });
           const folderInviteCell = el('div', { class: 'invite-url-cell' });
           const copyFolderInviteBtn = el('button', { type: 'button' }, t('コピー'));
           copyFolderInviteBtn.onclick = safeAction(async () => {
             await copyInviteUrlFromInput(folderInviteInput);
-          }, 'コンテナ番号招待URLコピー');
+          }, 'コンテナ招待URLコピー');
           const createFolderInviteBtn = el('button', { type: 'button' }, t('招待URL発行（7日）'));
           createFolderInviteBtn.onclick = safeAction(async () => {
             const res = await api('/invites/create', {
@@ -2223,7 +2236,7 @@ async function loadAdminPanel() {
             const url = `${base}?invite=${encodeURIComponent(token)}`;
             if (revokeFolderInviteBtn) revokeFolderInviteBtn.classList.remove('hidden');
             await setInviteUrlText(url, folderInviteInput);
-          }, 'コンテナ番号招待URL発行');
+          }, 'コンテナ招待URL発行');
           inviteRow.appendChild(createFolderInviteBtn);
 
           const revokeFolderInviteBtn = el('button', { type: 'button', class: 'danger hidden' }, t('招待URL失効'));
@@ -2233,14 +2246,14 @@ async function loadAdminPanel() {
               showError(t('失効する招待URLがなかです（先に発行してください）'));
               return;
             }
-            const ok = window.confirm(tf('コンテナ番号「{folder}」の招待URLを失効してよかですか？', { folder: f.title || f.folderId }));
+            const ok = window.confirm(tf('コンテナ「{folder}」の招待URLを失効してよかですか？', { folder: f.title || f.folderId }));
             if (!ok) return;
             await api('/invites/revoke', { method: 'POST', body: JSON.stringify({ token }) });
             delete state.lastFolderInviteTokens[f.folderId];
             folderInviteInput.value = '';
             revokeFolderInviteBtn.classList.add('hidden');
-            showToast(t('コンテナ番号招待URLを失効しました。'));
-          }, 'コンテナ番号招待URL失効');
+            showToast(t('コンテナ招待URLを失効しました。'));
+          }, 'コンテナ招待URL失効');
           inviteRow.appendChild(revokeFolderInviteBtn);
           folderInviteCell.appendChild(folderInviteInput);
           folderInviteCell.appendChild(copyFolderInviteBtn);
@@ -2249,7 +2262,7 @@ async function loadAdminPanel() {
 
           const passwordRow = el('div', { class: 'row folder-admin-actions folder-admin-password' });
           const passwordInput = el('input', {
-            placeholder: t('コンテナ番号パスワード（空で解除）'),
+            placeholder: t('コンテナパスワード（空で解除）'),
             type: 'password',
           });
           const passwordBtn = el('button', { type: 'button' }, t('設定/解除'));
@@ -2257,8 +2270,8 @@ async function loadAdminPanel() {
             const next = String(passwordInput.value || '').trim();
             const ok = window.confirm(
               next
-                ? tf('コンテナ番号「{folder}」のパスワードを設定してよかですか？', { folder: f.title || f.folderId })
-                : tf('コンテナ番号「{folder}」のパスワードを解除してよかですか？', { folder: f.title || f.folderId })
+                ? tf('コンテナ「{folder}」のパスワードを設定してよかですか？', { folder: f.title || f.folderId })
+                : tf('コンテナ「{folder}」のパスワードを解除してよかですか？', { folder: f.title || f.folderId })
             );
             if (!ok) return;
             await api(`/folders/${f.folderId}/password`, {
@@ -2269,10 +2282,10 @@ async function loadAdminPanel() {
             if (next) state.folderPasswordById[f.folderId] = next;
             else delete state.folderPasswordById[f.folderId];
             passwordInput.value = '';
-            window.alert(next ? t('コンテナ番号のパスワードを設定しました。') : t('コンテナ番号のパスワードを解除しました。'));
+            window.alert(next ? t('コンテナのパスワードを設定しました。') : t('コンテナのパスワードを解除しました。'));
             await loadFolders();
             await loadAdminPanel();
-          }, 'コンテナ番号パスワード設定');
+          }, 'コンテナパスワード設定');
           passwordRow.appendChild(passwordInput);
           passwordRow.appendChild(passwordBtn);
           wrap.appendChild(passwordRow);
@@ -2280,15 +2293,15 @@ async function loadAdminPanel() {
           const deleteRow = el('div', { class: 'row folder-admin-actions' });
           const delBtn = el('button', { type: 'button', class: 'danger' }, t('削除'));
           delBtn.onclick = safeAction(async () => {
-            const ok = window.confirm(tf('コンテナ番号「{folder}」を削除してよかですか？（写真とコメントも消えます）', { folder: f.title || f.folderId }));
+            const ok = window.confirm(tf('コンテナ「{folder}」を削除してよかですか？（写真とコメントも消えます）', { folder: f.title || f.folderId }));
             if (!ok) return;
             await api(`/folders/${f.folderId}`, { method: 'DELETE' });
             state.adminFolderId = '';
-            window.alert(t('コンテナ番号を削除しました。'));
+            window.alert(t('コンテナを削除しました。'));
             await loadFolders();
             await loadTeamMe();
             await loadAdminPanel();
-          }, 'コンテナ番号削除');
+          }, 'コンテナ削除');
           deleteRow.appendChild(delBtn);
           wrap.appendChild(deleteRow);
 
@@ -2306,9 +2319,9 @@ async function loadAdminPanel() {
               }
               const reasonLabel = {
                 admin: t('管理者'),
-                all: t('全コンテナ番号'),
+                all: t('全コンテナ'),
                 owner: t('作成者'),
-                invited: t('コンテナ番号招待'),
+                invited: t('コンテナ招待'),
               };
               membersBox.appendChild(el('h3', {}, t('メンバー')));
               items.forEach((m) => {
@@ -2323,17 +2336,17 @@ async function loadAdminPanel() {
                 );
                 const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
                 if (m.accessReason === 'invited' && m.folderScope === 'invited') {
-                  const removeBtn = el('button', { type: 'button', class: 'danger' }, t('このコンテナ番号から外す'));
+                  const removeBtn = el('button', { type: 'button', class: 'danger' }, t('このコンテナから外す'));
                   removeBtn.onclick = safeAction(async () => {
-                    const ok = window.confirm(tf('メンバー「{name}」をこのコンテナ番号から外してよかですか？', { name }));
+                    const ok = window.confirm(tf('メンバー「{name}」をこのコンテナから外してよかですか？', { name }));
                     if (!ok) return;
                     await api(
                       `/folders/${encodeURIComponent(f.folderId)}/members/${encodeURIComponent(m.userKey)}`,
                       { method: 'DELETE' }
                     );
-                    window.alert(t('コンテナ番号メンバーを外しました。'));
+                    window.alert(t('コンテナメンバーを外しました。'));
                     await loadAdminPanel();
-                  }, 'コンテナ番号メンバー解除');
+                  }, 'コンテナメンバー解除');
                   actions.appendChild(removeBtn);
                 }
                 row.appendChild(actions);
@@ -2349,7 +2362,7 @@ async function loadAdminPanel() {
   } catch (error) {
     if (els.folderAdminList) {
       els.folderAdminList.innerHTML = '';
-      els.folderAdminList.appendChild(el('div', { class: 'muted' }, tf('コンテナ番号取得失敗: {message}', { message: asMessage(error) })));
+      els.folderAdminList.appendChild(el('div', { class: 'muted' }, tf('コンテナ取得失敗: {message}', { message: asMessage(error) })));
     }
   }
 
@@ -2463,9 +2476,9 @@ async function loadFolders() {
     renderFolders();
     const message = error?.message || 'unknown';
     if (message.includes('Failed to fetch') || message.includes('Type error')) {
-      showError(t('コンテナ番号取得失敗: ネットワーク/CORSエラーの可能性があります'));
+      showError(t('コンテナ取得失敗: ネットワーク/CORSエラーの可能性があります'));
     } else {
-      showError(tf('コンテナ番号取得失敗: {message}', { message }));
+      showError(tf('コンテナ取得失敗: {message}', { message }));
     }
   }
 }
@@ -2536,12 +2549,13 @@ function renderFolders() {
   if (!state.folders.length) {
     const empty = document.createElement('option');
     empty.value = '';
-    empty.textContent = t('まだコンテナ番号がなかです');
+    empty.textContent = t('まだコンテナがなかです');
     els.currentFolderSelect.appendChild(empty);
     els.currentFolderSelect.value = '';
     els.currentFolderSelect.disabled = true;
     els.folderDetail.classList.add('hidden');
     state.selectedFolder = null;
+    state.searchPhotos = [];
     state.quests = [];
     return;
   }
@@ -2575,24 +2589,30 @@ async function selectFolder(folder) {
   clearUploadDrafts();
   const folderId = folder.folderId;
   if (folder.hasPassword && !state.folderPasswordById[folder.folderId]) {
-    const entered = window.prompt(t('このコンテナ番号は鍵付きです。パスワードを入力してください。'), '');
+    const entered = window.prompt(t('このコンテナは鍵付きです。パスワードを入力してください。'), '');
     if (entered === null) {
       renderFolders();
       return;
     }
     const pw = String(entered || '').trim();
     if (!pw) {
-      showError(t('コンテナ番号パスワードが必要です。'));
+      showError(t('コンテナパスワードが必要です。'));
       renderFolders();
       return;
     }
     state.folderPasswordById[folder.folderId] = pw;
   }
   state.selectedFolder = folder;
+  state.folderDetailTab = 'record';
+  state.photoSearchScope = 'folder';
+  state.photoSearchTag = 'all';
+  state.photoSearchKeyword = '';
+  state.searchPhotos = [];
   renderFolders();
   els.folderDetail.classList.remove('hidden');
+  setFolderDetailTab('record');
   const modeLabel = normalizeFolderMode(folder.mode) === 'quest' ? t('クエスト') : t('フォト');
-  els.folderDetailTitle.textContent = `コンテナ番号: ${folder.title} [${modeLabel}]`;
+  els.folderDetailTitle.textContent = `コンテナ: ${folder.title} [${modeLabel}]`;
   try {
     await loadFolderContent();
   } catch (error) {
@@ -2601,10 +2621,11 @@ async function selectFolder(folder) {
       delete state.folderPasswordById[folderId];
       state.selectedFolder = null;
       state.selectedFolderArchive = null;
+      state.searchPhotos = [];
       els.folderDetail.classList.add('hidden');
       renderPhotoArchiveNote();
       renderFolders();
-      showError(t('コンテナ番号パスワードが違います。'));
+      showError(t('コンテナパスワードが違います。'));
       return;
     }
     throw error;
@@ -2615,6 +2636,7 @@ async function selectFolderById(folderId) {
   if (!folderId) {
     state.selectedFolder = null;
     state.selectedFolderArchive = null;
+    state.searchPhotos = [];
     state.quests = [];
     clearUploadDrafts();
     els.folderDetail.classList.add('hidden');
@@ -2641,6 +2663,10 @@ async function loadPhotos() {
   };
   renderPhotoArchiveNote();
   await renderPhotos();
+  if (state.folderDetailTab === 'search' && state.photoSearchScope === 'folder') {
+    state.searchPhotos = filteredFolderPhotos();
+    renderSearchResults();
+  }
   await refreshFolderUnread([state.selectedFolder.folderId]);
   renderFolders();
   await loadTeamMe();
@@ -2831,7 +2857,7 @@ async function uploadFiles() {
     }
     if (duplicateCount > 0) {
       if (totalFiles === 1) {
-        setUploadMetaStatus(t('同じ写真は同じコンテナ番号にアップロードできません（重複を検知しました）。'));
+        setUploadMetaStatus(t('同じ写真は同じコンテナにアップロードできません（重複を検知しました）。'));
         return;
       }
       if (duplicateCount === totalFiles) {
@@ -2868,13 +2894,29 @@ function formatDateTime(value) {
   return new Date(value).toLocaleString(appLocale);
 }
 
+function setFolderDetailTab(tab) {
+  const nextTab = tab === 'search' ? 'search' : 'record';
+  state.folderDetailTab = nextTab;
+  const isSearch = nextTab === 'search';
+  if (els.recordTabBtn) {
+    els.recordTabBtn.classList.toggle('is-active', !isSearch);
+    els.recordTabBtn.setAttribute('aria-selected', isSearch ? 'false' : 'true');
+  }
+  if (els.searchTabBtn) {
+    els.searchTabBtn.classList.toggle('is-active', isSearch);
+    els.searchTabBtn.setAttribute('aria-selected', isSearch ? 'true' : 'false');
+  }
+  if (els.recordPanel) els.recordPanel.classList.toggle('hidden', isSearch);
+  if (els.searchPanel) els.searchPanel.classList.toggle('hidden', !isSearch);
+  renderFolderMode();
+}
+
 function renderFolderMode() {
   const mode = currentFolderMode();
-  const isRoomSearch = state.photoSearchScope === 'room';
   if (els.photoModePanel) els.photoModePanel.classList.toggle('hidden', mode !== 'photo');
-  if (els.questModePanel) els.questModePanel.classList.toggle('hidden', mode !== 'quest' || isRoomSearch);
-  if (els.photoList) els.photoList.classList.toggle('hidden', mode !== 'photo' && !isRoomSearch);
-  if (els.questList) els.questList.classList.toggle('hidden', mode !== 'quest' || isRoomSearch);
+  if (els.questModePanel) els.questModePanel.classList.toggle('hidden', mode !== 'quest');
+  if (els.photoList) els.photoList.classList.toggle('hidden', mode !== 'photo');
+  if (els.questList) els.questList.classList.toggle('hidden', mode !== 'quest');
 }
 
 function photosForCurrentSummary() {
@@ -2917,7 +2959,7 @@ function photoMatchesSearch(photo) {
 }
 
 function filteredFolderPhotos() {
-  return (state.photos || []).filter(photoMatchesSearch);
+  return (photosForCurrentSummary() || []).filter(photoMatchesSearch);
 }
 
 function syncSearchControls() {
@@ -2942,7 +2984,6 @@ async function runPhotoSearch() {
   state.photoSearchKeyword = String(els.photoSearchKeyword?.value || '').trim();
   state.roomSearchNextToken = null;
   syncSearchControls();
-  renderFolderMode();
   if (state.photoSearchScope === 'room') {
     if (!state.roomId) return;
     const params = new URLSearchParams();
@@ -2953,10 +2994,55 @@ async function runPhotoSearch() {
     const data = await api(`/rooms/${encodeURIComponent(state.roomId)}/photos/search?${params.toString()}`, {
       method: 'GET',
     });
-    state.photos = data.items || [];
+    state.searchPhotos = data.items || [];
     state.roomSearchNextToken = data.nextToken || null;
+  } else {
+    state.searchPhotos = filteredFolderPhotos();
   }
-  await renderPhotos();
+  renderSearchResults();
+}
+
+function renderSearchResults() {
+  if (!els.searchPhotoList) return;
+  els.searchPhotoList.innerHTML = '';
+  syncSearchControls();
+  const photos = state.searchPhotos || [];
+  if (!photos.length) {
+    els.searchPhotoList.appendChild(el('div', { class: 'muted' }, t('条件に合う写真はなかです。')));
+    return;
+  }
+  photos.forEach((photo) => {
+    const card = el('div', { class: 'photo-card search-photo-card' });
+    const codeRow = el('div', { class: 'photo-card-meta-row' });
+    codeRow.appendChild(el('strong', {}, photo.photoCode || 'P---'));
+    codeRow.appendChild(createLogTagBadge(photo.logTag));
+    card.appendChild(codeRow);
+
+    const img = el('img', {
+      class: 'photo-card-image',
+      src: photo.viewUrl || '',
+      alt: photo.fileName || photo.photoId,
+      loading: 'lazy',
+    });
+    img.onclick = () => {
+      openPhotoPreview(photo);
+    };
+    img.onkeydown = (event) => {
+      if (!event || (event.key !== 'Enter' && event.key !== ' ')) return;
+      event.preventDefault();
+      openPhotoPreview(photo);
+    };
+    img.tabIndex = 0;
+    img.setAttribute('role', 'button');
+    img.setAttribute('aria-label', tf('{name} を全体表示', { name: photo.fileName || photo.photoId }));
+    card.appendChild(img);
+
+    if (photo.containerNumber || photo.folderTitle) {
+      card.appendChild(el('div', { class: 'muted' }, `コンテナ: ${photo.containerNumber || photo.folderTitle}`));
+    }
+    card.appendChild(el('div', { class: 'muted' }, tf('投稿: {name}', { name: photo.createdByName || '-' })));
+    els.searchPhotoList.appendChild(card);
+  });
 }
 
 function sortQuests(items) {
@@ -3118,7 +3204,7 @@ async function renderQuests() {
 async function renderPhotos() {
   els.photoList.innerHTML = '';
   syncSearchControls();
-  const photos = state.photoSearchScope === 'folder' ? filteredFolderPhotos() : state.photos || [];
+  const photos = state.photos || [];
   renderLogTagSummary(photosForCurrentSummary());
   if (!photos.length) {
     const archived = state.selectedFolderArchive || null;
@@ -3155,10 +3241,6 @@ async function renderPhotos() {
     img.setAttribute('role', 'button');
     img.setAttribute('aria-label', tf('{name} を全体表示', { name: photo.fileName || photo.photoId }));
     card.appendChild(img);
-
-    if (photo.containerNumber && state.photoSearchScope === 'room') {
-      card.appendChild(el('div', { class: 'muted' }, `コンテナ番号: ${photo.containerNumber}`));
-    }
 
     card.appendChild(el('div', { class: 'muted' }, tf('投稿: {name}', { name: photo.createdByName })));
 
@@ -3637,14 +3719,14 @@ if (els.openFolderCreateBtn) {
   els.openFolderCreateBtn.onclick = safeAction(async () => {
     closeMenu();
     openFolderCreateModal();
-  }, 'コンテナ番号登録');
+  }, 'コンテナ登録');
 }
 
 if (els.openFolderPasswordBtn) {
   els.openFolderPasswordBtn.onclick = safeAction(async () => {
     closeMenu();
     openFolderPasswordModal();
-  }, 'コンテナ番号パスワード');
+  }, 'コンテナパスワード');
 }
 
 if (els.developerDashboardBtn) {
@@ -3752,7 +3834,7 @@ els.createFolderBtn.onclick = safeAction(async () => {
   } catch (error) {
     const body = parseApiErrorBody(error);
     if (body?.code === 'FREE_PLAN_FOLDER_LIMIT_EXCEEDED') {
-      window.alert(body.message || t('フリープランではコンテナ番号は2つまでです。有料プランで無制限になります。'));
+      window.alert(body.message || t('フリープランではコンテナは2つまでです。有料プランで無制限になります。'));
       return;
     }
     throw error;
@@ -3761,10 +3843,10 @@ els.createFolderBtn.onclick = safeAction(async () => {
   if (els.folderMode) els.folderMode.value = 'photo';
   if (els.folderPassword) els.folderPassword.value = '';
   closeFolderCreateModal();
-  showToast(tf('コンテナ番号：{title} を登録しました。', { title: created.title }));
+  showToast(tf('コンテナ：{title} を登録しました。', { title: created.title }));
   await loadFolders();
   await selectFolderById(created.folderId);
-}, 'コンテナ番号登録');
+}, 'コンテナ登録');
 
 if (els.uploadBtn) {
   els.uploadBtn.onclick = safeAction(async () => {
@@ -3835,7 +3917,7 @@ if (els.cancelUploadDraftsBtn) {
 
 els.exportBtn.onclick = safeAction(async () => {
   if (!state.selectedFolder) {
-    window.alert(t('先にコンテナ番号を選択してください。'));
+    window.alert(t('先にコンテナを選択してください。'));
     return;
   }
   closeMenu();
@@ -3944,7 +4026,7 @@ if (els.lowStorageChargeBtn) {
 if (els.deleteTeamBtn) {
   els.deleteTeamBtn.onclick = safeAction(async () => {
     const ok = window.confirm(
-      t('このお部屋を削除すると、コンテナ番号/写真/コメント/課金情報が全て削除され、Stripeの定期課金も即時停止されます。よかですか？')
+      t('このお部屋を削除すると、コンテナ/写真/コメント/課金情報が全て削除され、Stripeの定期課金も即時停止されます。よかですか？')
     );
     if (!ok) return;
     const ok2 = window.confirm(t('本当によかですか？（取り消せません）'));
@@ -3991,17 +4073,18 @@ if (els.accountDeleteBtn) {
 if (els.folderDeleteBtn) {
   els.folderDeleteBtn.onclick = safeAction(async () => {
     if (!state.selectedFolder) return;
-    const ok = window.confirm(t('このコンテナ番号を削除すると、写真とコメントも消えます。よかですか？'));
+    const ok = window.confirm(t('このコンテナを削除すると、写真とコメントも消えます。よかですか？'));
     if (!ok) return;
     const folderId = state.selectedFolder.folderId;
     await api(`/folders/${folderId}`, { method: 'DELETE', headers: { ...folderPasswordHeader(folderId) } });
-    window.alert(t('コンテナ番号を削除しました。'));
+    window.alert(t('コンテナを削除しました。'));
     state.selectedFolder = null;
+    state.searchPhotos = [];
     els.folderDetail.classList.add('hidden');
     await loadFolders();
     await loadTeamMe();
     await loadAdminPanel();
-  }, 'コンテナ番号削除');
+  }, 'コンテナ削除');
 }
 
 if (els.setFolderPasswordBtn) {
@@ -4018,7 +4101,7 @@ if (els.setFolderPasswordBtn) {
     else delete state.folderPasswordById[folderId];
     if (els.folderPasswordSet) els.folderPasswordSet.value = '';
     closeFolderPasswordModal();
-    showToast(t('コンテナ番号の鍵を更新しました。'));
+    showToast(t('コンテナの鍵を更新しました。'));
     await loadFolders();
   }, '鍵設定');
 }
@@ -4061,7 +4144,7 @@ if (els.currentFolderSelect) {
     await safeAction(async () => {
       const folderId = event.target.value;
       await selectFolderById(folderId);
-    }, 'コンテナ番号選択')();
+    }, 'コンテナ選択')();
   });
 }
 
@@ -4094,22 +4177,30 @@ if (els.currentRoomSelect) {
   });
 }
 
+if (els.recordTabBtn) {
+  els.recordTabBtn.onclick = () => {
+    setFolderDetailTab('record');
+  };
+}
+
+if (els.searchTabBtn) {
+  els.searchTabBtn.onclick = safeAction(async () => {
+    setFolderDetailTab('search');
+    await runPhotoSearch();
+  }, '検索タブ切替');
+}
+
 if (els.searchScopeFolderBtn) {
   els.searchScopeFolderBtn.onclick = safeAction(async () => {
     state.photoSearchScope = 'folder';
     state.roomSearchNextToken = null;
-    syncSearchControls();
-    renderFolderMode();
-    if (state.selectedFolder && currentFolderMode() === 'photo') await loadPhotos();
-    else await renderPhotos();
+    await runPhotoSearch();
   }, '検索範囲切替');
 }
 
 if (els.searchScopeRoomBtn) {
   els.searchScopeRoomBtn.onclick = safeAction(async () => {
     state.photoSearchScope = 'room';
-    syncSearchControls();
-    renderFolderMode();
     await runPhotoSearch();
   }, '検索範囲切替');
 }
