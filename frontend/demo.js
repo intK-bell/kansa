@@ -493,7 +493,6 @@ const els = {
   folderDetailTabs: document.querySelector('#folder-detail-tabs'),
   recordTabBtn: document.querySelector('#record-tab-btn'),
   searchTabBtn: document.querySelector('#search-tab-btn'),
-  exportTabBtn: document.querySelector('#export-tab-btn'),
   recordPanel: document.querySelector('#record-panel'),
   searchPanel: document.querySelector('#search-panel'),
   folderDetailTitle: document.querySelector('#folder-detail-title'),
@@ -3781,10 +3780,6 @@ async function openExportForSelectedContainer() {
 }
 
 els.exportBtn.onclick = safeAction(openExportForSelectedContainer, 'PPT出力');
-
-if (els.exportTabBtn) {
-  els.exportTabBtn.onclick = safeAction(openExportForSelectedContainer, '出力');
-}
 
 if (els.teamAdminBtn && els.teamAdminCard) {
   els.teamAdminBtn.onclick = safeAction(async () => {
