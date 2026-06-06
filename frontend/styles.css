@@ -97,6 +97,11 @@ h3 {
   align-items: center;
   gap: 12px;
   margin-bottom: 10px;
+  padding: 14px 18px;
+  border: 1px solid rgba(58, 119, 174, 0.34);
+  border-bottom-color: rgba(30, 144, 255, 0.48);
+  background: linear-gradient(180deg, rgba(17, 70, 120, 0.78), rgba(8, 39, 76, 0.88));
+  backdrop-filter: blur(8px);
 }
 
 .page-header h1 {
@@ -1447,8 +1452,9 @@ body.dark .room-row {
     align-items: center;
     margin: -14px -14px 12px;
     padding: calc(10px + env(safe-area-inset-top)) 14px 10px;
-    background: color-mix(in srgb, var(--bg) 86%, transparent);
-    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(17, 70, 120, 0.82), rgba(8, 39, 76, 0.92));
+    border: 0;
+    border-bottom: 1px solid rgba(30, 144, 255, 0.48);
     backdrop-filter: blur(10px);
   }
 
