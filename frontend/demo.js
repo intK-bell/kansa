@@ -3,6 +3,7 @@ import { DEMO_PLAN_BYTES, DEMO_USER_KEY, createDemoPhoto, createDemoStore, demoN
 const APP_CONFIG = window.KANSA_CONFIG || {};
 const API_BASE =
   window.localStorage.getItem('kansa_api_base') || APP_CONFIG.apiBase || 'http://127.0.0.1:3000';
+const DEMO_EXPORT_ASSET_VERSION = '20260606-cong-pdf2';
 const PHOTO_BUCKET =
   window.localStorage.getItem('kansa_photo_bucket') || APP_CONFIG.photoBucket || '';
 function normalizeCognitoDomain(raw) {
@@ -860,7 +861,9 @@ function buildDemoExportUrl(format) {
       : format === 'pptx_light'
         ? `demo-export-light-sample${languageSuffix}.pptx`
         : `demo-export-high-sample${languageSuffix}.pptx`;
-  return new URL(`./demo-assets/${fileName}`, window.location.href).href;
+  const url = new URL(`./demo-assets/${fileName}`, window.location.href);
+  url.searchParams.set('v', DEMO_EXPORT_ASSET_VERSION);
+  return url.href;
 }
 
 async function requestFolderExport(format) {
