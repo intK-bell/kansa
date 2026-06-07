@@ -662,14 +662,14 @@ async function buildExportPdf(options) {
       borderColor: hexToRgbColor('BFD2B7'),
       borderWidth: 1,
     });
-    page.drawText('Cong Report', {
+    page.drawText(i18n.t('Cong Report'), {
       x: pptUnit(0.82),
       y: PDF_PAGE_HEIGHT - pptUnit(0.58),
       size: 10,
       font: jpFont,
       color: hexToRgbColor(PALETTE.brandText),
     });
-    drawMixedPdfText(page, `コンテナ番号: ${folder.title || folder.folderCode || 'F000'}`, {
+    drawMixedPdfText(page, `${i18n.t('コンテナ番号')}: ${folder.title || folder.folderCode || 'F000'}`, {
       x: pptUnit(0.55),
       y: PDF_PAGE_HEIGHT - pptUnit(1.18),
       size: 21,
@@ -677,7 +677,7 @@ async function buildExportPdf(options) {
       latinFont,
       color: hexToRgbColor(PALETTE.ink),
     });
-    drawMixedPdfText(page, `タグ: ${photo.logTagLabel || 'その他'}`, {
+    drawMixedPdfText(page, `${i18n.t('タグ')}: ${i18n.t(photo.logTagLabel || 'その他')}`, {
       x: pptUnit(0.55),
       y: PDF_PAGE_HEIGHT - pptUnit(1.44),
       size: 11,
