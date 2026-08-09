@@ -158,7 +158,7 @@
       <p class="subtitle" data-i18n="Container Log ユーザーマニュアル">Container Log ユーザーマニュアル</p>
       <p class="meta">
         <strong data-i18n="作成日：">作成日：</strong><span data-i18n="2026年4月19日">2026年4月19日</span><br />
-        <strong data-i18n="改訂日：">改訂日：</strong><span data-i18n="2026年6月6日">2026年6月6日</span>
+        <strong data-i18n="改訂日：">改訂日：</strong><span data-i18n="2026年8月9日">2026年8月9日</span>
       </p>
     </header>
 
@@ -172,7 +172,7 @@
         <li data-i18n="タグによる分類">タグによる分類</li>
         <li data-i18n="写真とコメントを一元管理">写真とコメントを一元管理</li>
         <li data-i18n="クエストによる撮影漏れ防止">クエストによる撮影漏れ防止</li>
-        <li data-i18n="PowerPoint出力">PowerPoint出力</li>
+        <li><span data-i18n="PDF">PDF</span> / <span data-i18n="軽量PPT">軽量PPT</span> / <span data-i18n="高画質PPT">高画質PPT</span></li>
         <li data-i18n="権限管理">権限管理</li>
       </ul>
     </section>
@@ -205,9 +205,8 @@
     </section>
 
     <section>
-      <h2 data-i18n="4. フォルダ">4. フォルダ</h2>
-      <p data-i18n="フォルダはコンテナ単位で利用します。">フォルダはコンテナ単位で利用します。</p>
-      <p data-i18n="コンテナ番号をフォルダ名として利用できます。">コンテナ番号をフォルダ名として利用できます。</p>
+      <h2>4. <span data-i18n="コンテナ">コンテナ</span></h2>
+      <p data-i18n="コンテナ番号を記録単位として登録し、通常記録またはクエスト記録を選択します。">コンテナ番号を記録単位として登録し、通常記録またはクエスト記録を選択します。</p>
       <h3 data-i18n="例">例</h3>
       <ul>
         <li data-i18n="ABCU1234567">ABCU1234567</li>
@@ -217,10 +216,10 @@
     </section>
 
     <section>
-      <h2 data-i18n="5. フォトフォルダ">5. フォトフォルダ</h2>
-      <p data-i18n="フォトフォルダでは写真を記録します。">フォトフォルダでは写真を記録します。</p>
+      <h2>5. <span data-i18n="通常記録">通常記録</span></h2>
+      <p data-i18n="通常記録では、コンテナに関する写真を自由に追加します。">通常記録では、コンテナに関する写真を自由に追加します。</p>
       <p data-i18n="写真にはタグを付与できます。">写真にはタグを付与できます。</p>
-      <h3 data-i18n="推奨タグ">推奨タグ</h3>
+      <h3 data-i18n="タグ">タグ</h3>
       <ul>
         <li data-i18n="コンテナ番号">コンテナ番号</li>
         <li data-i18n="搬入">搬入</li>
@@ -233,8 +232,8 @@
     </section>
 
     <section>
-      <h2 data-i18n="6. クエストフォルダ">6. クエストフォルダ</h2>
-      <p data-i18n="クエストフォルダは撮影依頼に利用します。">クエストフォルダは撮影依頼に利用します。</p>
+      <h2>6. <span data-i18n="クエスト記録">クエスト記録</span></h2>
+      <p data-i18n="クエスト記録は撮影依頼と撮影漏れ防止に利用します。">クエスト記録は撮影依頼と撮影漏れ防止に利用します。</p>
       <h3 data-i18n="例">例</h3>
       <ul>
         <li data-i18n="□ コンテナ番号">□ コンテナ番号</li>
@@ -251,6 +250,7 @@
       <h2 data-i18n="7. 写真">7. 写真</h2>
       <p data-i18n="写真は単体または一括アップロード可能です。">写真は単体または一括アップロード可能です。</p>
       <p data-i18n="撮影後にタグ付けできます。">撮影後にタグ付けできます。</p>
+      <p data-i18n="写真名はコンテナ番号、タグ名、3桁連番から自動生成されます。">写真名はコンテナ番号、タグ名、3桁連番から自動生成されます。</p>
       <ul>
         <li data-i18n="カメラ / ライブラリ / ファイル">カメラ / ライブラリ / ファイル</li>
         <li data-i18n="単体 / 一括">単体 / 一括</li>
@@ -269,23 +269,36 @@
     </section>
 
     <section>
-      <h2 data-i18n="9. 出力">9. 出力</h2>
-      <p data-i18n="フォルダ単位でPowerPoint出力できます。">フォルダ単位でPowerPoint出力できます。</p>
+      <h2>9. <span data-i18n="検索">検索</span></h2>
+      <p data-i18n="検索タブでは、保存済み写真をタグ、キーワード、検索範囲で絞り込めます。">検索タブでは、保存済み写真をタグ、キーワード、検索範囲で絞り込めます。</p>
+      <ul>
+        <li data-i18n="このコンテナ">このコンテナ</li>
+        <li data-i18n="このお部屋">このお部屋</li>
+        <li data-i18n="タグ">タグ</li>
+        <li data-i18n="キーワード">キーワード</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>10. <span data-i18n="出力">出力</span></h2>
+      <p data-i18n="コンテナ単位でPDFまたはPowerPointを出力できます。">コンテナ単位でPDFまたはPowerPointを出力できます。</p>
       <p data-i18n="コンテナ報告資料作成に利用できます。">コンテナ報告資料作成に利用できます。</p>
       <ul>
-        <li data-i18n="PowerPoint出力">PowerPoint出力</li>
+        <li data-i18n="PDF">PDF</li>
+        <li data-i18n="軽量PPT">軽量PPT</li>
+        <li data-i18n="高画質PPT">高画質PPT</li>
         <li data-i18n="フリー：透かしあり">フリー：透かしあり</li>
         <li data-i18n="有料：透かしなし">有料：透かしなし</li>
       </ul>
     </section>
 
     <section>
-      <h2 data-i18n="10. 権限管理">10. 権限管理</h2>
+      <h2>11. <span data-i18n="権限管理">権限管理</span></h2>
       <h3 data-i18n="管理者">管理者</h3>
       <ul>
         <li data-i18n="お部屋管理">お部屋管理</li>
         <li data-i18n="メンバー管理">メンバー管理</li>
-        <li data-i18n="フォルダ管理">フォルダ管理</li>
+        <li data-i18n="コンテナ管理">コンテナ管理</li>
       </ul>
       <h3 data-i18n="メンバー">メンバー</h3>
       <ul>
@@ -295,7 +308,7 @@
     </section>
 
     <section>
-      <h2 data-i18n="11. 料金プラン">11. 料金プラン</h2>
+      <h2>12. <span data-i18n="料金プラン">料金プラン</span></h2>
       <ul>
         <li data-i18n="フリー：512MB / 30日">フリー：512MB / 30日</li>
         <li data-i18n="1GB：¥980">1GB：¥980</li>
@@ -321,7 +334,7 @@
             <td data-i18n="不可">不可</td>
           </tr>
           <tr>
-            <td data-i18n="フォルダ管理">フォルダ管理</td>
+            <td data-i18n="コンテナ管理">コンテナ管理</td>
             <td data-i18n="可">可</td>
             <td data-i18n="不可">不可</td>
           </tr>
@@ -341,7 +354,7 @@
             <td data-i18n="可">可</td>
           </tr>
           <tr>
-            <td data-i18n="PowerPoint出力">PowerPoint出力</td>
+            <td data-i18n="PDF / PowerPoint出力">PDF / PowerPoint出力</td>
             <td data-i18n="可">可</td>
             <td data-i18n="可">可</td>
           </tr>

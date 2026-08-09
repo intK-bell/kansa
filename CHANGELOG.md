@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-06-07
+
+- Updated the landing page and multilingual content for the Cong container-log brand.
+- Updated Cong logos and localized product presentation.
+
+## 2026-06-06
+
+- Rebranded the application from a general photo-recording app to `Cong | Container Log`.
+- Changed the user-facing record unit from folders to container numbers while retaining internal `folder` identifiers for compatibility.
+- Added per-photo container-log tags for container number, inbound, outbound, seal, damage, and other records.
+- Added automatic photo names based on container number, tag, and a three-digit sequence.
+- Added tag summaries and tag/keyword search across the current container or room.
+- Added PDF, light PowerPoint, and high-quality PowerPoint report output with tag information.
+- Updated the standard and Quest recording flows for container operations.
+- Removed the theme selector from the main Cong application and standardized the Cong visual design.
+
 ## 2026-05-15
 
 - Added confirmation dialogs before starting paid subscription checkout, upgrading a paid plan, or scheduling a paid downgrade.

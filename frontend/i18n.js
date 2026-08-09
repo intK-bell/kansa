@@ -2463,6 +2463,7 @@
       Cong: 'Cong',
       'Container Log ユーザーマニュアル': 'Container Log User Manual',
       '2026年6月6日': 'June 6, 2026',
+      '2026年8月9日': 'August 9, 2026',
       コンテナ: 'Container',
       現在のコンテナ: 'Current container',
       コンテナ詳細: 'Container details',
@@ -2488,6 +2489,20 @@
       記録モード: 'Record mode',
       通常記録: 'Standard record',
       クエスト記録: 'Quest record',
+      'コンテナ番号を記録単位として登録し、通常記録またはクエスト記録を選択します。':
+        'Register a container number as the record unit, then select Standard record or Quest record.',
+      '通常記録では、コンテナに関する写真を自由に追加します。':
+        'Standard records let you freely add photos related to the container.',
+      'クエスト記録は撮影依頼と撮影漏れ防止に利用します。':
+        'Quest records are used for photo requests and preventing missed shots.',
+      '写真名はコンテナ番号、タグ名、3桁連番から自動生成されます。':
+        'Photo names are generated automatically from the container number, tag, and a three-digit sequence.',
+      '検索タブでは、保存済み写真をタグ、キーワード、検索範囲で絞り込めます。':
+        'The Search tab filters saved photos by tag, keyword, and search scope.',
+      'コンテナ単位でPDFまたはPowerPointを出力できます。':
+        'Export PDF or PowerPoint reports by container.',
+      コンテナ管理: 'Container management',
+      'PDF / PowerPoint出力': 'PDF / PowerPoint export',
       'コンテナ登録 → 写真アップロード → コメント追加 → 出力':
         'Register container -> upload photos -> add comments -> export',
       コンテナ番号: 'Container number',
@@ -2674,6 +2689,7 @@
       Cong: 'Cong',
       'Container Log ユーザーマニュアル': 'Container Log 用户手册',
       '2026年6月6日': '2026年6月6日',
+      '2026年8月9日': '2026年8月9日',
       コンテナ: '集装箱',
       現在のコンテナ: '当前集装箱',
       コンテナ詳細: '集装箱详情',
@@ -2698,6 +2714,17 @@
       記録モード: '记录模式',
       通常記録: '普通记录',
       クエスト記録: '任务记录',
+      'コンテナ番号を記録単位として登録し、通常記録またはクエスト記録を選択します。':
+        '将集装箱编号登记为记录单位，然后选择普通记录或任务记录。',
+      '通常記録では、コンテナに関する写真を自由に追加します。': '普通记录可自由添加与集装箱相关的照片。',
+      'クエスト記録は撮影依頼と撮影漏れ防止に利用します。': '任务记录用于拍摄请求和防止漏拍。',
+      '写真名はコンテナ番号、タグ名、3桁連番から自動生成されます。':
+        '照片名称由集装箱编号、标签名称和三位序号自动生成。',
+      '検索タブでは、保存済み写真をタグ、キーワード、検索範囲で絞り込めます。':
+        '在搜索标签页中，可按标签、关键词和搜索范围筛选已保存的照片。',
+      'コンテナ単位でPDFまたはPowerPointを出力できます。': '可按集装箱导出 PDF 或 PowerPoint。',
+      コンテナ管理: '集装箱管理',
+      'PDF / PowerPoint出力': 'PDF / PowerPoint 导出',
       'コンテナ登録 → 写真アップロード → コメント追加 → 出力': '登记集装箱 -> 上传照片 -> 添加评论 -> 导出',
       コンテナ番号: '集装箱编号',
       搬入: '进场',
@@ -2877,6 +2904,7 @@
       Cong: 'Cong',
       'Container Log ユーザーマニュアル': 'Hướng dẫn sử dụng Container Log',
       '2026年6月6日': 'Ngày 6 tháng 6 năm 2026',
+      '2026年8月9日': 'Ngày 9 tháng 8 năm 2026',
       コンテナ: 'Container',
       現在のコンテナ: 'Container hiện tại',
       コンテナ詳細: 'Chi tiết container',
@@ -2902,6 +2930,20 @@
       記録モード: 'Chế độ ghi nhận',
       通常記録: 'Ghi nhận thường',
       クエスト記録: 'Ghi nhận quest',
+      'コンテナ番号を記録単位として登録し、通常記録またはクエスト記録を選択します。':
+        'Đăng ký số container làm đơn vị ghi nhận, sau đó chọn ghi nhận thường hoặc ghi nhận quest.',
+      '通常記録では、コンテナに関する写真を自由に追加します。':
+        'Ghi nhận thường cho phép tự do thêm ảnh liên quan đến container.',
+      'クエスト記録は撮影依頼と撮影漏れ防止に利用します。':
+        'Ghi nhận quest dùng cho yêu cầu chụp ảnh và ngăn chụp thiếu.',
+      '写真名はコンテナ番号、タグ名、3桁連番から自動生成されます。':
+        'Tên ảnh được tạo tự động từ số container, tên thẻ và số thứ tự ba chữ số.',
+      '検索タブでは、保存済み写真をタグ、キーワード、検索範囲で絞り込めます。':
+        'Tab Tìm kiếm lọc ảnh đã lưu theo thẻ, từ khóa và phạm vi tìm kiếm.',
+      'コンテナ単位でPDFまたはPowerPointを出力できます。':
+        'Có thể xuất PDF hoặc PowerPoint theo từng container.',
+      コンテナ管理: 'Quản lý container',
+      'PDF / PowerPoint出力': 'Xuất PDF / PowerPoint',
       'コンテナ登録 → 写真アップロード → コメント追加 → 出力':
         'Đăng ký container -> tải ảnh lên -> thêm bình luận -> xuất',
       コンテナ番号: 'Số container',
