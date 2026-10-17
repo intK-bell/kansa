@@ -1,25 +1,12 @@
-const APP_CONFIG = window.KANSA_CONFIG || {};
-const API_BASE =
-  window.localStorage.getItem('kansa_api_base') || APP_CONFIG.apiBase || 'http://127.0.0.1:3000';
-const PHOTO_BUCKET =
-  window.localStorage.getItem('kansa_photo_bucket') || APP_CONFIG.photoBucket || '';
-function normalizeCognitoDomain(raw) {
-  const value = String(raw || '').trim();
-  if (!value) return '';
-  const withoutProto = value.replace(/^https?:\/\//i, '');
-  const host = withoutProto.split('/')[0];
-  return host.replace(/\.auth\..*$/, '');
-}
+import {
+  DEFAULT_LOG_TAG, LOG_TAGS, appendFolderAdminActions, appendPhotoCardComments, appendQuestPhotoArea, asMessage, bindAppControlEvents, bindAuthControlEvents, bindBillingControlEvents, bindExportControlEvents, bindGlobalAppEvents, bindInviteControlEvents, bindManagementControlEvents, bindModalDismissEvents, bindMutationControlEvents, bindPhotoCardEditing, bindPhotoCommentsAccordionLifecycle, bindUploadControlEvents, collectAppElements, computeStorageStats, createAdminPanelUi, createAppErrorUi, createBillingStatusUi, createFolderAdminOverview, createFolderCreationUi, createFolderManagementUi, createFreePlanUi, createLogTagUi, createPhotoCardShell, createPhotoCommentRow, createPhotoCommentsAccordion, createPhotoPreviewImage, createQuestCardHeader, createQuestCommentsSection, createRoomCreationUi, createUploadDraftRow, downloadFileNameFromResponse, el, formatBytes,
+  createManagementUi, createSubscriptionPlanUi, normalizeCognitoDomain, normalizeFolderMode, normalizeLogTag, parseApiErrorBody, renderBillingBarInto, renderCurrentRoomHeaderInto, renderFolderMembersInto, renderFolderModePanels, renderFolderSelectInto, renderLogTagSummaryInto, renderMyRoomsInto, renderPhotoArchiveNoteInto, renderRentalComparisonInto, renderRoomSelectInto, renderSearchResultsInto, renderStorageGraphInto, renderTeamMembersInto, renderTopStorageGraphInto, syncSearchControlsInto,
+  parseJwt, planToProductLabel, questReadKey, questStatusText, renderUploadDraftContainerInto, resizeImageToJpeg, sortQuests, subscriptionPlanLimitBytes, subscriptionPlanRank, syncSubscriptionPlanButtonsInto, syncUploadDraftsFromRows, validateUploadDraftItems,
+} from './app-core.js';
+import { createCognitoClient, createLiveApi, createLiveRequest, resolveLiveEnvironment } from './api-live.js';
+import { clearFolderSelectionState, computeFolderUnreadState, copyInviteText, createAccountDeleteHandler, createActionBoundary, createAdminPanelOptions, createAppViewController, createBillingUiController, createCommentReadController, createDisplayNameChangeHandler, createExportProgressController, createExportResultController, createFolderCreationHandler, createFolderDeleteHandler, createFolderDetailController, createFolderPasswordHandler, createInitialAppState, createInviteHandlers, createLowStorageController, createPhotoCommentAddHandler, createPhotoCommentMutationActions, createPhotoMutationActions, createPhotoPreviewController, createQuestCommentMutationActions, createQuestMutationActions, createReadTracker, createRoomCreationHandler, createRoomDeleteHandler, createRoomLeaveHandler, createScreenController, createStorageGraphController, createTeamAdminController, createUploadDraftController, createUploadDraftEditor, createUploadLoadingController, ensureFolderPasswordState, ensureUserDisplayName, handleFolderListError, handleInvalidFolderPassword, loadFolderContentState, loadFolderListState, loadPhotoState, loadQuestState, loadRoomListState, loadTeamState, refreshFolderUnreadState, renderAdminPanel, renderBillingAdminState, renderFolderListState, resetRoomState, runActionWithHandledErrors, runFolderChange, runFolderExport, runFreePlanChange, runOwnerRoomSwitch, runPhotoSearchState, runQuestCreation, runRoomChange, runSubscriptionPlanChange, runUploadBatch, selectFolderState, startAppInitialization, switchRoomState } from './app-runtime.js';
 
-const COGNITO_REGION =
-  window.localStorage.getItem('kansa_cognito_region') || APP_CONFIG.cognitoRegion || '';
-const COGNITO_DOMAIN = normalizeCognitoDomain(
-  window.localStorage.getItem('kansa_cognito_domain') || APP_CONFIG.cognitoDomain || ''
-);
-const COGNITO_CLIENT_ID =
-  window.localStorage.getItem('kansa_cognito_client_id') || APP_CONFIG.cognitoClientId || '';
-const COGNITO_REDIRECT_URI =
-  APP_CONFIG.cognitoRedirectUri || window.localStorage.getItem('kansa_cognito_redirect_uri') || window.location.origin;
+const liveEnvironment = resolveLiveEnvironment(window);
 const I18N = window.KANSA_I18N || null;
 const t = (key) => (I18N && typeof I18N.t === 'function' ? I18N.t(key) : key);
 const tf = (key, values = {}) =>
@@ -29,152 +16,41 @@ const tf = (key, values = {}) =>
         Object.prototype.hasOwnProperty.call(values, name) ? String(values[name]) : match
       );
 const appLocale = I18N?.language || 'ja-JP';
-const LOG_TAGS = [
-  { value: 'container_number', label: 'コンテナ番号', color: '#06224A' },
-  { value: 'inbound', label: '搬入', color: '#1E90FF' },
-  { value: 'outbound', label: '搬出', color: '#2E7D32' },
-  { value: 'seal', label: 'シール', color: '#7C4DFF' },
-  { value: 'damage', label: '損傷', color: '#E53935' },
-  { value: 'other', label: 'その他', color: '#607D8B' },
-];
-const DEFAULT_LOG_TAG = 'container_number';
+const { createLogTagBadge, createLogTagSelect } = createLogTagUi(t);
+const subscriptionPlanUi = createSubscriptionPlanUi({ translate: t, formatMessage: tf });
+const freePlanUi = createFreePlanUi({ translate: t, formatMessage: tf, formatSize: formatBytes });
+const planToDisplayLabel = subscriptionPlanUi.displayLabel;
+const billingStatusUi = createBillingStatusUi({ formatMessage: tf, formatSize: formatBytes, planLabel: planToDisplayLabel });
+const adminPanelUi = createAdminPanelUi({ translate: t, formatMessage: tf, formatSize: formatBytes, describeError: asMessage });
+const roomCreationUi = createRoomCreationUi({ translate: t, formatMessage: tf, describeError: asMessage });
+const folderCreationUi = createFolderCreationUi({ translate: t, formatMessage: tf });
+const managementUi = createManagementUi({ translate: t });
+const folderManagementUi = createFolderManagementUi({ translate: t });
+const appErrorUi = createAppErrorUi({ translate: t, formatMessage: tf, describeError: asMessage });
+const subscriptionPlanChangeConfirmText = subscriptionPlanUi.confirmText;
+const freePlanGuideText = () => freePlanUi.guideText(currentFolderLimit());
+const freePlanRequirementDialogText = freePlanUi.requirementText;
+const freePlanReturnConfirmText = freePlanUi.confirmText;
+const freePlanReturnSuccessText = freePlanUi.successText;
+const cognitoClient = createCognitoClient({ ...liveEnvironment.cognito, windowRef: window, translate: t, formatMessage: tf });
+const liveRequest = createLiveRequest({
+  baseUrl: liveEnvironment.apiBase,
+  getHeaders: (method) => headers(method),
+  clearError,
+  onUnauthorized: () => { clearAuth(); showAuthSetup(); },
+  onNoActiveRoom: () => { resetRoomContext(); showRoomSetup(); },
+  formatNetworkError: (message) => tf('ネットワークエラー: {message}', { message }),
+});
+const appApi = createLiveApi(liveRequest, (folderId) => folderPasswordHeader(folderId));
+const state = createInitialAppState();
 
-const state = {
-  userKey: null,
-  userName: null,
-  idToken: null,
-  roomId: null,
-  roomName: null,
-  teamRole: null,
-  isAdmin: false,
-  uploadBlocked: false,
-  billing: null,
-  ownerUserKey: null,
-  isDeveloper: false,
-  lastInviteToken: null,
-  lastFolderInviteTokens: {},
-  adminFolderId: '',
-  availableRooms: [],
-  folderPasswordById: {},
-  folders: [],
-  folderUnreadMap: {},
-  folderModeUnreadMap: {},
-  selectedFolder: null,
-  selectedFolderArchive: null,
-  photos: [],
-  quests: [],
-  questSort: 'status',
-  openAccordions: new Set(),
-  restoreScrollY: null,
-  isUploading: false,
-  isCreatingQuest: false,
-  uploadDrafts: [],
-  uploadTargetQuestId: null,
-  folderDetailTab: 'record',
-  photoSearchScope: 'folder',
-  photoSearchTag: 'all',
-  photoSearchKeyword: '',
-  searchPhotos: [],
-  roomSearchNextToken: null,
-};
+const readTracker = createReadTracker({ storage: localStorage, getUserKey: () => state.userKey });
+const commentReadController = createCommentReadController(appApi, state, {
+  readTracker, refreshFolderUnread, renderFolders,
+});
+const isUnread = (key, latestIncomingAt) => commentReadController.isUnread(key, latestIncomingAt);
 
-let exportLoadingTimer = null;
-let exportResult = null;
-
-function el(tag, attrs = {}, text = null) {
-  const node = document.createElement(tag);
-  Object.entries(attrs || {}).forEach(([key, value]) => {
-    if (value === null || value === undefined) return;
-    if (key === 'class') node.className = value;
-    else if (key === 'dataset') Object.assign(node.dataset, value);
-    else if (key.startsWith('on') && typeof value === 'function') node[key] = value;
-    else node.setAttribute(key, String(value));
-  });
-  if (text !== null && text !== undefined) node.textContent = String(text);
-  return node;
-}
-
-function normalizeLogTag(value, fallback = DEFAULT_LOG_TAG) {
-  const tag = String(value || '').trim();
-  return LOG_TAGS.some((item) => item.value === tag) ? tag : fallback;
-}
-
-function logTagMeta(value) {
-  return LOG_TAGS.find((item) => item.value === normalizeLogTag(value, 'other')) || LOG_TAGS[LOG_TAGS.length - 1];
-}
-
-function createLogTagBadge(value, suffix = '') {
-  const meta = logTagMeta(value);
-  const badge = el('span', { class: 'tag-badge' }, `${t(meta.label)}${suffix}`);
-  badge.style.setProperty('--tag-color', meta.color);
-  return badge;
-}
-
-function createLogTagSelect(value = DEFAULT_LOG_TAG) {
-  const select = el('select', { class: 'js-log-tag-select' });
-  LOG_TAGS.forEach((tag) => {
-    select.appendChild(el('option', { value: tag.value }, t(tag.label)));
-  });
-  select.value = normalizeLogTag(value);
-  return select;
-}
-
-function readStateKey() {
-  return `kansa_read_comments_${state.userKey || 'guest'}`;
-}
-
-function getReadState() {
-  try {
-    return JSON.parse(localStorage.getItem(readStateKey()) || '{}');
-  } catch (_) {
-    return {};
-  }
-}
-
-function setReadState(nextState) {
-  localStorage.setItem(readStateKey(), JSON.stringify(nextState));
-}
-
-function getLatestIncomingCommentAt(comments) {
-  return comments
-    .filter((comment) => comment.createdBy !== state.userKey)
-    .reduce((latest, comment) => (comment.createdAt > latest ? comment.createdAt : latest), '');
-}
-
-function isUnread(photoId, latestIncomingAt) {
-  if (!latestIncomingAt) return false;
-  const map = getReadState();
-  return !map[photoId] || map[photoId] < latestIncomingAt;
-}
-
-function markAsRead(readKey, latestIncomingAt) {
-  if (!latestIncomingAt) return;
-  const map = getReadState();
-  if (!map[readKey] || map[readKey] < latestIncomingAt) {
-    map[readKey] = latestIncomingAt;
-    setReadState(map);
-  }
-}
-
-function questReadKey(questId) {
-  return `quest:${questId}`;
-}
-
-function hasCognitoConfig() {
-  return Boolean(COGNITO_REGION && COGNITO_DOMAIN && COGNITO_CLIENT_ID && COGNITO_REDIRECT_URI);
-}
-
-function parseJwt(token) {
-  if (!token) return null;
-  try {
-    const payload = token.split('.')[1];
-    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const json = atob(normalized);
-    return JSON.parse(json);
-  } catch (_) {
-    return null;
-  }
-}
+const hasCognitoConfig = cognitoClient.isConfigured;
 
 function clearAuth() {
   localStorage.removeItem('kansa_id_token');
@@ -189,32 +65,7 @@ function clearAuth() {
 
 function resetRoomContext() {
   localStorage.removeItem('kansa_room_name');
-  state.roomId = null;
-  state.roomName = null;
-  state.teamRole = null;
-  state.isAdmin = false;
-  state.uploadBlocked = false;
-  state.billing = null;
-  state.ownerUserKey = null;
-  state.lastInviteToken = null;
-  state.lastFolderInviteTokens = {};
-  state.adminFolderId = '';
-  state.availableRooms = [];
-  state.folderPasswordById = {};
-  state.folders = [];
-  state.folderUnreadMap = {};
-  state.folderModeUnreadMap = {};
-  state.selectedFolder = null;
-  state.selectedFolderArchive = null;
-  state.photos = [];
-  state.searchPhotos = [];
-  state.quests = [];
-  state.folderDetailTab = 'record';
-  state.photoSearchScope = 'folder';
-  state.photoSearchTag = 'all';
-  state.photoSearchKeyword = '';
-  state.openAccordions.clear();
-  state.restoreScrollY = null;
+  resetRoomState(state);
   if (els.folderDetail) els.folderDetail.classList.add('hidden');
   renderPhotoArchiveNote();
   closeLowStorageModal();
@@ -224,343 +75,114 @@ function resetRoomContext() {
   renderFolders();
 }
 
-function normalizeFolderMode(value) {
-  return String(value || '').trim().toLowerCase() === 'quest' ? 'quest' : 'photo';
-}
-
 function currentFolderMode() {
   return normalizeFolderMode(state.selectedFolder?.mode);
 }
 
-function supportsPkce() {
-  return Boolean(window.crypto && window.crypto.subtle && typeof window.crypto.subtle.digest === 'function');
-}
+const startLogin = cognitoClient.startLogin;
+const startSignup = cognitoClient.startSignup;
+const completeLoginFromCallback = cognitoClient.completeLogin;
 
-function randomString(length = 64) {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
-  if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
-    const bytes = new Uint8Array(length);
-    window.crypto.getRandomValues(bytes);
-    return Array.from(bytes, (b) => chars[b % chars.length]).join('');
-  }
-  let out = '';
-  for (let i = 0; i < length; i += 1) {
-    out += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return out;
-}
-
-async function sha256(text) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(text);
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  return new Uint8Array(hash);
-}
-
-function base64UrlEncode(bytes) {
-  let binary = '';
-  bytes.forEach((b) => {
-    binary += String.fromCharCode(b);
-  });
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-async function startLogin() {
-  if (!hasCognitoConfig()) {
-    throw new Error(t('Cognito設定が不足しています。config.jsを確認してください。'));
-  }
-  const stateVal = randomString(32);
-  localStorage.setItem('kansa_oauth_state', stateVal);
-  const authUrl = new URL(`https://${COGNITO_DOMAIN}.auth.${COGNITO_REGION}.amazoncognito.com/oauth2/authorize`);
-  const usePkceHash = supportsPkce();
-  authUrl.searchParams.set('response_type', 'code');
-  authUrl.searchParams.set('client_id', COGNITO_CLIENT_ID);
-  authUrl.searchParams.set('redirect_uri', COGNITO_REDIRECT_URI);
-  authUrl.searchParams.set('scope', 'openid email profile');
-  authUrl.searchParams.set('state', stateVal);
-  const verifier = randomString(64);
-  localStorage.setItem('kansa_oauth_code_verifier', verifier);
-  if (usePkceHash) {
-    const challenge = base64UrlEncode(await sha256(verifier));
-    authUrl.searchParams.set('code_challenge_method', 'S256');
-    authUrl.searchParams.set('code_challenge', challenge);
-  } else {
-    authUrl.searchParams.set('code_challenge_method', 'plain');
-    authUrl.searchParams.set('code_challenge', verifier);
-  }
-  window.location.href = authUrl.toString();
-}
-
-async function startSignup() {
-  if (!hasCognitoConfig()) {
-    throw new Error(t('Cognito設定が不足しています。config.jsを確認してください。'));
-  }
-  const stateVal = randomString(32);
-  localStorage.setItem('kansa_oauth_state', stateVal);
-  const signupUrl = new URL(`https://${COGNITO_DOMAIN}.auth.${COGNITO_REGION}.amazoncognito.com/signup`);
-  const usePkceHash = supportsPkce();
-  signupUrl.searchParams.set('state', stateVal);
-  signupUrl.searchParams.set('client_id', COGNITO_CLIENT_ID);
-  signupUrl.searchParams.set('response_type', 'code');
-  signupUrl.searchParams.set('scope', 'openid email profile');
-  signupUrl.searchParams.set('redirect_uri', COGNITO_REDIRECT_URI);
-  const verifier = randomString(64);
-  localStorage.setItem('kansa_oauth_code_verifier', verifier);
-  if (usePkceHash) {
-    signupUrl.searchParams.set('code_challenge_method', 'S256');
-    signupUrl.searchParams.set('code_challenge', base64UrlEncode(await sha256(verifier)));
-  } else {
-    signupUrl.searchParams.set('code_challenge_method', 'plain');
-    signupUrl.searchParams.set('code_challenge', verifier);
-  }
-  window.location.href = signupUrl.toString();
-}
-
-async function completeLoginFromCallback() {
-  const url = new URL(window.location.href);
-  const code = url.searchParams.get('code');
-  const returnedState = url.searchParams.get('state');
-  if (!code) return false;
-
-  const expectedState = localStorage.getItem('kansa_oauth_state');
-  const verifier = localStorage.getItem('kansa_oauth_code_verifier');
-  if (!expectedState || !verifier || returnedState !== expectedState) {
-    localStorage.removeItem('kansa_oauth_state');
-    localStorage.removeItem('kansa_oauth_code_verifier');
-    url.searchParams.delete('code');
-    url.searchParams.delete('state');
-    window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
-    return false;
-  }
-
-  const body = new URLSearchParams();
-  body.set('grant_type', 'authorization_code');
-  body.set('client_id', COGNITO_CLIENT_ID);
-  body.set('redirect_uri', COGNITO_REDIRECT_URI);
-  body.set('code', code);
-  body.set('code_verifier', verifier);
-
-  const tokenRes = await fetch(
-    `https://${COGNITO_DOMAIN}.auth.${COGNITO_REGION}.amazoncognito.com/oauth2/token`,
-    {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: body.toString(),
-    }
-  );
-  if (!tokenRes.ok) {
-    const text = await tokenRes.text();
-    throw new Error(tf('Cognitoトークン取得失敗: {message}', { message: text || tokenRes.status }));
-  }
-  const tokenJson = await tokenRes.json();
-  if (!tokenJson.id_token) {
-    throw new Error(t('Cognitoトークンが取得できませんでした。'));
-  }
-  localStorage.setItem('kansa_id_token', tokenJson.id_token);
-  localStorage.removeItem('kansa_oauth_state');
-  localStorage.removeItem('kansa_oauth_code_verifier');
-  url.searchParams.delete('code');
-  url.searchParams.delete('state');
-  window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
-  return true;
-}
-
-const els = {
-  userSetup: document.querySelector('#user-setup'),
-  roomSetup: document.querySelector('#room-setup'),
-  app: document.querySelector('#app'),
-  globalMenuWrap: document.querySelector('#global-menu-wrap'),
-  loginBtn: document.querySelector('#login-btn'),
-  signupBtn: document.querySelector('#signup-btn'),
-  helpUserLink: document.querySelector('#help-user-link'),
-  logoutBtn: document.querySelector('#logout-btn'),
-  accountDeleteBtn: document.querySelector('#account-delete-btn'),
-  createRoomName: document.querySelector('#create-room-name'),
-  createRoomBtn: document.querySelector('#create-room-btn'),
-  createRoomMenuBtn: document.querySelector('#create-room-menu-btn'),
-  refreshMyRoomsBtn: document.querySelector('#refresh-my-rooms-btn'),
-  myRoomsList: document.querySelector('#my-rooms-list'),
-  leaveRoomBtn: document.querySelector('#leave-room-btn'),
-  roomCreateModal: document.querySelector('#room-create-modal'),
-  roomCreateName: document.querySelector('#room-create-name'),
-  roomCreateSubmitBtn: document.querySelector('#room-create-submit-btn'),
-  roomCreateCloseBtn: document.querySelector('#room-create-close-btn'),
-  folderCreateModal: document.querySelector('#folder-create-modal'),
-  folderCreateCloseBtn: document.querySelector('#folder-create-close-btn'),
-  openFolderCreateBtn: document.querySelector('#open-folder-create-btn'),
-  folderPasswordModal: document.querySelector('#folder-password-modal'),
-  folderPasswordCloseBtn: document.querySelector('#folder-password-close-btn'),
-  openFolderPasswordBtn: document.querySelector('#open-folder-password-btn'),
-  folderPasswordTargetName: document.querySelector('#folder-password-target-name'),
-  developerDashboardBtn: document.querySelector('#developer-dashboard-btn'),
-  developerModal: document.querySelector('#developer-modal'),
-  developerCloseBtn: document.querySelector('#developer-close-btn'),
-  developerSummary: document.querySelector('#developer-summary'),
-  helpModal: document.querySelector('#help-modal'),
-  helpCloseBtn: document.querySelector('#help-close-btn'),
-  menuBtn: document.querySelector('#menu-btn'),
-  menuPanel: document.querySelector('#menu-panel'),
-  helpMenuBtn: document.querySelector('#help-menu-btn'),
-  resetUserBtn: document.querySelector('#reset-user-btn'),
-  teamAdminBtn: document.querySelector('#team-admin-btn'),
-  teamAdminCard: document.querySelector('#team-admin'),
-  teamAdminBackBtn: document.querySelector('#team-admin-back-btn'),
-  billingBar: document.querySelector('#billing-bar'),
-  billingGraphTop: document.querySelector('#billing-graph-top'),
-  billingGraphTopUsed: document.querySelector('#billing-graph-top-used'),
-  billingGraphTopRemaining: document.querySelector('#billing-graph-top-remaining'),
-  billingGraphTopUsedLabel: document.querySelector('#billing-graph-top-used-label'),
-  billingGraphTopRemainLabel: document.querySelector('#billing-graph-top-remain-label'),
-  billingGraphTopSubmeta: document.querySelector('#billing-graph-top-submeta'),
-  billingGraphTopExtraLabel: document.querySelector('#billing-graph-top-extra-label'),
-  billingStatus: document.querySelector('#billing-status'),
-  billingGraph: document.querySelector('#billing-graph'),
-  billingGraphUsed: document.querySelector('#billing-graph-used'),
-  billingGraphRemaining: document.querySelector('#billing-graph-remaining'),
-  billingGraphUsedLabel: document.querySelector('#billing-graph-used-label'),
-  billingGraphRemainLabel: document.querySelector('#billing-graph-remain-label'),
-  billingPlanGuide: document.querySelector('#billing-plan-guide'),
-  billingArchiveNote: document.querySelector('#billing-archive-note'),
-  subscribeFreeBtn: document.querySelector('#subscribe-free'),
-  subscribeBasicBtn: document.querySelector('#subscribe-basic'),
-  subscribePlusBtn: document.querySelector('#subscribe-plus'),
-  subscribeProBtn: document.querySelector('#subscribe-pro'),
-  lowStorageModal: document.querySelector('#low-storage-modal'),
-  lowStorageCloseBtn: document.querySelector('#low-storage-close-btn'),
-  lowStorageMessage: document.querySelector('#low-storage-message'),
-  lowStorageChargeBtn: document.querySelector('#low-storage-charge-btn'),
-  exportOptionsModal: document.querySelector('#export-options-modal'),
-  exportOptionsCloseBtn: document.querySelector('#export-options-close-btn'),
-  exportHighBtn: document.querySelector('#export-high-btn'),
-  exportLightBtn: document.querySelector('#export-light-btn'),
-  exportPdfBtn: document.querySelector('#export-pdf-btn'),
-  exportLoadingModal: document.querySelector('#export-loading-modal'),
-  exportLoadingTitle: document.querySelector('#export-loading-title'),
-  exportLoadingCloseBtn: document.querySelector('#export-loading-close-btn'),
-  exportLoadingText: document.querySelector('#export-loading-text'),
-  exportLoadingBar: document.querySelector('#export-loading-bar'),
-  exportLoadingActions: document.querySelector('#export-loading-actions'),
-  exportDownloadBtn: document.querySelector('#export-download-btn'),
-  exportOpenTabBtn: document.querySelector('#export-open-tab-btn'),
-  exportCopyLinkBtn: document.querySelector('#export-copy-link-btn'),
-  photoPreviewModal: document.querySelector('#photo-preview-modal'),
-  photoPreviewTitle: document.querySelector('#photo-preview-title'),
-  photoPreviewImage: document.querySelector('#photo-preview-image'),
-  photoPreviewCloseBtn: document.querySelector('#photo-preview-close-btn'),
-  deleteTeamBtn: document.querySelector('#delete-team-btn'),
-  createInviteBtn: document.querySelector('#create-invite-btn'),
-  revokeInviteBtn: document.querySelector('#revoke-invite-btn'),
-  copyInviteUrlBtn: document.querySelector('#copy-invite-url-btn'),
-  inviteUrl: document.querySelector('#invite-url'),
-  memberList: document.querySelector('#member-list'),
-  folderAdminList: document.querySelector('#folder-admin-list'),
-  folderDeleteBtn: document.querySelector('#delete-folder-btn'),
-  appHeaderSummary: document.querySelector('#app-header-summary'),
-  appHeaderControls: document.querySelector('.app-header-controls'),
-  currentName: document.querySelector('#current-name'),
-  currentRoomStatic: document.querySelector('#current-room-static'),
-  currentRoomName: document.querySelector('#current-room-name'),
-  currentRoomSelect: document.querySelector('#current-room-select'),
-  currentFolderSelect: document.querySelector('#current-folder-select'),
-  folderTitle: document.querySelector('#folder-title'),
-  folderTitleError: document.querySelector('#folder-title-error'),
-  folderMode: document.querySelector('#folder-mode'),
-  folderPassword: document.querySelector('#folder-password'),
-  createFolderBtn: document.querySelector('#create-folder-btn'),
-  folderDetail: document.querySelector('#folder-detail'),
-  folderDetailTabs: document.querySelector('#folder-detail-tabs'),
-  recordTabBtn: document.querySelector('#record-tab-btn'),
-  searchTabBtn: document.querySelector('#search-tab-btn'),
-  recordPanel: document.querySelector('#record-panel'),
-  searchPanel: document.querySelector('#search-panel'),
-  folderDetailTitle: document.querySelector('#folder-detail-title'),
-  logTagSummary: document.querySelector('#log-tag-summary'),
-  photoSearchPanel: document.querySelector('#photo-search-panel'),
-  searchScopeFolderBtn: document.querySelector('#search-scope-folder-btn'),
-  searchScopeRoomBtn: document.querySelector('#search-scope-room-btn'),
-  logTagFilter: document.querySelector('#log-tag-filter'),
-  photoSearchKeyword: document.querySelector('#photo-search-keyword'),
-  photoSearchBtn: document.querySelector('#photo-search-btn'),
-  photoArchiveNote: document.querySelector('#photo-archive-note'),
-  folderPasswordSet: document.querySelector('#folder-password-set'),
-  setFolderPasswordBtn: document.querySelector('#set-folder-password-btn'),
-  photoModePanel: document.querySelector('#photo-mode-panel'),
-  questModePanel: document.querySelector('#quest-mode-panel'),
-  questText: document.querySelector('#quest-text'),
-  createQuestBtn: document.querySelector('#create-quest-btn'),
-  questSort: document.querySelector('#quest-sort'),
-  photoUploadMetaSlot: document.querySelector('#photo-upload-meta-slot'),
-  photoFiles: document.querySelector('#photo-files'),
-  uploadBtn: document.querySelector('#upload-btn'),
-  uploadLoading: document.querySelector('#upload-loading'),
-  uploadMetaCard: document.querySelector('#upload-meta-card'),
-  uploadMetaList: document.querySelector('#upload-meta-list'),
-  uploadMetaStatus: document.querySelector('#upload-meta-status'),
-  applyCommentBulkBtn: document.querySelector('#apply-comment-bulk-btn'),
-  cancelUploadDraftsBtn: document.querySelector('#cancel-upload-drafts-btn'),
-  exportBtn: document.querySelector('#export-btn'),
-  photoList: document.querySelector('#photo-list'),
-  searchPhotoList: document.querySelector('#search-photo-list'),
-  questList: document.querySelector('#quest-list'),
-  errorBox: document.querySelector('#error-box'),
-  toast: document.querySelector('#toast'),
-};
-
-function closeMenu() {
-  if (els.menuPanel) {
-    els.menuPanel.classList.add('hidden');
-  }
-}
-
-function closeTeamAdminPanel() {
-  if (els.teamAdminCard) els.teamAdminCard.classList.add('hidden');
-  setTeamAdminMode(false);
-}
-
-function closeRoomCreateModal() {
-  if (els.roomCreateModal) {
-    els.roomCreateModal.classList.add('hidden');
-  }
-}
-
-function closeFolderCreateModal() {
-  if (els.folderCreateModal) {
-    els.folderCreateModal.classList.add('hidden');
-  }
-}
-
-function closeFolderPasswordModal() {
-  if (els.folderPasswordModal) {
-    els.folderPasswordModal.classList.add('hidden');
-  }
-  if (els.folderPasswordTargetName) {
-    els.folderPasswordTargetName.textContent = '-';
-  }
-}
-
-function closeHelpModal() {
-  if (els.helpModal) {
-    els.helpModal.classList.add('hidden');
-  }
-}
-
-function closeDeveloperModal() {
-  if (els.developerModal) {
-    els.developerModal.classList.add('hidden');
-  }
-}
-
-function closeLowStorageModal() {
-  if (els.lowStorageModal) {
-    els.lowStorageModal.classList.add('hidden');
-  }
-}
-
-function closeExportOptionsModal() {
-  if (els.exportOptionsModal) {
-    els.exportOptionsModal.classList.add('hidden');
-  }
-}
+const els = collectAppElements(document);
+const {
+  closeMenu, closeTeamAdminPanel, closeRoomCreateModal, closeFolderCreateModal,
+  closeFolderPasswordModal, closeHelpModal, closeDeveloperModal, closeLowStorageModal,
+  closeExportOptionsModal,
+} = createAppViewController(els, { onTeamAdminMode: setTeamAdminMode });
+const exportProgress = createExportProgressController(els.exportLoadingBar, window);
+const exportResultController = createExportResultController({
+  elements: els, windowRef: window, documentRef: document, urlRef: URL,
+  readyTitle: () => t('生成完了'),
+  readyMessage: (label) => tf('{formatLabel} の生成が完了しました。操作を選んでください。', { formatLabel: label }),
+  copiedMessage: (label) => tf('{formatLabel} のリンクをコピーしました。', { formatLabel: label }),
+  onCopied: () => showToast(t('リンクをコピーしました。')),
+});
+const photoPreviewController = createPhotoPreviewController(els, {
+  emptyTitle: () => t('写真全体表示'),
+  altFor: (photo) => {
+    const tagLabel = photo?.logTag ? logTagMeta(photo.logTag).label : '';
+    return tagLabel || photo?.originalName || photo?.photoId || t('写真プレビュー');
+  },
+  titleFor: (photo) => {
+    const tagLabel = photo?.logTag ? logTagMeta(photo.logTag).label : '';
+    return tagLabel ? `${t(tagLabel)} ${photo?.photoCode || ''}`.trim() : t('写真全体表示');
+  },
+});
+const screenController = createScreenController(els);
+const folderDetailController = createFolderDetailController(state, els, {
+  renderMode: renderFolderMode,
+  renderSearchControls: (criteria) => syncSearchControlsInto(els, criteria, t),
+});
+const uploadLoadingController = createUploadLoadingController(state, els, {
+  getExtraFileInputs: () => document.querySelectorAll('.js-quest-files'),
+  idleLabel: () => t('アップロード'), loadingLabel: () => t('アップロード中...'),
+});
+const uploadDraftController = createUploadDraftController(state, {
+  urlRef: URL, defaultLogTag: DEFAULT_LOG_TAG, onRender: renderUploadDrafts,
+  clearFileInputs: () => {
+    if (els.photoFiles) els.photoFiles.value = '';
+    document.querySelectorAll('.js-quest-files').forEach((input) => { input.value = ''; });
+  },
+});
+const uploadDraftEditor = createUploadDraftEditor(state, {
+  sync: () => syncUploadDraftsFromRows(els.uploadMetaList, state.uploadDrafts),
+  validate: (drafts) => validateUploadDraftItems(drafts, {
+    invalidTagMessage: (row) => tf('{row}行目: タグを選択してください。', { row }),
+    longCommentMessage: (row) => tf('{row}行目: 初回コメントは50文字以内にしてください。', { row }),
+  }),
+  onRender: renderUploadDrafts, onClear: () => uploadDraftController.clear(),
+  alertMissingComment: () => window.alert(t('1つ目のコメントを先に入力してください。')),
+  confirmBulkComment: () => window.confirm(t('1つ目のコメントを全件に反映してよかですか？既存入力は上書きされます。')),
+  confirmCancel: () => window.confirm(t('選択した写真と入力内容を破棄してよかですか？')),
+});
+const actionBoundary = createActionBoundary({
+  clearError,
+  showError,
+  formatError: ({ label, error }) => tf('{label}失敗: {message}', {
+    label: t(label || '処理'), message: asMessage(error),
+  }),
+  onError: (error) => console.error(error),
+});
+const lowStorageController = createLowStorageController(state, els, {
+  storage: localStorage, computeStats: computeStorageStats, formatSize: formatBytes,
+  planLabel: planToDisplayLabel,
+  formatMessage: ({ remain, plan }) => tf('容量を追加しますか？（現在の残り: {remain} / 現在プラン: {plan}）', { remain, plan }),
+});
+const storageGraphController = createStorageGraphController(state, els, {
+  renderTop: renderTopStorageGraphInto, renderAdmin: renderStorageGraphInto,
+  formatSize: formatBytes, folderUsage: folderUsageSummary,
+  topLabels: {
+    usedLabel: (size) => tf('使用量 {size}', { size }),
+    remainingLabel: (size) => tf('残り {size}', { size }),
+  },
+  adminLabels: {
+    used: (size) => tf('使用量 {size}', { size }),
+    remaining: (size) => tf('残り {size}', { size }),
+  },
+});
+const syncTopStorageGraphWidth = () => storageGraphController.syncTopWidth();
+const renderTopStorageGraph = () => storageGraphController.renderTop();
+const renderStorageGraph = () => storageGraphController.renderAdmin();
+const billingUiController = createBillingUiController(state, els, {
+  renderTopGraph: renderTopStorageGraph, renderBillingBarInto,
+  planLabel: planToDisplayLabel, translate: t,
+  formatPlan: (plan) => tf('プラン:{plan}', { plan: planToDisplayLabel(plan) }),
+  closeLowStorage: closeLowStorageModal, closeFolderPassword: closeFolderPasswordModal,
+});
+const renderBillingBar = () => billingUiController.renderBar();
+const setAdminUiVisibility = () => billingUiController.syncAdminVisibility();
+const teamAdminController = createTeamAdminController(state, els, {
+  closeMenu, renderCurrentRoomHeader, loadPanel: loadAdminPanel,
+});
+const setUploadLoading = (isLoading) => uploadLoadingController.set(isLoading);
+const clearUploadDrafts = () => uploadDraftController.clear();
+const rebuildUploadDrafts = (files, questId = null) => uploadDraftController.rebuild(files, questId);
+const syncUploadDraftsFromDom = () => uploadDraftEditor.sync();
+const applyBulkComment = () => uploadDraftEditor.applyBulkComment();
+const cancelUploadDrafts = () => uploadDraftEditor.cancel();
+const loadComments = (photoId) => commentReadController.loadPhotoComments(photoId);
+const setFolderDetailTab = (tab) => folderDetailController.setTab(tab);
+const syncSearchControls = () => folderDetailController.syncSearchControls();
 
 function openExportLoadingModal(message = t('ダウンロードを開始しています...')) {
   if (els.exportLoadingTitle) els.exportLoadingTitle.textContent = t('出力中');
@@ -575,28 +197,11 @@ function openExportLoadingModal(message = t('ダウンロードを開始して�
 }
 
 function startExportLoadingProgress() {
-  if (!els.exportLoadingBar) return;
-  if (exportLoadingTimer) window.clearInterval(exportLoadingTimer);
-  let progress = 0;
-  els.exportLoadingBar.style.width = '0%';
-  exportLoadingTimer = window.setInterval(() => {
-    progress = progress < 10 ? progress + 0.9 : progress < 22 ? progress + 0.55 : progress < 40 ? progress + 0.3 : progress + 0.12;
-    const next = Math.min(56, progress);
-    els.exportLoadingBar.style.width = `${next}%`;
-    if (next >= 56 && exportLoadingTimer) {
-      window.clearInterval(exportLoadingTimer);
-      exportLoadingTimer = null;
-    }
-  }, 60);
+  exportProgress.start();
 }
 
 function updateExportLoadingProgress(loaded, total) {
-  if (els.exportLoadingBar) {
-    els.exportLoadingBar.classList.remove('is-indeterminate');
-    const ratio =
-      total > 0 ? Math.min(100, Math.max(60, 60 + (loaded / total) * 40)) : Math.min(96, Math.max(60, 60 + loaded / 65536));
-    els.exportLoadingBar.style.width = `${ratio}%`;
-  }
+  exportProgress.update(loaded, total);
   if (els.exportLoadingText) {
     if (total > 0) {
       els.exportLoadingText.textContent = tf('PDFをダウンロード中... {percent}%', {
@@ -610,93 +215,41 @@ function updateExportLoadingProgress(loaded, total) {
 
 function closeExportLoadingModal() {
   if (els.exportLoadingModal) els.exportLoadingModal.classList.add('hidden');
-  if (exportLoadingTimer) {
-    window.clearInterval(exportLoadingTimer);
-    exportLoadingTimer = null;
-  }
+  exportProgress.reset();
   if (els.exportLoadingBar) {
     els.exportLoadingBar.style.width = '0%';
     els.exportLoadingBar.classList.remove('is-indeterminate');
   }
   if (els.exportLoadingActions) els.exportLoadingActions.classList.add('hidden');
   if (els.exportLoadingCloseBtn) els.exportLoadingCloseBtn.classList.add('hidden');
-  if (exportResult?.objectUrl) {
-    URL.revokeObjectURL(exportResult.objectUrl);
-  }
-  exportResult = null;
+  exportResultController.clear();
 }
 
 function markExportLoadingDownloadReady() {
-  if (exportLoadingTimer) {
-    window.clearInterval(exportLoadingTimer);
-    exportLoadingTimer = null;
-  }
-  if (els.exportLoadingBar) {
-    els.exportLoadingBar.classList.remove('is-indeterminate');
-    els.exportLoadingBar.style.width = '60%';
-  }
+  exportProgress.markDownloadReady();
   if (els.exportLoadingText) {
     els.exportLoadingText.textContent = t('PDFのダウンロードを開始しています...');
   }
 }
 
 function completeExportLoadingProgress() {
-  if (exportLoadingTimer) {
-    window.clearInterval(exportLoadingTimer);
-    exportLoadingTimer = null;
-  }
-  if (els.exportLoadingBar) {
-    els.exportLoadingBar.classList.remove('is-indeterminate');
-    els.exportLoadingBar.style.width = '100%';
-  }
+  exportProgress.complete();
 }
 
 function showExportReadyActions({ formatLabel, downloadUrl, fileName = '', objectUrl = null }) {
-  exportResult = {
-    formatLabel,
-    downloadUrl,
-    fileName,
-    objectUrl,
-  };
-  if (els.exportLoadingTitle) els.exportLoadingTitle.textContent = t('生成完了');
-  if (els.exportLoadingText) {
-    els.exportLoadingText.textContent = tf('{formatLabel} の生成が完了しました。操作を選んでください。', { formatLabel });
-  }
-  if (els.exportLoadingBar) els.exportLoadingBar.style.width = '100%';
-  if (els.exportLoadingActions) els.exportLoadingActions.classList.remove('hidden');
-  if (els.exportLoadingCloseBtn) els.exportLoadingCloseBtn.classList.remove('hidden');
+  exportResultController.show({ formatLabel, downloadUrl, fileName, objectUrl });
 }
 
 function triggerExportDownload() {
-  if (!exportResult) return;
-  if (exportResult.objectUrl) {
-    const link = document.createElement('a');
-    link.href = exportResult.objectUrl;
-    if (exportResult.fileName) link.download = exportResult.fileName;
-    link.rel = 'noopener';
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    return;
-  }
-  window.location.href = exportResult.downloadUrl;
+  exportResultController.download();
 }
 
 function openExportInNewTab() {
-  if (!exportResult) return;
-  window.open(exportResult.objectUrl || exportResult.downloadUrl, '_blank', 'noopener');
+  exportResultController.openInNewTab();
 }
 
 async function copyExportLink() {
-  if (!exportResult?.downloadUrl) return;
-  await navigator.clipboard.writeText(exportResult.downloadUrl);
-  if (els.exportLoadingText) {
-    els.exportLoadingText.textContent = tf('{formatLabel} のリンクをコピーしました。', {
-      formatLabel: exportResult.formatLabel,
-    });
-  }
-  showToast(t('リンクをコピーしました。'));
+  await exportResultController.copyLink();
 }
 
 function triggerBlobDownload(blob, fileName) {
@@ -712,52 +265,16 @@ function triggerBlobDownload(blob, fileName) {
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }
 
-function downloadFileNameFromResponse(response, fallback = 'export.pdf') {
-  const disposition = String(response?.headers?.get('content-disposition') || '');
-  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
-  if (utf8Match && utf8Match[1]) {
-    try {
-      return decodeURIComponent(utf8Match[1]);
-    } catch (_) {
-      return utf8Match[1];
-    }
-  }
-  const plainMatch = disposition.match(/filename="?([^\";]+)"?/i);
-  if (plainMatch && plainMatch[1]) return plainMatch[1];
-  return fallback;
-}
-
 function closePhotoPreviewModal() {
-  if (els.photoPreviewModal) {
-    els.photoPreviewModal.classList.add('hidden');
-  }
-  if (els.photoPreviewImage) {
-    els.photoPreviewImage.removeAttribute('src');
-  }
-  if (els.photoPreviewTitle) {
-    els.photoPreviewTitle.textContent = t('写真全体表示');
-  }
+  photoPreviewController.close();
 }
 
 function openPhotoPreview(photo) {
-  if (!els.photoPreviewModal || !els.photoPreviewImage) return;
-  const imageUrl = photo?.viewUrl || photo?.previewUrl || '';
-  if (!imageUrl) return;
-  els.photoPreviewImage.src = imageUrl;
-  const tagLabel = photo?.logTag ? logTagMeta(photo.logTag).label : '';
-  els.photoPreviewImage.alt = tagLabel || photo?.originalName || photo?.photoId || t('写真プレビュー');
-  if (els.photoPreviewTitle) {
-    els.photoPreviewTitle.textContent = tagLabel ? `${t(tagLabel)} ${photo?.photoCode || ''}`.trim() : t('写真全体表示');
-  }
-  els.photoPreviewModal.classList.remove('hidden');
+  photoPreviewController.open(photo);
 }
 
 function showAuthSetup() {
-  if (els.userSetup) els.userSetup.classList.remove('hidden');
-  if (els.roomSetup) els.roomSetup.classList.add('hidden');
-  if (els.app) els.app.classList.add('hidden');
-  if (els.globalMenuWrap) els.globalMenuWrap.classList.add('hidden');
-  if (els.logoutBtn) els.logoutBtn.classList.add('hidden');
+  screenController.showAuth();
   setMenuActionVisibility(false);
   closeMenu();
   closeFolderCreateModal();
@@ -868,7 +385,7 @@ async function openDeveloperDashboard() {
   els.developerSummary.appendChild(el('p', { class: 'muted' }, t('読み込み中...')));
   els.developerModal.classList.remove('hidden');
   try {
-    const data = await api('/developer/summary', { method: 'GET' });
+    const data = await liveRequest('/developer/summary', { method: 'GET' });
     renderDeveloperSummary(data);
   } catch (error) {
     els.developerSummary.innerHTML = '';
@@ -928,79 +445,31 @@ function openExportOptionsModal() {
 }
 
 function renderCurrentRoomHeader() {
-  if (els.currentRoomName) {
-    els.currentRoomName.textContent = state.roomName || t('未選択');
-  }
+  renderCurrentRoomHeaderInto(els.currentRoomName, state.roomName, t('未選択'));
 }
 
 async function requestFolderExport(format) {
-  if (!state.selectedFolder) {
-    window.alert(t('先にコンテナを選択してください。'));
-    return;
-  }
-  const formatLabel = format === 'pdf' ? 'PDF' : format === 'pptx_light' ? t('軽量PPT') : t('高画質PPT');
-  const confirmed = window.confirm(tf('{formatLabel}で出力します。よろしいですか？', { formatLabel }));
-  if (!confirmed) return;
-  const isPdf = format === 'pdf';
-  const formatLabelText = format === 'pdf' ? 'PDF' : format === 'pptx_light' ? t('軽量PPT') : t('高画質PPT');
-  openExportLoadingModal(tf('{formatLabel} を生成しています...', { formatLabel: formatLabelText }));
-  startExportLoadingProgress();
-  try {
-    const folderId = state.selectedFolder.folderId;
-    const res = await api(`/folders/${folderId}/export`, {
-      method: 'POST',
-      headers: { ...folderPasswordHeader(folderId) },
-      body: JSON.stringify({ format }),
-    });
-    if (isPdf) {
-      markExportLoadingDownloadReady();
-      try {
-        const pdfRes = await fetch(res.downloadUrl);
-        if (!pdfRes.ok) throw new Error(tf('PDFダウンロード失敗({status})', { status: pdfRes.status }));
-        const fileName = downloadFileNameFromResponse(pdfRes);
-        const total = Number(pdfRes.headers.get('content-length') || 0);
-        if (!pdfRes.body || typeof pdfRes.body.getReader !== 'function') {
-          const blob = await pdfRes.blob();
-          const objectUrl = URL.createObjectURL(blob);
-          showExportReadyActions({ formatLabel: formatLabelText, downloadUrl: res.downloadUrl, fileName, objectUrl });
-          return;
-        }
-        const reader = pdfRes.body.getReader();
-        const chunks = [];
-        let loaded = 0;
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (value) {
-            chunks.push(value);
-            loaded += value.byteLength;
-            updateExportLoadingProgress(loaded, total);
-          }
-        }
-        const blob = new Blob(chunks, { type: 'application/pdf' });
-        const objectUrl = URL.createObjectURL(blob);
-        showExportReadyActions({ formatLabel: formatLabelText, downloadUrl: res.downloadUrl, fileName, objectUrl });
-        return;
-      } catch (downloadError) {
-        closeExportLoadingModal();
-        window.location.href = res.downloadUrl;
-        return;
-      }
-    }
-    completeExportLoadingProgress();
-    showExportReadyActions({ formatLabel: formatLabelText, downloadUrl: res.downloadUrl });
-  } catch (error) {
-    closeExportLoadingModal();
-    throw error;
-  }
+  return runFolderExport(appApi, state, format, {
+    getFormatLabel: (value) => value === 'pdf' ? 'PDF' : value === 'pptx_light' ? t('軽量PPT') : t('高画質PPT'),
+    onMissingFolder: () => window.alert(t('先にコンテナを選択してください。')),
+    confirmExport: (label) => window.confirm(tf('{formatLabel}で出力します。よろしいですか？', { formatLabel: label })),
+    onStart: (label) => { openExportLoadingModal(tf('{formatLabel} を生成しています...', { formatLabel: label })); startExportLoadingProgress(); },
+    onDownloadReady: markExportLoadingDownloadReady,
+    fetchDownload: (url) => fetch(url),
+    downloadError: (status) => new Error(tf('PDFダウンロード失敗({status})', { status })),
+    getFileName: downloadFileNameFromResponse,
+    createBlob: (chunks) => new Blob(chunks, { type: 'application/pdf' }),
+    createObjectUrl: (blob) => URL.createObjectURL(blob),
+    onProgress: updateExportLoadingProgress,
+    onComplete: completeExportLoadingProgress,
+    onReady: showExportReadyActions,
+    onFallback: (url) => { window.location.href = url; },
+    onClose: closeExportLoadingModal,
+  });
 }
 
 function setTeamAdminMode(isOpen) {
-  // While team admin is open, hide main folder workflow to reduce clutter.
-  if (els.appHeaderControls) els.appHeaderControls.classList.toggle('hidden', isOpen);
-  if (els.currentRoomStatic) els.currentRoomStatic.classList.toggle('hidden', !isOpen);
-  renderCurrentRoomHeader();
-  if (els.folderDetail) els.folderDetail.classList.toggle('hidden', isOpen ? true : !state.selectedFolder);
+  return teamAdminController.syncMode(isOpen);
 }
 
 function setMenuActionVisibility(showActions, options = {}) {
@@ -1054,28 +523,6 @@ function formatJstDateTime(value) {
   }).format(date);
 }
 
-function formatBytes(bytes) {
-  const n = Number(bytes || 0);
-  const mib = 1024 * 1024;
-  const gib = 1024 * 1024 * 1024;
-  if (n >= gib) return `${(n / gib).toFixed(2)}GB`;
-  return `${Math.round(n / mib)}MB`;
-}
-
-function parseApiErrorBody(error) {
-  if (error && typeof error === 'object' && error.body && typeof error.body === 'object') {
-    return error.body;
-  }
-  const raw = asMessage(error);
-  const match = raw.match(/APIエラー\(\d+\):\s*(\{[\s\S]*\})$/);
-  if (!match) return null;
-  try {
-    return JSON.parse(match[1]);
-  } catch (_) {
-    return null;
-  }
-}
-
 function uploadErrorMessage(error, fileName = '') {
   const body = parseApiErrorBody(error);
   const message = String(body?.message || asMessage(error) || '');
@@ -1107,235 +554,28 @@ function uploadErrorMessage(error, fileName = '') {
 }
 
 function currentFolderLimit() {
-  const mode = String(state.billing?.billingMode || 'prepaid').toLowerCase();
-  const currentPlan = String(state.billing?.subscription?.currentPlan || 'FREE').toUpperCase();
-  return mode !== 'subscription' || currentPlan === 'FREE' ? 2 : null;
+  return billingStatusUi.folderLimit(state.billing);
 }
 
 function folderUsageSummary() {
-  const count = Array.isArray(state.folders) ? state.folders.length : 0;
-  const limit = currentFolderLimit();
-  return limit === null
-    ? tf('コンテナ {count} / 無制限', { count })
-    : tf('コンテナ {count} / {limit}', { count, limit });
-}
-
-function freePlanGuideText() {
-  const limit = currentFolderLimit();
-  return limit === null
-    ? t('1GB〜10GBプラン: コンテナ無制限 / 3年保存 / PPT透かしなし')
-    : t('フリープラン: コンテナ2個 / 30日保存 / PPT透かしあり');
-}
-
-function freePlanRequirementDialogText(constraints = {}) {
-  const lines = [
-    t('フリープランへの切り替えは、以下を満たす必要があります。'),
-    t('・容量が512MB未満'),
-    t('・コンテナの数が2つ以下'),
-  ];
-  const unmet = Array.isArray(constraints.unmet) ? constraints.unmet : [];
-  if (unmet.includes('usageBytes')) {
-    lines.push(tf('・現在の容量: {size}', { size: formatBytes(Number(constraints.usageBytes || 0)) }));
-  }
-  if (unmet.includes('folderCount')) {
-    lines.push(tf('・現在のコンテナ数: {count}', { count: Number(constraints.folderCount || 0) }));
-  }
-  return lines.join('\n');
-}
-
-function freePlanReturnConfirmText() {
-  return [
-    t('フリープランへ戻してよかですか？'),
-    '',
-    t('実行するとStripeの定期課金は今すぐ停止します。'),
-    t('当月の残り期間分の返金はありません。'),
-    t('フリープランへ戻すには、容量512MB未満・コンテナ2個以下である必要があります。'),
-  ].join('\n');
-}
-
-function freePlanReturnSuccessText() {
-  return [
-    t('フリープランに戻りました。'),
-    '',
-    t('Stripeの定期課金は停止しました。'),
-    t('当月の残り期間分の返金はありません。'),
-    t('現在の上限は、容量512MB未満・コンテナ2個までです。'),
-  ].join('\n');
+  return billingStatusUi.folderUsage(state.folders, state.billing);
 }
 
 function renderPhotoArchiveNote() {
-  if (!els.photoArchiveNote) return;
-  const archived = state.selectedFolderArchive || null;
-  if (!archived || Number(archived.archivedCount || 0) <= 0 || archived.archiveMode !== 'hidden') {
-    els.photoArchiveNote.textContent = '';
-    return;
-  }
-  els.photoArchiveNote.textContent = tf(
-    '{count}件の写真は{days}日保存後にアーカイブされ、現在は非表示です。アーカイブ済みデータも容量に含まれます。有料プランにすると再表示されます。',
-    { count: archived.archivedCount, days: archived.archiveDays || 30 }
-  );
-}
-
-function storagePromptKey() {
-  const rid = state.roomId || state.roomName || 'unknown';
-  return `kansa_low_storage_prompted_${rid}`;
-}
-
-function computeStorageStats(billing) {
-  const usageBytes = Math.max(0, Number(billing?.usageBytes || 0));
-  const freeBytes = Math.max(0, Number(billing?.freeBytes || 0));
-  const mode = String(billing?.billingMode || 'prepaid').toLowerCase();
-  const planLimitBytes = Math.max(0, Number(billing?.subscription?.limitBytes || 0));
-  const capacityBytes = mode === 'subscription' && planLimitBytes > 0 ? planLimitBytes : freeBytes;
-  const usedBytes = Math.min(usageBytes, capacityBytes);
-  const freeRemainBytes = Math.max(0, capacityBytes - usageBytes);
-  const usedRatio = capacityBytes > 0 ? Math.min(100, (usedBytes / capacityBytes) * 100) : 0;
-  const remainRatio = Math.max(0, 100 - usedRatio);
-  return { usageBytes, freeBytes, capacityBytes, usedBytes, freeRemainBytes, usedRatio, remainRatio };
-}
-
-function syncTopStorageGraphWidth() {
-  if (!els.billingGraphTop || !els.appHeaderSummary) return;
-  const width = Math.round(els.appHeaderSummary.getBoundingClientRect().width || 0);
-  if (width > 0) {
-    els.billingGraphTop.style.width = `${width}px`;
-    return;
-  }
-  els.billingGraphTop.style.removeProperty('width');
-}
-
-function renderTopStorageGraph() {
-  if (!els.billingGraphTop || !els.billingGraphTopUsed || !els.billingGraphTopRemaining) return;
-  if (!state.roomName || !state.billing) {
-    els.billingGraphTop.classList.add('hidden');
-    return;
-  }
-  const stats = computeStorageStats(state.billing);
-  syncTopStorageGraphWidth();
-  els.billingGraphTopUsed.style.width = `${stats.usedRatio}%`;
-  els.billingGraphTopRemaining.style.width = `${stats.remainRatio}%`;
-  if (els.billingGraphTopUsedLabel) {
-    els.billingGraphTopUsedLabel.textContent = tf('使用量 {size}', { size: formatBytes(stats.usageBytes) });
-  }
-  if (els.billingGraphTopRemainLabel) {
-    els.billingGraphTopRemainLabel.textContent = tf('残り {size}', { size: formatBytes(stats.freeRemainBytes) });
-  }
-  if (els.billingGraphTopExtraLabel) {
-    els.billingGraphTopExtraLabel.textContent = folderUsageSummary();
-  }
-  if (els.billingGraphTopSubmeta) els.billingGraphTopSubmeta.classList.remove('hidden');
-  els.billingGraphTop.classList.remove('hidden');
-}
-
-function renderBillingBar() {
-  if (!els.billingBar) return;
-  if (!state.roomName || !state.billing) {
-    renderTopStorageGraph();
-    els.billingBar.classList.add('hidden');
-    els.billingBar.textContent = '';
-    return;
-  }
-
-  const b = state.billing;
-  const freeRemainBytes = Math.max(0, Number(b.freeBytes || 0) - Number(b.usageBytes || 0));
-  const blocked = state.uploadBlocked;
-  const plan = String(b?.subscription?.currentPlan || 'FREE').toUpperCase();
-
-  const parts = [];
-  parts.push(tf('プラン:{plan}', { plan: planToDisplayLabel(plan) }));
-  if (state.ownerUserKey && state.userKey) {
-    parts.push(state.ownerUserKey === state.userKey ? t('作成者') : t('参加者'));
-  }
-  if (blocked) parts.push(t('アップロード停止中（残量不足）'));
-  if (!blocked && plan === 'FREE' && freeRemainBytes > 0) parts.push(t('無料枠で利用中'));
-  if (state.isAdmin) parts.push(t('管理者'));
-
-  renderTopStorageGraph();
-  els.billingBar.textContent = parts.join(' / ');
-  els.billingBar.classList.remove('hidden');
-}
-
-function setAdminUiVisibility() {
-  if (els.teamAdminBtn) els.teamAdminBtn.classList.toggle('hidden', !state.isAdmin);
-  if (els.folderDeleteBtn) els.folderDeleteBtn.classList.toggle('hidden', !state.isAdmin);
-  if (els.setFolderPasswordBtn) els.setFolderPasswordBtn.classList.toggle('hidden', !state.isAdmin);
-  if (els.openFolderPasswordBtn) els.openFolderPasswordBtn.classList.toggle('hidden', !state.isAdmin);
-  if (!state.isAdmin) {
-    if (els.teamAdminCard) els.teamAdminCard.classList.add('hidden');
-    closeLowStorageModal();
-    closeFolderPasswordModal();
-  }
-}
-
-function renderStorageGraph() {
-  if (!els.billingGraph || !els.billingGraphUsed || !els.billingGraphRemaining) return;
-  if (!state.billing) {
-    els.billingGraph.classList.add('hidden');
-    return;
-  }
-  const stats = computeStorageStats(state.billing);
-  els.billingGraphUsed.style.width = `${stats.usedRatio}%`;
-  els.billingGraphRemaining.style.width = `${stats.remainRatio}%`;
-  if (els.billingGraphUsedLabel) {
-    els.billingGraphUsedLabel.textContent = tf('使用量 {size}', { size: formatBytes(stats.usageBytes) });
-  }
-  if (els.billingGraphRemainLabel) {
-    els.billingGraphRemainLabel.textContent = tf('残り {size}', { size: formatBytes(stats.freeRemainBytes) });
-  }
-  els.billingGraph.classList.remove('hidden');
+  renderPhotoArchiveNoteInto(els.photoArchiveNote, state.selectedFolderArchive, (values) => tf(
+    '{count}件の写真は{days}日保存後にアーカイブされ、現在は非表示です。アーカイブ済みデータも容量に含まれます。有料プランにすると再表示されます。', values
+  ));
 }
 
 function syncSubscriptionPlanButtons() {
-  const mode = String(state.billing?.billingMode || 'prepaid').toLowerCase();
-  const currentPlan = String(state.billing?.subscription?.currentPlan || 'FREE').toUpperCase();
-  const isFreeCurrent = mode !== 'subscription' || currentPlan === 'FREE';
-  const usageBytes = Number(state.billing?.usageBytes || 0);
-  const currentRank = subscriptionPlanRank(currentPlan);
-  if (els.subscribeFreeBtn) {
-    els.subscribeFreeBtn.textContent = isFreeCurrent ? t('フリープランに戻る（現在のプラン）') : t('フリープランに戻る');
-    els.subscribeFreeBtn.disabled = isFreeCurrent;
-    els.subscribeFreeBtn.setAttribute('aria-pressed', isFreeCurrent ? 'true' : 'false');
-  }
-  const planButtons = [
-    { plan: 'BASIC', button: els.subscribeBasicBtn, label: t('1GBプラン (¥980/月)') },
-    { plan: 'PLUS', button: els.subscribePlusBtn, label: t('5GBプラン (¥1,980/月)') },
-    { plan: 'PRO', button: els.subscribeProBtn, label: t('10GBプラン (¥2,980/月)') },
-  ];
-  planButtons.forEach(({ plan, button, label }) => {
-    if (!button) return;
-    const isCurrent = mode === 'subscription' && currentPlan === plan;
-    const isDowngrade = mode === 'subscription' && subscriptionPlanRank(plan) < currentRank;
-    const isOverTargetLimit = isDowngrade && usageBytes > subscriptionPlanLimitBytes(plan);
-    button.textContent = isCurrent ? tf('{label}（現在のプラン）', { label }) : label;
-    button.disabled = isCurrent || isOverTargetLimit;
-    button.setAttribute('aria-pressed', isCurrent ? 'true' : 'false');
-    button.title = isOverTargetLimit
-      ? t('現在の使用量がこのプランの上限を超えているため変更できません。')
-      : '';
+  syncSubscriptionPlanButtonsInto(els, state.billing, {
+    translate: t,
+    formatCurrent: (label) => tf('{label}（現在のプラン）', { label }),
   });
 }
 
 function maybePromptLowStorage() {
-  if (!state.isAdmin || !state.billing || !els.lowStorageModal) return;
-  const stats = computeStorageStats(state.billing);
-  const lowByBytes = stats.freeRemainBytes <= 100 * 1024 * 1024;
-  const lowByRatio = stats.freeBytes > 0 ? stats.freeRemainBytes / stats.freeBytes <= 0.15 : false;
-  const isLow = state.uploadBlocked || lowByBytes || lowByRatio;
-  const key = storagePromptKey();
-  if (!isLow) {
-    localStorage.removeItem(key);
-    return;
-  }
-  if (localStorage.getItem(key) === '1') return;
-  if (els.lowStorageMessage) {
-    const plan = String(state.billing?.subscription?.currentPlan || 'FREE').toUpperCase();
-    els.lowStorageMessage.textContent = tf('容量を追加しますか？（現在の残り: {remain} / 現在プラン: {plan}）', {
-      remain: formatBytes(stats.freeRemainBytes),
-      plan: planToDisplayLabel(plan),
-    });
-  }
-  els.lowStorageModal.classList.remove('hidden');
-  localStorage.setItem(key, '1');
+  return lowStorageController.prompt();
 }
 
 function initFixedAppearance() {
@@ -1352,84 +592,13 @@ function showToast(message) {
   }, 2500);
 }
 
-async function fetchMe() {
-  return api('/me', { method: 'GET' });
-}
-
-async function saveDisplayName(displayName) {
-  return api('/me/display-name', {
-    method: 'PUT',
-    body: JSON.stringify({ displayName }),
-  });
-}
-
 async function ensureDisplayName() {
-  const me = await fetchMe();
-  state.isDeveloper = Boolean(me.isDeveloper);
-  if (me.displayName) {
-    state.userName = me.displayName;
-    return;
-  }
-
-  while (true) {
-    const next = window.prompt(t('表示名を入力してください。メニューからいつでも変更可能です。'));
-    if (next === null) continue;
-    const displayName = next.trim();
-    if (!displayName) {
-      window.alert(t('表示名は必須です。'));
-      continue;
-    }
-    await saveDisplayName(displayName);
-    state.userName = displayName;
-    showToast(t('表示名を設定しました。'));
-    return;
-  }
-}
-
-function setUploadLoading(isLoading) {
-  state.isUploading = isLoading;
-  if (els.uploadBtn) {
-    els.uploadBtn.disabled = isLoading;
-    els.uploadBtn.classList.toggle('is-loading', isLoading);
-    els.uploadBtn.textContent = isLoading ? t('アップロード中...') : t('アップロード');
-  }
-  if (els.photoFiles) {
-    els.photoFiles.disabled = isLoading;
-  }
-  document.querySelectorAll('.js-quest-files').forEach((input) => {
-    input.disabled = isLoading;
+  return ensureUserDisplayName(appApi, state, {
+    promptName: () => window.prompt(t('表示名を入力してください。メニューからいつでも変更可能です。')),
+    onLoaded: (me) => { state.isDeveloper = Boolean(me.isDeveloper); },
+    onInvalid: () => window.alert(t('表示名は必須です。')),
+    onSaved: () => showToast(t('表示名を設定しました。')),
   });
-  if (els.applyCommentBulkBtn) els.applyCommentBulkBtn.disabled = isLoading;
-  if (els.cancelUploadDraftsBtn) els.cancelUploadDraftsBtn.disabled = isLoading;
-  if (els.uploadLoading) {
-    els.uploadLoading.classList.toggle('hidden', !isLoading);
-  }
-}
-
-function revokeUploadDraftPreview(draft) {
-  if (!draft?.previewUrl) return;
-  try {
-    URL.revokeObjectURL(draft.previewUrl);
-  } catch (_) {
-    // Ignore preview cleanup errors.
-  }
-}
-
-function revokeAllUploadDraftPreviews() {
-  state.uploadDrafts.forEach((draft) => {
-    revokeUploadDraftPreview(draft);
-  });
-}
-
-function clearUploadDrafts() {
-  revokeAllUploadDraftPreviews();
-  state.uploadDrafts = [];
-  state.uploadTargetQuestId = null;
-  if (els.photoFiles) els.photoFiles.value = '';
-  document.querySelectorAll('.js-quest-files').forEach((input) => {
-    input.value = '';
-  });
-  renderUploadDrafts();
 }
 
 function setUploadMetaStatus(message) {
@@ -1437,59 +606,12 @@ function setUploadMetaStatus(message) {
   els.uploadMetaStatus.textContent = message || '';
 }
 
-function rebuildUploadDrafts(files, questId = null) {
-  revokeAllUploadDraftPreviews();
-  state.uploadTargetQuestId = questId || null;
-  state.uploadDrafts = files.map((file, index) => ({
-    localId: `${Date.now()}_${index}_${file.name}`,
-    file,
-    originalName: file.name,
-    logTag: DEFAULT_LOG_TAG,
-    initialComment: '',
-    previewUrl: URL.createObjectURL(file),
-  }));
-  renderUploadDrafts();
-}
-
 function removeUploadedDrafts(uploadedDraftIds) {
-  const ids = new Set(uploadedDraftIds || []);
-  if (!ids.size) return;
-  state.uploadDrafts.forEach((draft) => {
-    if (ids.has(draft.localId)) revokeUploadDraftPreview(draft);
-  });
-  state.uploadDrafts = state.uploadDrafts.filter((draft) => !ids.has(draft.localId));
-  if (!state.uploadDrafts.length) state.uploadTargetQuestId = null;
-  renderUploadDrafts();
-}
-
-function syncUploadDraftsFromDom() {
-  if (!els.uploadMetaList) return;
-  const rowNodes = els.uploadMetaList.querySelectorAll('.upload-draft-row[data-draft-id]');
-  rowNodes.forEach((row) => {
-    const draftId = row.getAttribute('data-draft-id');
-    if (!draftId) return;
-    const draft = state.uploadDrafts.find((item) => item.localId === draftId);
-    if (!draft) return;
-    const tagSelect = row.querySelector('.js-log-tag-select');
-    const commentInput = row.querySelector('.js-upload-draft-comment');
-    if (tagSelect) draft.logTag = normalizeLogTag(tagSelect.value);
-    if (commentInput) draft.initialComment = String(commentInput.value || '').slice(0, 50);
-  });
+  uploadDraftController.remove(uploadedDraftIds);
 }
 
 function validateUploadDrafts() {
-  syncUploadDraftsFromDom();
-  const errors = [];
-  state.uploadDrafts.forEach((draft, index) => {
-    const initialComment = String(draft.initialComment || '').trim();
-    if (!normalizeLogTag(draft.logTag, '')) {
-      errors.push(tf('{row}行目: タグを選択してください。', { row: index + 1 }));
-    }
-    if (initialComment.length > 50) {
-      errors.push(tf('{row}行目: 初回コメントは50文字以内にしてください。', { row: index + 1 }));
-    }
-  });
-  return errors;
+  return uploadDraftEditor.validate();
 }
 
 function moveUploadMetaCardToActiveSlot() {
@@ -1502,143 +624,27 @@ function moveUploadMetaCardToActiveSlot() {
       return;
     }
   }
-  if (els.photoUploadMetaSlot) {
-    els.photoUploadMetaSlot.appendChild(els.uploadMetaCard);
-  }
+  if (els.photoUploadMetaSlot) els.photoUploadMetaSlot.appendChild(els.uploadMetaCard);
 }
 
 function renderUploadDrafts() {
-  if (!els.uploadMetaCard || !els.uploadMetaList || !els.uploadMetaStatus) return;
   moveUploadMetaCardToActiveSlot();
-  const hasDrafts = state.uploadDrafts.length > 0;
-  const showBulkActions = state.uploadDrafts.length >= 2;
-  els.uploadMetaCard.classList.toggle('hidden', !hasDrafts);
-  if (els.applyCommentBulkBtn) {
-    els.applyCommentBulkBtn.classList.toggle('hidden', !showBulkActions || Boolean(state.uploadTargetQuestId));
-  }
-  els.uploadMetaList.innerHTML = '';
-  if (!hasDrafts) {
-    els.uploadMetaStatus.textContent = '';
-    return;
-  }
-
-  els.uploadMetaStatus.textContent = tf('{count}件の写真をアップロード対象に追加しています。', {
-    count: state.uploadDrafts.length,
+  renderUploadDraftContainerInto(els, state.uploadDrafts, {
+    uploadTargetQuestId: state.uploadTargetQuestId,
+    formatStatus: (count) => tf('{count}件の写真をアップロード対象に追加しています。', { count }),
+    createRow: (draft, index) => createUploadDraftRow(draft, index, {
+      translate: t,
+      createTagSelect: createLogTagSelect,
+      onPreview: openPhotoPreview,
+      onRemove: (removedDraft) => {
+        uploadDraftController.remove([removedDraft.localId]);
+      },
+    }),
   });
-  state.uploadDrafts.forEach((draft, index) => {
-    const row = el('div', { class: 'upload-draft-row', 'data-draft-id': draft.localId });
-    const head = el('div', { class: 'upload-draft-head' });
-    head.appendChild(el('strong', {}, `${index + 1}. ${draft.originalName}`));
-    const headActions = el('div', { class: 'upload-draft-head-actions' });
-    headActions.appendChild(el('span', { class: 'muted' }, `${formatBytes(draft.file.size || 0)}`));
-    const removeBtn = el(
-      'button',
-      { class: 'icon-btn danger upload-draft-remove', type: 'button', title: t('この写真を除外') },
-      '✕'
-    );
-    removeBtn.addEventListener('click', () => {
-      revokeUploadDraftPreview(draft);
-      state.uploadDrafts = state.uploadDrafts.filter((item) => item.localId !== draft.localId);
-      renderUploadDrafts();
-    });
-    headActions.appendChild(removeBtn);
-    head.appendChild(headActions);
-    row.appendChild(head);
-
-    const thumb = el('img', {
-      class: 'upload-draft-thumb',
-      src: draft.previewUrl || '',
-      alt: draft.originalName || `draft-${index + 1}`,
-      loading: 'lazy',
-    });
-    thumb.addEventListener('click', () => {
-      openPhotoPreview(draft);
-    });
-    thumb.addEventListener('keydown', (event) => {
-      if (!event || (event.key !== 'Enter' && event.key !== ' ')) return;
-      event.preventDefault();
-      openPhotoPreview(draft);
-    });
-    thumb.tabIndex = 0;
-    thumb.setAttribute('role', 'button');
-    thumb.setAttribute('aria-label', tf('{name} を全体表示', { name: draft.originalName || `draft-${index + 1}` }));
-    thumb.addEventListener('error', () => {
-      thumb.classList.add('hidden');
-    });
-    row.appendChild(thumb);
-
-    const grid = el('div', { class: 'upload-draft-grid' });
-
-    const tagField = el('label', { class: 'upload-draft-field' });
-    tagField.appendChild(el('span', { class: 'upload-draft-label' }, t('タグ')));
-    const tagSelect = createLogTagSelect(draft.logTag);
-    const syncTag = (event) => {
-      draft.logTag = normalizeLogTag(event.target.value);
-    };
-    tagSelect.addEventListener('input', syncTag);
-    tagSelect.addEventListener('change', syncTag);
-    tagField.appendChild(tagSelect);
-    grid.appendChild(tagField);
-
-    const commentField = el('label', { class: 'upload-draft-field' });
-    commentField.appendChild(el('span', { class: 'upload-draft-label' }, t('初回コメント')));
-    const commentInput = el('textarea', {
-      class: 'js-upload-draft-comment',
-      rows: '2',
-      maxlength: '50',
-      placeholder: t('初回コメント（任意）'),
-    });
-    commentInput.value = draft.initialComment || '';
-    const syncComment = (event) => {
-      draft.initialComment = String(event.target.value || '').slice(0, 50);
-    };
-    commentInput.addEventListener('input', syncComment);
-    commentInput.addEventListener('change', syncComment);
-    commentField.appendChild(commentInput);
-    grid.appendChild(commentField);
-
-    row.appendChild(grid);
-    els.uploadMetaList.appendChild(row);
-  });
-}
-
-function applyBulkComment() {
-  if (!state.uploadDrafts.length) return;
-  syncUploadDraftsFromDom();
-  const nextComment = String(state.uploadDrafts[0]?.initialComment || '').slice(0, 50);
-  if (!nextComment) {
-    window.alert(t('1つ目のコメントを先に入力してください。'));
-    return;
-  }
-  if (!window.confirm(t('1つ目のコメントを全件に反映してよかですか？既存入力は上書きされます。'))) return;
-  state.uploadDrafts.forEach((draft) => {
-    draft.initialComment = nextComment;
-  });
-  renderUploadDrafts();
-}
-
-function cancelUploadDrafts() {
-  if (!state.uploadDrafts.length) return;
-  if (!window.confirm(t('選択した写真と入力内容を破棄してよかですか？'))) return;
-  clearUploadDrafts();
-}
-
-function asMessage(error) {
-  if (!error) return 'unknown error';
-  if (typeof error === 'string') return error;
-  return error.message || 'unknown error';
 }
 
 function safeAction(fn, label) {
-  return async (...args) => {
-    try {
-      clearError();
-      await fn(...args);
-    } catch (error) {
-      showError(tf('{label}失敗: {message}', { label: t(label || '処理'), message: asMessage(error) }));
-      console.error(error);
-    }
-  };
+  return actionBoundary.wrap(fn, label);
 }
 
 async function scrollToPhotoList() {
@@ -1652,59 +658,6 @@ async function scrollToActiveList() {
   await new Promise((r) => window.requestAnimationFrame(() => r()));
   const target = currentFolderMode() === 'quest' ? els.questList : els.photoList;
   if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-function planToProductLabel(plan) {
-  const v = String(plan || '').trim().toUpperCase();
-  if (v === 'BASIC') return '1GB';
-  if (v === 'PLUS') return '5GB';
-  if (v === 'PRO') return '10GB';
-  return null;
-}
-
-function planToDisplayLabel(plan) {
-  const v = String(plan || '').trim().toUpperCase();
-  const product = planToProductLabel(v);
-  if (product) return tf('{product}プラン', { product });
-  if (v === 'FREE') return t('無料プラン');
-  return v || t('不明');
-}
-
-function subscriptionPlanRank(plan) {
-  const v = String(plan || '').trim().toUpperCase();
-  if (v === 'BASIC') return 1;
-  if (v === 'PLUS') return 2;
-  if (v === 'PRO') return 3;
-  return 0;
-}
-
-function subscriptionPlanLimitBytes(plan) {
-  const gib = 1024 * 1024 * 1024;
-  const v = String(plan || '').trim().toUpperCase();
-  if (v === 'BASIC') return gib;
-  if (v === 'PLUS') return 5 * gib;
-  if (v === 'PRO') return 10 * gib;
-  return 512 * 1024 * 1024;
-}
-
-function subscriptionPlanChangeConfirmText(currentPlan, targetPlan, action) {
-  const currentLabel = planToDisplayLabel(currentPlan);
-  const targetLabel = planToDisplayLabel(targetPlan);
-  if (action === 'checkout') {
-    return tf('{plan}を申し込みますか？', { plan: targetLabel });
-  }
-  if (action === 'upgrade') {
-    return [
-      tf('{currentPlan}から{targetPlan}へ変更してよかですか？', { currentPlan: currentLabel, targetPlan: targetLabel }),
-      '',
-      t('差額はStripeで即時請求されます。'),
-    ].join('\n');
-  }
-  return [
-    tf('{currentPlan}から{targetPlan}へ変更してよかですか？', { currentPlan: currentLabel, targetPlan: targetLabel }),
-    '',
-    t('今すぐ反映されます。'),
-  ].join('\n');
 }
 
 function clearPurchaseParamsFromUrl() {
@@ -1735,17 +688,13 @@ async function handleStripePurchaseReturn() {
   }
 
   // Navigate to the room admin screen (within the same page).
-  if (els.teamAdminCard) {
-    els.teamAdminCard.classList.remove('hidden');
-    setTeamAdminMode(true);
-  }
-  await loadAdminPanel();
+  await teamAdminController.open();
 
   // Poll until subscription info reflects the selected plan.
   const maxAttempts = 45; // ~45s
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
-      const res = await api('/team/subscription', { method: 'GET' });
+      const res = await appApi.getSubscription();
       const currentPlan = String(res?.subscription?.currentPlan || '').toUpperCase();
       if (currentPlan === String(plan).toUpperCase()) {
         await loadTeamMe();
@@ -1804,7 +753,7 @@ async function initUser() {
     await ensureDisplayName();
     if (inviteToken) {
       try {
-        const res = await api('/invites/accept', { method: 'POST', body: JSON.stringify({ token: inviteToken }) });
+        const res = await appApi.acceptInvite(inviteToken);
         state.roomName = res.roomName || null;
         localStorage.removeItem('kansa_pending_invite');
         const url = new URL(window.location.href);
@@ -1822,7 +771,7 @@ async function initUser() {
     }
     // Resolve room solely from membership; don't trust local cache across users.
     try {
-      const data = await api('/team/me', { method: 'GET' });
+      const data = await appApi.getTeam();
       if (!data || data.hasRoom === false || !data.roomName) {
         showRoomSetup();
         return;
@@ -1839,16 +788,9 @@ async function initUser() {
 }
 
 function showRoomSetup() {
-  els.userSetup.classList.add('hidden');
-  if (els.roomSetup) els.roomSetup.classList.remove('hidden');
-  els.app.classList.add('hidden');
+  screenController.showRoomSetup({ authenticated: Boolean(state.userKey) });
   if (state.userKey) {
-    if (els.globalMenuWrap) els.globalMenuWrap.classList.remove('hidden');
-    if (els.logoutBtn) els.logoutBtn.classList.remove('hidden');
     loadMyRooms().catch(() => {});
-  } else {
-    if (els.globalMenuWrap) els.globalMenuWrap.classList.add('hidden');
-    if (els.logoutBtn) els.logoutBtn.classList.add('hidden');
   }
   setMenuActionVisibility(false, { showAccountDelete: Boolean(state.userKey) });
   closeMenu();
@@ -1858,59 +800,18 @@ function showRoomSetup() {
 }
 
 function renderMyRooms(items, activeRoomId) {
-  if (!els.myRoomsList) return;
-  // /rooms/mine returns USER#... selection (status=active|inactive) plus membership (memberStatus=active|left|disabled).
-  // Hide "left" rooms; they require a new invite to re-join anyway.
-  const rooms = (items || []).filter((r) => r && r.roomId && r.roomName && r.memberStatus !== 'left');
-  if (!rooms.length) {
-    els.myRoomsList.textContent = t('入室可能なお部屋がありません');
-    return;
-  }
-  els.myRoomsList.innerHTML = '';
-  rooms.forEach((r) => {
-    const row = el('div', { class: 'room-row' });
-    const ms = String(r.memberStatus || 'active').toLowerCase();
-    const suffix = r.roomId === activeRoomId ? t('（参加中）') : ms === 'disabled' ? t('（停止中）') : '';
-    const ownerLabel = String(r.role || 'member').toLowerCase() === 'admin' ? t('作成者: 自分') : t('作成者: 別ユーザ');
-    const label = el('div', { style: 'flex:1;' }, `${r.roomName}${suffix} / ${ownerLabel}`);
-    const btnLabel = r.roomId === activeRoomId ? t('入室中') : ms === 'disabled' ? t('停止中') : t('この部屋へ');
-    const btn = el('button', { type: 'button' }, btnLabel);
-    btn.disabled = r.roomId === activeRoomId || ms === 'disabled';
-    btn.onclick = safeAction(async () => {
-      await switchRoomById(r.roomId, r.roomName);
-    }, 'お部屋切替');
-    row.appendChild(label);
-    row.appendChild(btn);
-    els.myRoomsList.appendChild(row);
+  renderMyRoomsInto(els.myRoomsList, items, activeRoomId, {
+    translate: t,
+    onSwitch: safeAction(async (room) => {
+      await switchRoomById(room.roomId, room.roomName);
+    }, 'お部屋切替'),
   });
 }
 
 function renderRoomSelect() {
-  if (!els.currentRoomSelect) return;
-  els.currentRoomSelect.innerHTML = '';
-
-  if (!state.availableRooms.length) {
-    const empty = el('option', { value: '' }, t('お部屋がありません'));
-    els.currentRoomSelect.appendChild(empty);
-    els.currentRoomSelect.value = '';
-    els.currentRoomSelect.disabled = true;
-    return;
-  }
-
-  state.availableRooms.forEach((room) => {
-    const option = el('option', { value: room.roomId }, room.roomName);
-    if (String(room.memberStatus || '').toLowerCase() === 'disabled') {
-      option.disabled = true;
-      option.textContent = tf('{roomName}（停止中）', { roomName: room.roomName });
-    }
-    els.currentRoomSelect.appendChild(option);
+  renderRoomSelectInto(els.currentRoomSelect, state.availableRooms, {
+    roomId: state.roomId, roomName: state.roomName, translate: t,
   });
-
-  const activeRoom =
-    state.availableRooms.find((room) => String(room.roomId || '') === String(state.roomId || '')) ||
-    state.availableRooms.find((room) => String(room.roomName || '') === String(state.roomName || ''));
-  els.currentRoomSelect.disabled = false;
-  els.currentRoomSelect.value = activeRoom?.roomId || '';
   renderCurrentRoomHeader();
 }
 
@@ -1919,25 +820,20 @@ async function loadMyRooms() {
   if (els.myRoomsList) {
     els.myRoomsList.textContent = t('読み込み中...');
   }
-  const res = await api('/rooms/mine', { method: 'GET' });
-  state.availableRooms = (res.items || []).filter((room) => room && room.roomId && room.roomName && room.memberStatus !== 'left');
+  const res = await loadRoomListState(appApi, state);
   renderMyRooms(state.availableRooms, res.activeRoomId || null);
   renderRoomSelect();
 }
 
 async function switchRoomById(roomId, fallbackRoomName = '') {
-  const sw = await api('/rooms/switch', { method: 'POST', body: JSON.stringify({ roomId }) });
-  const nextRoomName = sw.roomName || fallbackRoomName || null;
-  closeTeamAdminPanel();
-  resetRoomContext();
-  state.roomId = roomId;
-  state.roomName = nextRoomName;
-  showApp();
+  await switchRoomState(appApi, state, roomId, fallbackRoomName, {
+    beforeReset: closeTeamAdminPanel, reset: resetRoomContext, onReady: showApp,
+  });
 }
 
 async function getOwnedRoomForGuard() {
   if (!state.idToken) return false;
-  const res = await api('/rooms/mine', { method: 'GET' });
+  const res = await appApi.listRooms();
   const items = Array.isArray(res?.items) ? res.items : [];
   const owned = items.find((r) => {
     const role = String(r?.role || '').toLowerCase();
@@ -1948,39 +844,22 @@ async function getOwnedRoomForGuard() {
 }
 
 async function showOwnerDeleteGuard(ownedRoom) {
-  const isCurrentOwnedRoom =
-    (state.roomId && String(state.roomId) === String(ownedRoom?.roomId || '')) ||
-    (state.roomName && String(state.roomName) === String(ownedRoom?.roomName || ''));
-
-  if (isCurrentOwnedRoom) {
-    window.alert(t('作成者は先に「このお部屋を削除（全データ）」を実行してください。'));
-    return;
-  }
-
-  const ok = window.confirm(
-    tf('作成者は先に「お部屋を削除（全データ）」を実行してください。\n「{roomName}」へ移動しますか？', {
+  return runOwnerRoomSwitch(appApi, state, ownedRoom, {
+    onCurrentRoom: () => window.alert(t('作成者は先に「このお部屋を削除（全データ）」を実行してください。')),
+    confirmSwitch: () => window.confirm(tf('作成者は先に「お部屋を削除（全データ）」を実行してください。\n「{roomName}」へ移動しますか？', {
       roomName: ownedRoom?.roomName || t('自分の部屋'),
-    })
-  );
-  if (!ok) return;
-
-  await api('/rooms/switch', { method: 'POST', body: JSON.stringify({ roomId: ownedRoom.roomId }) });
-  closeTeamAdminPanel();
-  resetRoomContext();
-  state.roomName = ownedRoom.roomName;
-  showApp();
-  showToast(tf('「{roomName}」へ移動しました。', { roomName: ownedRoom.roomName }));
+    })),
+    closeAdmin: closeTeamAdminPanel,
+    resetRoom: resetRoomContext,
+    showApp,
+    onSwitched: () => showToast(tf('「{roomName}」へ移動しました。', { roomName: ownedRoom.roomName })),
+  });
 }
 
 function showApp() {
-  els.userSetup.classList.add('hidden');
-  if (els.roomSetup) els.roomSetup.classList.add('hidden');
-  els.app.classList.remove('hidden');
-  if (els.globalMenuWrap) els.globalMenuWrap.classList.remove('hidden');
+  screenController.showApp({ userName: state.userName });
   setMenuActionVisibility(true);
-  if (els.logoutBtn) els.logoutBtn.classList.remove('hidden');
   closeMenu();
-  els.currentName.textContent = state.userName;
   renderCurrentRoomHeader();
   renderRoomSelect();
   loadTeamMe().then(async () => {
@@ -2015,71 +894,14 @@ function folderPasswordHeader(folderId) {
   return { 'x-folder-password': encodeURIComponent(pw) };
 }
 
-async function api(path, options = {}) {
-  clearError();
-  const method = String(options.method || 'GET').toUpperCase();
-  let res;
-  try {
-    res = await fetch(`${API_BASE}${path}`, {
-      ...options,
-      headers: {
-        ...(options.headers || {}),
-        ...headers(method),
-      },
-    });
-  } catch (error) {
-    throw new Error(tf('ネットワークエラー: {message}', { message: asMessage(error) }));
-  }
-
-  if (!res.ok) {
-    const text = await res.text();
-    let body = null;
-    try {
-      body = text ? JSON.parse(text) : null;
-    } catch (_) {
-      body = null;
-    }
-    if (res.status === 401) {
-      clearAuth();
-      showAuthSetup();
-    }
-    if (res.status === 403 && text.includes('"no active room"')) {
-      resetRoomContext();
-      showRoomSetup();
-    }
-    const err = new Error(`APIエラー(${res.status}): ${text || 'unknown error'}`);
-    err.status = res.status;
-    err.body = body;
-    throw err;
-  }
-
-  return res.json();
-}
-
 async function loadTeamMe() {
-  try {
-    const data = await api('/team/me', { method: 'GET' });
-    state.roomId = data.roomId || state.roomId;
-    state.roomName = data.roomName || state.roomName;
-    state.teamRole = data.role || 'member';
-    state.isAdmin = Boolean(data.isAdmin);
-    state.uploadBlocked = Boolean(data.uploadBlocked);
-    state.billing = data.billing || null;
-    state.ownerUserKey = data.ownerUserKey || null;
-  } catch (error) {
-    // Keep the UI usable, but don't hide the failure.
+  await loadTeamState(appApi, state, { onError: (error) => {
     showError(
       tf('チーム情報取得失敗: {message}（バックエンド/フロントのデプロイ差分やキャッシュの可能性）', {
         message: asMessage(error),
       })
     );
-    state.teamRole = null;
-    state.roomId = null;
-    state.isAdmin = false;
-    state.uploadBlocked = false;
-    state.billing = null;
-    state.ownerUserKey = null;
-  }
+  } });
   setAdminUiVisibility();
   renderBillingBar();
   syncSubscriptionPlanButtons();
@@ -2087,315 +909,93 @@ async function loadTeamMe() {
   renderRoomSelect();
 }
 
+const adminPanelOptions = createAdminPanelOptions(state, {
+    isVisible: () => Boolean(els.teamAdminCard && !els.teamAdminCard.classList.contains('hidden')),
+    member: {
+      api: appApi,
+      target: els.memberList,
+      renderMembers: renderTeamMembersInto,
+      translate: t,
+      safeAction,
+      confirmScopeChange: (m) => window.confirm(adminPanelUi.confirmScopeChange(m)),
+      confirmRemove: (m) => window.confirm(adminPanelUi.confirmMemberRemove(m)),
+      onScopeUpdated: () => window.alert(adminPanelUi.scopeUpdated()),
+      onRemoved: () => window.alert(adminPanelUi.memberRemoved()),
+      reload: loadAdminPanel,
+      renderError: (error) => {
+        if (els.memberList) {
+          els.memberList.innerHTML = '';
+          els.memberList.appendChild(el('div', { class: 'muted' }, adminPanelUi.memberLoadError(error)));
+        }
+      },
+      scopeActionLabel: '権限更新',
+      removeActionLabel: 'メンバー削除',
+    },
+
+    folder: {
+      target: els.folderAdminList,
+      createOverview: createFolderAdminOverview,
+      translate: t,
+      formatCount: adminPanelUi.folderCount,
+      formatHeader: adminPanelUi.folderHeader,
+      safeAction,
+      reload: loadAdminPanel,
+      renderNoFolders: (target) => target.appendChild(el('div', { class: 'muted' }, adminPanelUi.noFolders())),
+      selected: {
+        api: appApi,
+        appendActions: appendFolderAdminActions,
+        renderMembers: renderFolderMembersInto,
+        createMembersBox: () => el('div', { class: 'folder-admin-members' }, t('メンバー読み込み中...')),
+        translate: t,
+        safeAction,
+        copyInvite: copyInviteUrlFromInput,
+        buildInviteUrl: (token) => `${window.location.origin}${window.location.pathname}?invite=${encodeURIComponent(token)}`,
+        missingTokenError: () => new Error(adminPanelUi.missingInviteToken()),
+        showInviteUrl: async ({ url, inviteInput, revokeButton }) => {
+          if (revokeButton) revokeButton.classList.remove('hidden');
+          await setInviteUrlText(url, inviteInput);
+        },
+        confirmRevoke: (folder) => window.confirm(adminPanelUi.confirmInviteRevoke(folder)),
+        onMissingInvite: () => showError(adminPanelUi.missingInvite()),
+        onInviteRevoked: ({ inviteInput, revokeButton }) => {
+          inviteInput.value = '';
+          revokeButton.classList.add('hidden');
+          showToast(adminPanelUi.inviteRevoked());
+        },
+        confirmPassword: (folder, password) => window.confirm(adminPanelUi.confirmPassword(folder, password)),
+        onPasswordUpdated: ({ password, passwordInput }) => {
+          passwordInput.value = '';
+          window.alert(adminPanelUi.passwordUpdated(password));
+        },
+        confirmDelete: (folder) => window.confirm(adminPanelUi.confirmFolderDelete(folder)),
+        onDeleted: () => window.alert(adminPanelUi.folderDeleted()),
+        confirmMemberRemove: (m) => window.confirm(adminPanelUi.confirmFolderMemberRemove(m)),
+        onMemberRemoved: () => window.alert(adminPanelUi.folderMemberRemoved()),
+        formatMemberLoadError: adminPanelUi.memberLoadError,
+        reloadFolders: loadFolders,
+        reloadTeam: loadTeamMe,
+        reloadPanel: loadAdminPanel,
+      },
+      renderError: (error) => {
+        if (els.folderAdminList) {
+          els.folderAdminList.innerHTML = '';
+          els.folderAdminList.appendChild(el('div', { class: 'muted' }, adminPanelUi.folderLoadError(error)));
+        }
+      },
+      selectActionLabel: '管理コンテナ選択',
+    },
+    renderBilling: () => renderBillingAdminState(state, els, {
+      buildStatus: (billing) => billingStatusUi.statusText(billing, state.folders),
+      guideText: freePlanGuideText,
+      archiveNote: adminPanelUi.archiveNote,
+      renderGraph: renderStorageGraph,
+      promptLowStorage: maybePromptLowStorage,
+      syncPlanButtons: syncSubscriptionPlanButtons,
+    }),
+});
+
 async function loadAdminPanel() {
-  if (!state.isAdmin) return;
-  if (!els.teamAdminCard || els.teamAdminCard.classList.contains('hidden')) return;
-
-  // Members
-  try {
-    const members = await api('/team/members', { method: 'GET' });
-    const items = (members.items || []).filter((m) => m.status !== 'left');
-    if (els.memberList) {
-      els.memberList.innerHTML = '';
-      if (!items.length) {
-        els.memberList.appendChild(el('div', { class: 'muted' }, t('メンバーがおらんばい')));
-      } else {
-        items.forEach((m) => {
-          const row = el('div', { class: 'member-row' });
-          const name = m.displayName || m.userKey;
-          const left = el(
-            'div',
-            {},
-            `${name} / ${m.role} / ${m.status}${m.folderScope ? ` / ${t('閲覧')}:${m.folderScope}` : ''}`
-          );
-          row.appendChild(left);
-
-          const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
-          if (m.folderScope === 'invited') {
-            actions.appendChild(el('span', { class: 'muted' }, t('コンテナ招待')));
-          } else {
-            const scopeSelect = el('select', { style: 'min-width:120px;' });
-            scopeSelect.appendChild(el('option', { value: 'own' }, t('自分のコンテナのみ')));
-            scopeSelect.appendChild(el('option', { value: 'all' }, t('全コンテナ表示')));
-            scopeSelect.value = m.role === 'admin' ? 'all' : m.folderScope || 'all';
-            scopeSelect.disabled = m.role === 'admin' || m.userKey === state.ownerUserKey;
-            scopeSelect.onchange = safeAction(async () => {
-              const next = scopeSelect.value;
-              const prev = m.folderScope || 'all';
-              const ok = window.confirm(tf('メンバー「{name}」の閲覧権限を変更してよかですか？', { name }));
-              if (!ok) {
-                scopeSelect.value = prev;
-                return;
-              }
-              await api(`/team/members/${encodeURIComponent(m.userKey)}`, {
-                method: 'PUT',
-                body: JSON.stringify({ folderScope: next }),
-              });
-              window.alert(t('閲覧権限を更新しました。'));
-              await loadAdminPanel();
-            }, '権限更新');
-            actions.appendChild(scopeSelect);
-          }
-
-          // Remove member (kick) with confirm.
-          if (m.role !== 'admin' && m.userKey !== state.ownerUserKey) {
-            const removeBtn = el('button', { type: 'button', class: 'danger' }, t('削除'));
-            removeBtn.onclick = safeAction(async () => {
-              const ok = window.confirm(tf('メンバー「{name}」をお部屋から削除してよかですか？（本人は入れんごとなります）', { name }));
-              if (!ok) return;
-              await api(`/team/members/${encodeURIComponent(m.userKey)}`, {
-                method: 'PUT',
-                body: JSON.stringify({ status: 'left' }),
-              });
-              window.alert(t('メンバーを削除しました。'));
-              await loadAdminPanel();
-            }, 'メンバー削除');
-            actions.appendChild(removeBtn);
-          }
-          row.appendChild(actions);
-          els.memberList.appendChild(row);
-        });
-      }
-    }
-  } catch (error) {
-    if (els.memberList) {
-      els.memberList.innerHTML = '';
-      els.memberList.appendChild(el('div', { class: 'muted' }, tf('メンバー取得失敗: {message}', { message: asMessage(error) })));
-    }
-  }
-
-  // Folder admin list
-  try {
-    const data = await api('/folders', { method: 'GET' });
-    const folders = data.items || [];
-    if (els.folderAdminList) {
-      els.folderAdminList.innerHTML = '';
-      if (!folders.length) {
-        state.adminFolderId = '';
-        els.folderAdminList.appendChild(el('div', { class: 'muted' }, t('コンテナがなかです')));
-      } else {
-        if (state.adminFolderId && !folders.some((f) => f.folderId === state.adminFolderId)) {
-          state.adminFolderId = '';
-        }
-        const pickerRow = el('div', { class: 'row folder-admin-picker' });
-        const folderSelect = el('select');
-        folderSelect.appendChild(el('option', { value: '' }, t('コンテナを選択してください')));
-        folders.forEach((f) => {
-          const locked = Boolean(f.hasPassword);
-          const modeLabel = normalizeFolderMode(f.mode) === 'quest' ? 'クエスト' : 'フォト';
-          const label = `${f.folderCode ? `${f.folderCode} ` : ''}${f.title || f.folderId} [${modeLabel}]${locked ? ` [${t('鍵')}]` : ''}`;
-          folderSelect.appendChild(el('option', { value: f.folderId }, label));
-        });
-        folderSelect.value = state.adminFolderId || '';
-        folderSelect.onchange = safeAction(async () => {
-          state.adminFolderId = folderSelect.value;
-          await loadAdminPanel();
-        }, '管理コンテナ選択');
-        pickerRow.appendChild(folderSelect);
-        pickerRow.appendChild(el('span', { class: 'muted' }, tf('{count}件', { count: folders.length })));
-        els.folderAdminList.appendChild(pickerRow);
-
-        const f = folders.find((item) => item.folderId === state.adminFolderId);
-        if (!f) {
-          els.folderAdminList.appendChild(el('div', { class: 'muted folder-admin-empty' }, t('')));
-        } else {
-          const wrap = el('div', { class: 'folder-admin-block' });
-          const header = el('div', { class: 'folder-admin-header' });
-          const left = el(
-            'div',
-            {},
-            tf('{folder}（作成:{creator} / 容量:{size}）', {
-              folder: `${f.folderCode || ''} ${f.title || f.folderId}`,
-              creator: f.createdByName || f.createdBy,
-              size: formatBytes(Number(f.usageBytes || 0)),
-            })
-          );
-          header.appendChild(left);
-          wrap.appendChild(header);
-
-          const inviteRow = el('div', { class: 'row folder-admin-actions' });
-          const folderInviteInput = el('input', {
-            placeholder: t('コンテナ招待URL'),
-            readonly: 'readonly',
-          });
-          const folderInviteCell = el('div', { class: 'invite-url-cell' });
-          const copyFolderInviteBtn = el('button', { type: 'button' }, t('コピー'));
-          copyFolderInviteBtn.onclick = safeAction(async () => {
-            await copyInviteUrlFromInput(folderInviteInput);
-          }, 'コンテナ招待URLコピー');
-          const createFolderInviteBtn = el('button', { type: 'button' }, t('招待URL発行（7日）'));
-          createFolderInviteBtn.onclick = safeAction(async () => {
-            const res = await api('/invites/create', {
-              method: 'POST',
-              body: JSON.stringify({ folderId: f.folderId }),
-            });
-            const token = res.token;
-            if (!token) throw new Error(t('招待トークンが取得できませんでした。'));
-            state.lastFolderInviteTokens[f.folderId] = token;
-            const base = window.location.origin + window.location.pathname;
-            const url = `${base}?invite=${encodeURIComponent(token)}`;
-            if (revokeFolderInviteBtn) revokeFolderInviteBtn.classList.remove('hidden');
-            await setInviteUrlText(url, folderInviteInput);
-          }, 'コンテナ招待URL発行');
-          inviteRow.appendChild(createFolderInviteBtn);
-
-          const revokeFolderInviteBtn = el('button', { type: 'button', class: 'danger hidden' }, t('招待URL失効'));
-          revokeFolderInviteBtn.onclick = safeAction(async () => {
-            const token = state.lastFolderInviteTokens[f.folderId];
-            if (!token) {
-              showError(t('失効する招待URLがなかです（先に発行してください）'));
-              return;
-            }
-            const ok = window.confirm(tf('コンテナ「{folder}」の招待URLを失効してよかですか？', { folder: f.title || f.folderId }));
-            if (!ok) return;
-            await api('/invites/revoke', { method: 'POST', body: JSON.stringify({ token }) });
-            delete state.lastFolderInviteTokens[f.folderId];
-            folderInviteInput.value = '';
-            revokeFolderInviteBtn.classList.add('hidden');
-            showToast(t('コンテナ招待URLを失効しました。'));
-          }, 'コンテナ招待URL失効');
-          inviteRow.appendChild(revokeFolderInviteBtn);
-          folderInviteCell.appendChild(folderInviteInput);
-          folderInviteCell.appendChild(copyFolderInviteBtn);
-          inviteRow.appendChild(folderInviteCell);
-          wrap.appendChild(inviteRow);
-
-          const passwordRow = el('div', { class: 'row folder-admin-actions folder-admin-password' });
-          const passwordInput = el('input', {
-            placeholder: t('コンテナパスワード（空で解除）'),
-            type: 'password',
-          });
-          const passwordBtn = el('button', { type: 'button' }, t('設定/解除'));
-          passwordBtn.onclick = safeAction(async () => {
-            const next = String(passwordInput.value || '').trim();
-            const ok = window.confirm(
-              next
-                ? tf('コンテナ「{folder}」のパスワードを設定してよかですか？', { folder: f.title || f.folderId })
-                : tf('コンテナ「{folder}」のパスワードを解除してよかですか？', { folder: f.title || f.folderId })
-            );
-            if (!ok) return;
-            await api(`/folders/${f.folderId}/password`, {
-              method: 'PUT',
-              headers: { ...folderPasswordHeader(f.folderId) },
-              body: JSON.stringify({ folderPassword: next }),
-            });
-            if (next) state.folderPasswordById[f.folderId] = next;
-            else delete state.folderPasswordById[f.folderId];
-            passwordInput.value = '';
-            window.alert(next ? t('コンテナのパスワードを設定しました。') : t('コンテナのパスワードを解除しました。'));
-            await loadFolders();
-            await loadAdminPanel();
-          }, 'コンテナパスワード設定');
-          passwordRow.appendChild(passwordInput);
-          passwordRow.appendChild(passwordBtn);
-          wrap.appendChild(passwordRow);
-
-          const deleteRow = el('div', { class: 'row folder-admin-actions' });
-          const delBtn = el('button', { type: 'button', class: 'danger' }, t('削除'));
-          delBtn.onclick = safeAction(async () => {
-            const ok = window.confirm(tf('コンテナ「{folder}」を削除してよかですか？（写真とコメントも消えます）', { folder: f.title || f.folderId }));
-            if (!ok) return;
-            await api(`/folders/${f.folderId}`, { method: 'DELETE' });
-            state.adminFolderId = '';
-            window.alert(t('コンテナを削除しました。'));
-            await loadFolders();
-            await loadTeamMe();
-            await loadAdminPanel();
-          }, 'コンテナ削除');
-          deleteRow.appendChild(delBtn);
-          wrap.appendChild(deleteRow);
-
-          const membersBox = el('div', { class: 'folder-admin-members' }, t('メンバー読み込み中...'));
-          wrap.appendChild(membersBox);
-
-          els.folderAdminList.appendChild(wrap);
-          api(`/folders/${encodeURIComponent(f.folderId)}/members`, { method: 'GET' })
-            .then((members) => {
-              const items = members.items || [];
-              membersBox.innerHTML = '';
-              if (!items.length) {
-                membersBox.appendChild(el('div', { class: 'muted' }, t('メンバーがおらんばい')));
-                return;
-              }
-              const reasonLabel = {
-                admin: t('管理者'),
-                all: t('全コンテナ'),
-                owner: t('作成者'),
-                invited: t('コンテナ招待'),
-              };
-              membersBox.appendChild(el('h3', {}, t('メンバー')));
-              items.forEach((m) => {
-                const name = m.displayName || m.userKey;
-                const row = el('div', { class: 'member-row folder-admin-member-row' });
-                row.appendChild(
-                  el(
-                    'div',
-                    {},
-                    `${name}（${reasonLabel[m.accessReason] || m.accessReason || m.folderScope || t('権限')} / ${m.status || 'active'}）`
-                  )
-                );
-                const actions = el('div', { class: 'row', style: 'gap:6px; justify-content:flex-end;' });
-                if (m.accessReason === 'invited' && m.folderScope === 'invited') {
-                  const removeBtn = el('button', { type: 'button', class: 'danger' }, t('このコンテナから外す'));
-                  removeBtn.onclick = safeAction(async () => {
-                    const ok = window.confirm(tf('メンバー「{name}」をこのコンテナから外してよかですか？', { name }));
-                    if (!ok) return;
-                    await api(
-                      `/folders/${encodeURIComponent(f.folderId)}/members/${encodeURIComponent(m.userKey)}`,
-                      { method: 'DELETE' }
-                    );
-                    window.alert(t('コンテナメンバーを外しました。'));
-                    await loadAdminPanel();
-                  }, 'コンテナメンバー解除');
-                  actions.appendChild(removeBtn);
-                }
-                row.appendChild(actions);
-                membersBox.appendChild(row);
-              });
-            })
-            .catch((error) => {
-              membersBox.textContent = tf('メンバー取得失敗: {message}', { message: asMessage(error) });
-            });
-        }
-      }
-    }
-  } catch (error) {
-    if (els.folderAdminList) {
-      els.folderAdminList.innerHTML = '';
-      els.folderAdminList.appendChild(el('div', { class: 'muted' }, tf('コンテナ取得失敗: {message}', { message: asMessage(error) })));
-    }
-  }
-
-  if (els.billingStatus && state.billing) {
-    const b = state.billing;
-    const stats = computeStorageStats(b);
-    const plan = String(b?.subscription?.currentPlan || 'FREE').toUpperCase();
-    const folderSummary = folderUsageSummary();
-    const capacityLabel =
-      String(b?.billingMode || 'prepaid').toLowerCase() === 'subscription'
-        ? tf('プラン容量 {size}', { size: formatBytes(stats.capacityBytes) })
-        : tf('無料 {size}', { size: formatBytes(b.freeBytes) });
-    els.billingStatus.textContent = tf('使用量 {used} / {capacity}（残り {remain}） / {folderSummary} / プラン {plan}', {
-      used: formatBytes(b.usageBytes),
-      capacity: capacityLabel,
-      remain: formatBytes(stats.freeRemainBytes),
-      folderSummary,
-      plan: planToDisplayLabel(plan),
-    });
-    if (els.billingPlanGuide) els.billingPlanGuide.textContent = freePlanGuideText();
-    if (els.billingArchiveNote) {
-      els.billingArchiveNote.textContent =
-        t('※ 30日保存後はアーカイブへ移動し、アーカイブは容量に含まれます。\n※ フリープランへ戻す際の容量判定にはアーカイブ済みデータも含みます。');
-    }
-    renderStorageGraph();
-    maybePromptLowStorage();
-  } else {
-    if (els.billingStatus) els.billingStatus.textContent = '';
-    if (els.billingPlanGuide) els.billingPlanGuide.textContent = '';
-    if (els.billingArchiveNote) els.billingArchiveNote.textContent = '';
-    if (els.billingGraph) els.billingGraph.classList.add('hidden');
-  }
-  syncSubscriptionPlanButtons();
+  await renderAdminPanel(appApi, state, adminPanelOptions);
 }
 
 async function setInviteUrlText(url, targetInput = els.inviteUrl) {
@@ -2405,262 +1005,124 @@ async function setInviteUrlText(url, targetInput = els.inviteUrl) {
 }
 
 async function copyInviteUrl(url, showFallbackPrompt = false) {
-  const text = String(url || '').trim();
-  if (!text) {
-    showError(t('コピーする招待URLがなかです（先に発行してください）'));
-    return;
-  }
-  try {
-    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-      await navigator.clipboard.writeText(text);
-      showToast(t('招待URLをコピーしました。'));
-      return;
-    }
-  } catch (_) {
-    // Ignore and fall back.
-  }
-  if (showFallbackPrompt) {
-    window.prompt(t('招待URL（コピーしてください）'), text);
-    return;
-  }
-  showError(t('ブラウザがコピー操作を許可しませんでした。URL欄からコピーしてください。'));
+  return copyInviteText(url, {
+    writeText: navigator.clipboard?.writeText?.bind(navigator.clipboard),
+    allowFallback: showFallbackPrompt,
+    onMissing: () => showError(folderManagementUi.copyMissing()),
+    onCopied: () => showToast(folderManagementUi.copied()),
+    onFallback: (text) => window.prompt(folderManagementUi.copyPrompt(), text),
+    onDenied: () => showError(folderManagementUi.copyDenied()),
+  });
 }
 
 async function copyInviteUrlFromInput(targetInput) {
   await copyInviteUrl(targetInput?.value || '', true);
 }
 
-if (els.copyInviteUrlBtn) {
-  els.copyInviteUrlBtn.onclick = safeAction(async () => {
-    await copyInviteUrlFromInput(els.inviteUrl);
-  }, '招待URLコピー');
-}
+const inviteHandlers = createInviteHandlers(appApi, {
+  getCopyValue: () => els.inviteUrl?.value,
+  copyOptions: {
+    writeText: navigator.clipboard?.writeText?.bind(navigator.clipboard),
+    onMissing: () => showError(folderManagementUi.copyMissing()),
+    onCopied: () => showToast(folderManagementUi.copied()),
+    onFallback: (text) => window.prompt(folderManagementUi.copyPrompt(), text),
+    onDenied: () => showError(folderManagementUi.copyDenied()),
+  },
+  createOptions: {
+      saveToken: (token) => { state.lastInviteToken = token; },
+      buildInviteUrl: (token) => `${window.location.origin}${window.location.pathname}?invite=${encodeURIComponent(token)}`,
+      missingTokenError: () => new Error(folderManagementUi.missingInviteToken()),
+      onCreated: async ({ url }) => { if (els.revokeInviteBtn) els.revokeInviteBtn.classList.remove('hidden'); await setInviteUrlText(url); },
+  },
+  getToken: () => state.lastInviteToken,
+  revokeOptions: {
+      onMissing: () => showError(folderManagementUi.revokeMissing()),
+      confirmRevoke: () => window.confirm(folderManagementUi.confirmRevoke()),
+      clearToken: () => { state.lastInviteToken = null; },
+      onRevoked: () => { if (els.inviteUrl) els.inviteUrl.value = ''; els.revokeInviteBtn.classList.add('hidden'); showToast(folderManagementUi.revoked()); },
+  },
+});
 
-if (els.createInviteBtn) {
-  els.createInviteBtn.onclick = safeAction(async () => {
-    const res = await api('/invites/create', { method: 'POST', body: JSON.stringify({}) });
-    const token = res.token;
-    if (!token) throw new Error(t('招待トークンが取得できませんでした。'));
-    state.lastInviteToken = token;
-    if (els.revokeInviteBtn) els.revokeInviteBtn.classList.remove('hidden');
-    const base = window.location.origin + window.location.pathname;
-    const url = `${base}?invite=${encodeURIComponent(token)}`;
-    await setInviteUrlText(url);
-  }, '招待URL発行');
-}
-
-if (els.revokeInviteBtn) {
-  els.revokeInviteBtn.onclick = safeAction(async () => {
-    if (!state.lastInviteToken) {
-      showError(t('失効する招待URLがなかです（先に発行してください）'));
-      return;
-    }
-    const ok = window.confirm(t('この招待URLを失効してよかですか？'));
-    if (!ok) return;
-    await api('/invites/revoke', { method: 'POST', body: JSON.stringify({ token: state.lastInviteToken }) });
-    state.lastInviteToken = null;
-    if (els.inviteUrl) els.inviteUrl.value = '';
-    els.revokeInviteBtn.classList.add('hidden');
-    showToast(t('招待URLを失効しました。'));
-  }, '招待URL失効');
-}
+bindInviteControlEvents(els, {
+  onCopyInviteUrl: safeAction(inviteHandlers.copy, '招待URLコピー'),
+  onCreateInvite: safeAction(inviteHandlers.create, '招待URL発行'),
+  onRevokeInvite: safeAction(inviteHandlers.revoke, '招待URL失効'),
+});
 
 async function loadFolders() {
-  try {
-    const data = await api('/folders', { method: 'GET' });
-    state.folders = data.items || [];
-    await refreshFolderUnread();
-    renderFolders();
-  } catch (error) {
-    state.folders = [];
-    renderFolders();
-    const message = error?.message || 'unknown';
-    if (message.includes('Failed to fetch') || message.includes('Type error')) {
-      showError(t('コンテナ取得失敗: ネットワーク/CORSエラーの可能性があります'));
-    } else {
-      showError(tf('コンテナ取得失敗: {message}', { message }));
-    }
-  }
+  await loadFolderListState(appApi, state, { refreshUnread: refreshFolderUnread, onError: (error) => handleFolderListError(error, {
+    onNetworkError: () => showError(appErrorUi.folderNetwork()),
+    onError: (_message, error) => showError(appErrorUi.folder(error)),
+  }) });
+  renderFolders();
 }
 
 async function computeFolderUnread(folderId) {
-  const folder = state.folders.find((item) => item.folderId === folderId);
-  const result = { photo: false, quest: false };
-  if (folder?.hasPassword && !state.folderPasswordById[folderId]) return result;
-  if (normalizeFolderMode(folder?.mode) === 'quest') {
-    const questsData = await api(`/folders/${folderId}/quests`, {
-      method: 'GET',
-      headers: { ...folderPasswordHeader(folderId) },
-    });
-    const quests = questsData.items || [];
-    for (const quest of quests) {
-      const latestAt = quest.latestCommentAt || '';
-      const latestBy = quest.latestCommentBy || '';
-      const latestIncoming = latestAt && latestBy && latestBy !== state.userKey ? latestAt : '';
-      if (isUnread(questReadKey(quest.questId), latestIncoming)) {
-        result.quest = true;
-        break;
-      }
-    }
-  } else {
-    const photosData = await api(`/folders/${folderId}/photos`, {
-      method: 'GET',
-      headers: { ...folderPasswordHeader(folderId) },
-    });
-    const photos = photosData.items || [];
-    for (const photo of photos) {
-      const latestAt = photo.latestCommentAt || '';
-      const latestBy = photo.latestCommentBy || '';
-      const latestIncoming = latestAt && latestBy && latestBy !== state.userKey ? latestAt : '';
-      if (isUnread(photo.photoId, latestIncoming)) {
-        result.photo = true;
-        break;
-      }
-    }
-  }
-  return result;
+  return computeFolderUnreadState(appApi, state, folderId, {
+    normalizeMode: normalizeFolderMode, isUnread, questKey: questReadKey,
+  });
 }
 
 async function refreshFolderUnread(folderIds = null) {
-  const targets = folderIds
-    ? state.folders.filter((folder) => folderIds.includes(folder.folderId))
-    : state.folders;
-  if (!targets.length) return;
-
-  const entries = await Promise.all(
-    targets.map(async (folder) => {
-      try {
-        const unread = await computeFolderUnread(folder.folderId);
-        return [folder.folderId, unread];
-      } catch (_) {
-        return [folder.folderId, { photo: false, quest: false }];
-      }
-    })
-  );
-  entries.forEach(([folderId, unread]) => {
-    state.folderModeUnreadMap[folderId] = unread;
-    state.folderUnreadMap[folderId] = Boolean(unread.photo || unread.quest);
-  });
+  return refreshFolderUnreadState(state, folderIds, { computeUnread: computeFolderUnread });
 }
 
 function renderFolders() {
-  if (!els.currentFolderSelect) return;
-  els.currentFolderSelect.innerHTML = '';
-  if (!state.folders.length) {
-    const empty = document.createElement('option');
-    empty.value = '';
-    empty.textContent = t('まだコンテナがなかです');
-    els.currentFolderSelect.appendChild(empty);
-    els.currentFolderSelect.value = '';
-    els.currentFolderSelect.disabled = true;
-    els.folderDetail.classList.add('hidden');
-    state.selectedFolder = null;
-    state.searchPhotos = [];
-    state.quests = [];
-    return;
-  }
-
-  const head = document.createElement('option');
-  head.value = '';
-  head.textContent = t('コンテナ番号を選択してください');
-  els.currentFolderSelect.appendChild(head);
-
-  state.folders.forEach((folder) => {
-    const option = document.createElement('option');
-    option.value = folder.folderId;
-    const unread = state.folderUnreadMap[folder.folderId];
-    const locked = Boolean(folder.hasPassword);
-    const modeLabel = normalizeFolderMode(folder.mode) === 'quest' ? t('クエスト') : t('フォト');
-    option.textContent = `${folder.title} [${modeLabel}]${locked ? ` [${t('鍵')}]` : ''}${
-      unread ? ` ${t('●新着')}` : ''
-    }`;
-    els.currentFolderSelect.appendChild(option);
+  const clearMissingSelection = () => clearFolderSelectionState(state, {
+    hideDetail: () => els.folderDetail.classList.add('hidden'),
   });
-
-  els.currentFolderSelect.disabled = false;
-  if (state.selectedFolder) {
-    els.currentFolderSelect.value = state.selectedFolder.folderId;
-  } else {
-    els.currentFolderSelect.value = '';
-  }
+  renderFolderListState(state, {
+    renderList: ({ folders, unreadById, selectedFolderId }) =>
+      renderFolderSelectInto(els.currentFolderSelect, folders, { unreadById, selectedFolderId, translate: t }),
+    onEmpty: clearMissingSelection,
+    onSelectionMissing: clearMissingSelection,
+  });
 }
 
 async function selectFolder(folder) {
   clearUploadDrafts();
   const folderId = folder.folderId;
-  if (folder.hasPassword && !state.folderPasswordById[folder.folderId]) {
-    const entered = window.prompt(t('このコンテナは鍵付きです。パスワードを入力してください。'), '');
-    if (entered === null) {
-      renderFolders();
-      return;
-    }
-    const pw = String(entered || '').trim();
-    if (!pw) {
-      showError(t('コンテナパスワードが必要です。'));
-      renderFolders();
-      return;
-    }
-    state.folderPasswordById[folder.folderId] = pw;
-  }
-  state.selectedFolder = folder;
-  state.folderDetailTab = 'record';
-  state.photoSearchScope = 'folder';
-  state.photoSearchTag = 'all';
-  state.photoSearchKeyword = '';
-  state.searchPhotos = [];
-  renderFolders();
-  els.folderDetail.classList.remove('hidden');
-  setFolderDetailTab('record');
-  const modeLabel = normalizeFolderMode(folder.mode) === 'quest' ? t('クエスト') : t('フォト');
-  els.folderDetailTitle.textContent = `コンテナ: ${folder.title} [${modeLabel}]`;
-  try {
-    await loadFolderContent();
-  } catch (error) {
-    const body = parseApiErrorBody(error);
-    if (error?.status === 403 && body?.message === 'invalid folder password') {
-      delete state.folderPasswordById[folderId];
-      state.selectedFolder = null;
-      state.selectedFolderArchive = null;
-      state.searchPhotos = [];
-      els.folderDetail.classList.add('hidden');
-      renderPhotoArchiveNote();
-      renderFolders();
-      showError(t('コンテナパスワードが違います。'));
-      return;
-    }
-    throw error;
-  }
+  const hasPassword = ensureFolderPasswordState(state, folder, {
+    prompt: () => window.prompt(t('このコンテナは鍵付きです。パスワードを入力してください。'), ''),
+    onCancel: renderFolders,
+    onMissing: () => { showError(t('コンテナパスワードが必要です。')); renderFolders(); },
+  });
+  if (!hasPassword) return;
+  await runActionWithHandledErrors(() => selectFolderState(state, folder, {
+      renderFolders,
+      showDetail: () => els.folderDetail.classList.remove('hidden'),
+      setRecordTab: () => setFolderDetailTab('record'),
+      setDetailTitle: (selected) => {
+        const modeLabel = normalizeFolderMode(selected.mode) === 'quest' ? t('クエスト') : t('フォト');
+        els.folderDetailTitle.textContent = `${t('コンテナ')}: ${selected.title} [${modeLabel}]`;
+      },
+      loadContent: loadFolderContent,
+    }), {
+    handleError: (error) => handleInvalidFolderPassword(error, state, folderId, {
+      isInvalidPassword: (caught) => caught?.status === 403 && parseApiErrorBody(caught)?.message === 'invalid folder password',
+      cleanup: () => clearFolderSelectionState(state, {
+        hideDetail: () => els.folderDetail.classList.add('hidden'),
+        renderArchive: renderPhotoArchiveNote, renderFolders,
+      }),
+      onInvalid: () => showError(t('コンテナパスワードが違います。')),
+    }),
+  });
 }
 
 async function selectFolderById(folderId) {
-  if (!folderId) {
-    state.selectedFolder = null;
-    state.selectedFolderArchive = null;
-    state.searchPhotos = [];
-    state.quests = [];
-    clearUploadDrafts();
-    els.folderDetail.classList.add('hidden');
-    renderPhotoArchiveNote();
-    renderFolders();
-    return;
-  }
-  const folder = state.folders.find((f) => f.folderId === folderId);
-  if (!folder) return;
-  await selectFolder(folder);
+  return runFolderChange(state, folderId, {
+    clearSelection: () => clearFolderSelectionState(state, {
+      clearDrafts: clearUploadDrafts,
+      hideDetail: () => els.folderDetail.classList.add('hidden'),
+      renderArchive: renderPhotoArchiveNote, renderFolders,
+    }),
+    selectFolder,
+  });
 }
 
 async function loadPhotos() {
   const folderId = state.selectedFolder.folderId;
-  const data = await api(`/folders/${folderId}/photos`, {
-    method: 'GET',
-    headers: { ...folderPasswordHeader(folderId) },
-  });
-  state.photos = data.items || [];
-  state.selectedFolderArchive = {
-    archivedCount: Number(data.archivedCount || 0),
-    archiveMode: data.archiveMode || 'visible',
-    archiveDays: Number(data.archiveDays || 30),
-  };
+  await loadPhotoState(appApi, state, folderId);
   renderPhotoArchiveNote();
   await renderPhotos();
   if (state.folderDetailTab === 'search' && state.photoSearchScope === 'folder') {
@@ -2679,11 +1141,7 @@ async function loadPhotos() {
 
 async function loadQuests() {
   const folderId = state.selectedFolder.folderId;
-  const data = await api(`/folders/${folderId}/quests`, {
-    method: 'GET',
-    headers: { ...folderPasswordHeader(folderId) },
-  });
-  state.quests = data.items || [];
+  await loadQuestState(appApi, state, folderId);
   renderQuests();
   await refreshFolderUnread([folderId]);
   renderFolderMode();
@@ -2691,158 +1149,32 @@ async function loadQuests() {
 }
 
 async function loadFolderContent() {
-  if (currentFolderMode() === 'quest') {
-    state.photos = [];
-    state.selectedFolderArchive = null;
-    renderPhotoArchiveNote();
-    await loadQuests();
-  } else {
-    state.quests = [];
-    await loadPhotos();
-  }
-  renderFolderMode();
+  await loadFolderContentState(state, {
+    mode: currentFolderMode(), loadQuests, loadPhotos,
+    onQuestMode: renderPhotoArchiveNote, onRendered: renderFolderMode,
+  });
 }
 
 async function uploadFiles() {
-  if (state.isUploading) return;
-  syncUploadDraftsFromDom();
-  const drafts = state.uploadDrafts.slice();
-  if (!drafts.length) return;
-  const validationErrors = validateUploadDrafts();
-  if (validationErrors.length) {
-    setUploadMetaStatus(validationErrors[0]);
-    return;
-  }
-
-  setUploadLoading(true);
-  let activeDraft = null;
-  try {
-    const totalFiles = drafts.length;
-    let uploadedCount = 0;
-    let duplicateCount = 0;
-    const uploadedDraftIds = [];
-    const targetQuestId = state.uploadTargetQuestId || null;
-
-    const resizeToJpeg = async (file, maxLongSide = 2048, quality = 0.82) => {
-      // Best-effort client-side resize; if anything fails, fall back to original.
-      let bitmap = null;
-      try {
-        if (window.createImageBitmap) {
-          bitmap = await window.createImageBitmap(file);
-        } else {
-          const url = URL.createObjectURL(file);
-          const img = new Image();
-          img.decoding = 'async';
-          img.src = url;
-          await new Promise((resolve, reject) => {
-            img.onload = resolve;
-            img.onerror = reject;
-          });
-          bitmap = img;
-          URL.revokeObjectURL(url);
-        }
-      } catch (_) {
-        return null;
-      }
-
-      const srcW = bitmap.width;
-      const srcH = bitmap.height;
-      if (!srcW || !srcH) return null;
-
-      const longSide = Math.max(srcW, srcH);
-      const scale = longSide > maxLongSide ? maxLongSide / longSide : 1;
-      const dstW = Math.max(1, Math.round(srcW * scale));
-      const dstH = Math.max(1, Math.round(srcH * scale));
-
-      const canvas = document.createElement('canvas');
-      canvas.width = dstW;
-      canvas.height = dstH;
-      const ctx = canvas.getContext('2d', { alpha: false });
-      if (!ctx) return null;
-      ctx.drawImage(bitmap, 0, 0, dstW, dstH);
-
-      const blob = await new Promise((resolve) => {
-        canvas.toBlob(
-          (b) => resolve(b),
-          'image/jpeg',
-          quality
-        );
-      });
-      return blob || null;
-    };
-
-    for (const draft of drafts) {
-      activeDraft = draft;
+  await runUploadBatch(state, {
+    syncDrafts: syncUploadDraftsFromDom,
+    validateDrafts: validateUploadDrafts,
+    setLoading: setUploadLoading,
+    isDuplicate: (error) => asMessage(error).includes('APIエラー(409)'),
+    onValidationError: setUploadMetaStatus,
+    uploadDraft: async (draft, _index, targetQuestId) => {
       const file = draft.file;
-      try {
-        const folderId = state.selectedFolder.folderId;
-        const up = await api(`/folders/${folderId}/photos/upload-url`, {
-          method: 'POST',
-          headers: { ...folderPasswordHeader(folderId) },
-          body: JSON.stringify({ fileName: file.name, contentType: file.type || 'image/jpeg', size: file.size || 0 }),
-        });
-
-        let putRes;
-        try {
-          putRes = await fetch(up.originalUploadUrl, {
-            method: 'PUT',
-            headers: { 'content-type': file.type || 'image/jpeg' },
-            body: file,
-          });
-        } catch (error) {
-          throw new Error(tf('画像アップロード通信エラー: {message}', { message: asMessage(error) }));
-        }
-        if (!putRes.ok) {
-          throw new Error(tf('画像アップロード失敗({status})', { status: putRes.status }));
-        }
-
-        const resized = await resizeToJpeg(file, 2048, 0.82);
-        if (resized) {
-          let previewRes;
-          try {
-            previewRes = await fetch(up.previewUploadUrl, {
-              method: 'PUT',
-              headers: { 'content-type': 'image/jpeg' },
-              body: resized,
-            });
-          } catch (error) {
-            throw new Error(tf('リサイズ画像アップロード通信エラー: {message}', { message: asMessage(error) }));
-          }
-          if (!previewRes.ok) {
-            throw new Error(tf('リサイズ画像アップロード失敗({status})', { status: previewRes.status }));
-          }
-        }
-
-        await api(`/folders/${folderId}/photos`, {
-          method: 'POST',
-          headers: { ...folderPasswordHeader(folderId) },
-          body: JSON.stringify({
-            photoId: up.photoId,
-            originalS3Key: up.originalS3Key,
-            previewS3Key: resized ? up.previewS3Key : null,
-            logTag: normalizeLogTag(draft.logTag),
-            initialComment: targetQuestId ? null : String(draft.initialComment || '').trim() || null,
-            questId: targetQuestId,
-          }),
-        });
-        uploadedCount += 1;
-        uploadedDraftIds.push(draft.localId);
-      } catch (error) {
-        const message = asMessage(error);
-        if (message.includes('APIエラー(409)')) {
-          duplicateCount += 1;
-          continue;
-        }
-        throw error;
-      }
-    }
-
-    if (uploadedCount > 0) {
-      if (duplicateCount > 0) {
-        removeUploadedDrafts(uploadedDraftIds);
-      } else {
-        clearUploadDrafts();
-      }
+      const previewBlob = await resizeImageToJpeg(file, 2048, 0.82);
+      await appApi.uploadPhoto({
+        folderId: state.selectedFolder.folderId, file, previewBlob,
+        logTag: normalizeLogTag(draft.logTag),
+        initialComment: String(draft.initialComment || '').trim() || null,
+        questId: targetQuestId,
+      });
+    },
+    onUploaded: async ({ totalFiles, uploadedCount, duplicateCount, uploadedDraftIds }) => {
+      if (duplicateCount > 0) removeUploadedDrafts(uploadedDraftIds);
+      else clearUploadDrafts();
       await loadFolderContent();
       await scrollToActiveList();
       if (duplicateCount > 0) {
@@ -2854,35 +1186,31 @@ async function uploadFiles() {
       } else {
         showToast(tf('{uploaded}/{total}件アップロード完了。', { uploaded: uploadedCount, total: totalFiles }));
       }
-    }
-    if (duplicateCount > 0) {
-      if (totalFiles === 1) {
-        setUploadMetaStatus(t('同じ写真は同じコンテナにアップロードできません（重複を検知しました）。'));
-        return;
+    },
+    onComplete: ({ totalFiles, uploadedCount, duplicateCount }) => {
+      if (duplicateCount > 0) {
+        if (totalFiles === 1) {
+          setUploadMetaStatus(t('同じ写真は同じコンテナにアップロードできません（重複を検知しました）。'));
+          return;
+        }
+        if (duplicateCount === totalFiles) {
+          setUploadMetaStatus(t('すべて重複なのでアップロードができません。'));
+          return;
+        }
+        if (uploadedCount === 0) {
+          setUploadMetaStatus(tf('{duplicate}件は重複のためスキップしました。', { duplicate: duplicateCount }));
+        }
       }
-      if (duplicateCount === totalFiles) {
-        setUploadMetaStatus(t('すべて重複なのでアップロードができません。'));
-        return;
+    },
+    onError: async (error, activeDraft) => {
+      if (error && error.status === 402) {
+        await loadTeamMe();
+        if (els.uploadBtn) els.uploadBtn.disabled = Boolean(state.uploadBlocked);
       }
-      if (uploadedCount === 0) {
-        setUploadMetaStatus(tf('{duplicate}件は重複のためスキップしました。', { duplicate: duplicateCount }));
-      }
-    }
-  } catch (error) {
-    if (error && error.status === 402) {
-      await loadTeamMe();
-      if (els.uploadBtn) els.uploadBtn.disabled = Boolean(state.uploadBlocked);
-    }
-    setUploadMetaStatus(uploadErrorMessage(error, activeDraft?.originalName || ''));
-    console.error(error);
-  } finally {
-    setUploadLoading(false);
-  }
-}
-
-async function loadComments(photoId) {
-  const data = await api(`/photos/${photoId}/comments`, { method: 'GET' });
-  return data.items || [];
+      setUploadMetaStatus(uploadErrorMessage(error, activeDraft?.originalName || ''));
+      console.error(error);
+    },
+  });
 }
 
 function canDelete(item) {
@@ -2894,29 +1222,8 @@ function formatDateTime(value) {
   return new Date(value).toLocaleString(appLocale);
 }
 
-function setFolderDetailTab(tab) {
-  const nextTab = tab === 'search' ? 'search' : 'record';
-  state.folderDetailTab = nextTab;
-  const isSearch = nextTab === 'search';
-  if (els.recordTabBtn) {
-    els.recordTabBtn.classList.toggle('is-active', !isSearch);
-    els.recordTabBtn.setAttribute('aria-selected', isSearch ? 'false' : 'true');
-  }
-  if (els.searchTabBtn) {
-    els.searchTabBtn.classList.toggle('is-active', isSearch);
-    els.searchTabBtn.setAttribute('aria-selected', isSearch ? 'true' : 'false');
-  }
-  if (els.recordPanel) els.recordPanel.classList.toggle('hidden', isSearch);
-  if (els.searchPanel) els.searchPanel.classList.toggle('hidden', !isSearch);
-  renderFolderMode();
-}
-
 function renderFolderMode() {
-  const mode = currentFolderMode();
-  if (els.photoModePanel) els.photoModePanel.classList.toggle('hidden', mode !== 'photo');
-  if (els.questModePanel) els.questModePanel.classList.toggle('hidden', mode !== 'quest');
-  if (els.photoList) els.photoList.classList.toggle('hidden', mode !== 'photo');
-  if (els.questList) els.questList.classList.toggle('hidden', mode !== 'quest');
+  renderFolderModePanels(els, currentFolderMode());
 }
 
 function photosForCurrentSummary() {
@@ -2927,15 +1234,13 @@ function photosForCurrentSummary() {
 }
 
 function renderLogTagSummary(photos = photosForCurrentSummary()) {
-  if (!els.logTagSummary) return;
-  els.logTagSummary.innerHTML = '';
-  const counts = Object.fromEntries(LOG_TAGS.map((tag) => [tag.value, 0]));
-  (photos || []).forEach((photo) => {
-    const tag = normalizeLogTag(photo.logTag, 'other');
-    counts[tag] = (counts[tag] || 0) + 1;
-  });
-  LOG_TAGS.forEach((tag) => {
-    els.logTagSummary.appendChild(createLogTagBadge(tag.value, ` ${counts[tag.value] || 0}`));
+  renderLogTagSummaryInto(els.logTagSummary, photos, t);
+}
+
+function renderRentalComparison(photos = photosForCurrentSummary()) {
+  renderRentalComparisonInto(els.rentalComparison, els.rentalComparisonGrid, photos, {
+    enabled: Boolean(window.KANSA_MARKET?.isRental), translate: t,
+    createTagBadge: createLogTagBadge, onPreview: openPhotoPreview,
   });
 }
 
@@ -2962,243 +1267,80 @@ function filteredFolderPhotos() {
   return (photosForCurrentSummary() || []).filter(photoMatchesSearch);
 }
 
-function syncSearchControls() {
-  if (els.searchScopeFolderBtn) {
-    els.searchScopeFolderBtn.classList.toggle('is-active', state.photoSearchScope === 'folder');
-  }
-  if (els.searchScopeRoomBtn) {
-    els.searchScopeRoomBtn.classList.toggle('is-active', state.photoSearchScope === 'room');
-  }
-  if (els.logTagFilter && !els.logTagFilter.options.length) {
-    els.logTagFilter.appendChild(el('option', { value: 'all' }, t('すべて')));
-    LOG_TAGS.forEach((tag) => {
-      els.logTagFilter.appendChild(el('option', { value: tag.value }, t(tag.label)));
-    });
-  }
-  if (els.logTagFilter) els.logTagFilter.value = state.photoSearchTag || 'all';
-  if (els.photoSearchKeyword) els.photoSearchKeyword.value = state.photoSearchKeyword || '';
-}
-
 async function runPhotoSearch() {
-  state.photoSearchTag = els.logTagFilter?.value || 'all';
-  state.photoSearchKeyword = String(els.photoSearchKeyword?.value || '').trim();
-  state.roomSearchNextToken = null;
-  syncSearchControls();
-  if (state.photoSearchScope === 'room') {
-    if (!state.roomId) return;
-    const params = new URLSearchParams();
-    params.set('logTag', state.photoSearchTag || 'all');
-    params.set('sort', 'newest');
-    params.set('limit', '50');
-    if (state.photoSearchKeyword) params.set('keyword', state.photoSearchKeyword);
-    const data = await api(`/rooms/${encodeURIComponent(state.roomId)}/photos/search?${params.toString()}`, {
-      method: 'GET',
-    });
-    state.searchPhotos = data.items || [];
-    state.roomSearchNextToken = data.nextToken || null;
-  } else {
-    state.searchPhotos = filteredFolderPhotos();
-  }
+  const result = await runPhotoSearchState(appApi, state, {
+    tag: els.logTagFilter?.value,
+    keyword: els.photoSearchKeyword?.value,
+    filterFolder: filteredFolderPhotos,
+    onCriteriaChanged: syncSearchControls,
+  });
+  if (!result) return;
   renderSearchResults();
 }
 
 function renderSearchResults() {
-  if (!els.searchPhotoList) return;
-  els.searchPhotoList.innerHTML = '';
   syncSearchControls();
-  const photos = state.searchPhotos || [];
-  if (!photos.length) {
-    els.searchPhotoList.appendChild(el('div', { class: 'muted' }, t('条件に合う写真はなかです。')));
-    return;
-  }
-  photos.forEach((photo) => {
-    const card = el('div', { class: 'photo-card search-photo-card' });
-    const codeRow = el('div', { class: 'photo-card-meta-row' });
-    codeRow.appendChild(el('strong', {}, photo.photoCode || 'P---'));
-    codeRow.appendChild(createLogTagBadge(photo.logTag));
-    card.appendChild(codeRow);
-
-    const img = el('img', {
-      class: 'photo-card-image',
-      src: photo.viewUrl || '',
-      alt: photo.fileName || photo.photoId,
-      loading: 'lazy',
-    });
-    img.onclick = () => {
-      openPhotoPreview(photo);
-    };
-    img.onkeydown = (event) => {
-      if (!event || (event.key !== 'Enter' && event.key !== ' ')) return;
-      event.preventDefault();
-      openPhotoPreview(photo);
-    };
-    img.tabIndex = 0;
-    img.setAttribute('role', 'button');
-    img.setAttribute('aria-label', tf('{name} を全体表示', { name: photo.fileName || photo.photoId }));
-    card.appendChild(img);
-
-    if (photo.containerNumber || photo.folderTitle) {
-      card.appendChild(el('div', { class: 'muted' }, `コンテナ: ${photo.containerNumber || photo.folderTitle}`));
-    }
-    card.appendChild(el('div', { class: 'muted' }, tf('投稿: {name}', { name: photo.createdByName || '-' })));
-    els.searchPhotoList.appendChild(card);
+  renderSearchResultsInto(els.searchPhotoList, state.searchPhotos, {
+    translate: t, createTagBadge: createLogTagBadge, onPreview: openPhotoPreview,
   });
-}
-
-function sortQuests(items) {
-  const list = items.slice();
-  const rank = { open: 0, shooting: 1, done: 2 };
-  if (state.questSort === 'oldest') {
-    return list.sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
-  }
-  if (state.questSort === 'newest') {
-    return list.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
-  }
-  return list.sort((a, b) => {
-    const statusDiff = (rank[a.status] ?? 9) - (rank[b.status] ?? 9);
-    if (statusDiff) return statusDiff;
-    return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
-  });
-}
-
-function questStatusText(status) {
-  if (status === 'done') return t('完了');
-  if (status === 'shooting') return t('撮影中');
-  return t('未対応');
 }
 
 async function renderQuests() {
   if (!els.questList) return;
   els.questList.innerHTML = '';
   renderLogTagSummary();
-  const quests = sortQuests(state.quests || []);
+  const quests = sortQuests(state.quests || [], state.questSort);
   if (!quests.length) {
     els.questList.appendChild(el('div', { class: 'muted' }, t('クエストはまだなかです。')));
     return;
   }
   quests.forEach((quest) => {
-    const card = el('div', { class: `quest-card quest-status-${quest.status || 'open'}` });
-    const head = el('div', { class: 'quest-head' });
-    const title = el('div');
-    title.appendChild(el('strong', {}, quest.questCode || 'Q---'));
-    title.appendChild(el('span', { class: 'quest-status' }, questStatusText(quest.status)));
-    head.appendChild(title);
-    const actions = el('div', { class: 'comment-actions' });
-    if (state.isAdmin && quest.status !== 'done') {
-      const doneBtn = el('button', { type: 'button' }, t('完了'));
-      doneBtn.onclick = safeAction(async () => {
-        await api(`/quests/${quest.questId}`, {
-          method: 'PUT',
-          headers: { ...folderPasswordHeader(quest.folderId) },
-          body: JSON.stringify({ status: 'done' }),
-        });
-        await loadQuests();
-      }, 'クエスト完了');
-      actions.appendChild(doneBtn);
-    }
-    if (canDelete(quest)) {
-      const delBtn = el('button', { class: 'icon-btn danger', type: 'button', title: t('削除') }, '🗑');
-      delBtn.onclick = safeAction(async () => {
-        if (!window.confirm(t('このクエストを削除してよかですか？写真も消えます。'))) return;
-        await api(`/quests/${quest.questId}`, {
-          method: 'DELETE',
-          headers: { ...folderPasswordHeader(quest.folderId) },
-        });
-        await loadFolderContent();
-      }, 'クエスト削除');
-      actions.appendChild(delBtn);
-    }
-    head.appendChild(actions);
-    card.appendChild(head);
-    card.appendChild(el('div', { class: 'quest-text' }, quest.text || ''));
-    card.appendChild(el('div', { class: 'muted' }, `${t('投稿')} ${formatDateTime(quest.createdAt)} ${quest.createdByName || ''}`));
-
-    const photoWrap = el('div', { class: 'quest-photo-strip' });
-    (quest.photos || []).forEach((photo) => {
-      const tile = el('div', { class: 'quest-photo-tile' });
-      const img = el('img', {
-        src: photo.viewUrl || '',
-        alt: photo.fileName || photo.photoId,
-        loading: 'lazy',
-        title: photo.fileName || '',
-      });
-      img.onclick = () => openPhotoPreview(photo);
-      tile.appendChild(img);
-      tile.appendChild(createLogTagBadge(photo.logTag));
-      if (canDelete(photo)) {
-        const deletePhotoBtn = el('button', { class: 'icon-btn danger', type: 'button', title: t('写真削除') }, '🗑');
-        deletePhotoBtn.onclick = safeAction(async () => {
-          if (!window.confirm(t('この写真を削除してよかですか？'))) return;
-          await api(`/photos/${photo.photoId}`, { method: 'DELETE' });
-          await loadFolderContent();
-        }, '写真削除');
-        tile.appendChild(deletePhotoBtn);
-      }
-      photoWrap.appendChild(tile);
+    const questActions = createQuestMutationActions(appApi, quest, {
+      confirmDelete: () => window.confirm(t('このクエストを削除してよかですか？写真も消えます。')),
+      reloadQuests: loadQuests,
+      reloadFolder: loadFolderContent,
     });
-    if (!(quest.photos || []).length) {
-      photoWrap.appendChild(el('div', { class: 'muted' }, t('写真はまだなかです。')));
-    }
-    card.appendChild(photoWrap);
-
-    const addPhoto = el('div', { class: 'quest-add-photo' });
-    const fileInput = el('input', { class: 'js-quest-files', type: 'file', accept: 'image/*', multiple: 'multiple' });
-    fileInput.addEventListener('change', (event) => {
-      const files = Array.from(event.target.files || []);
-      if (files.length) rebuildUploadDrafts(files, quest.questId);
+    const commentActions = createQuestCommentMutationActions(appApi, quest, {
+      confirmDelete: () => window.confirm(t('このコメントを削除してよかですか？')),
+      reload: loadQuests,
     });
-    addPhoto.appendChild(fileInput);
-    card.appendChild(addPhoto);
-    card.appendChild(el('div', { class: 'quest-upload-slot', 'data-quest-id': quest.questId }));
-
-    const commentWrap = el('div', { class: 'comments quest-comments' });
-    (quest.comments || []).forEach((comment) => {
-      const row = el('div', { class: 'comment' });
-      row.appendChild(el('div', { class: 'comment-meta-text' }, `${formatDateTime(comment.updatedAt || comment.createdAt)} ${comment.createdByName || ''}`));
-      row.appendChild(el('div', { class: 'comment-text' }, comment.text));
-      if (canDelete(comment)) {
-        const ca = el('div', { class: 'comment-actions' });
-        const deleteBtn = el('button', { class: 'icon-btn danger', type: 'button', title: t('コメント削除') }, '🗑');
-        deleteBtn.onclick = safeAction(async () => {
-          if (!window.confirm(t('このコメントを削除してよかですか？'))) return;
-          await api(`/quests/${quest.questId}/comments/${comment.commentId}`, {
-            method: 'DELETE',
-            headers: { ...folderPasswordHeader(quest.folderId) },
-          });
-          await loadQuests();
-        }, 'コメント削除');
-        ca.appendChild(deleteBtn);
-        row.appendChild(ca);
-      }
-      commentWrap.appendChild(row);
+    const card = createQuestCardHeader(quest, {
+      translate: t, formatDateTime, isAdmin: state.isAdmin, canDelete: canDelete(quest),
+      onComplete: safeAction(questActions.complete, 'クエスト完了'),
+      onDelete: safeAction(questActions.remove, 'クエスト削除'),
     });
-    const addRow = el('div', { class: 'row', style: 'margin-top:8px;' });
-    const ta = el('textarea', { rows: '2', placeholder: t('コメント'), style: 'flex:1' });
-    const addBtn = el('button', { type: 'button' }, t('追加'));
-    addBtn.onclick = safeAction(async () => {
-      const text = ta.value.trim();
-      if (!text) return;
-      await api(`/quests/${quest.questId}/comments`, {
-        method: 'POST',
-        headers: { ...folderPasswordHeader(quest.folderId) },
-        body: JSON.stringify({ text }),
-      });
-      await loadQuests();
-    }, 'コメント追加');
-    addRow.appendChild(ta);
-    addRow.appendChild(addBtn);
-    commentWrap.appendChild(addRow);
+
+    appendQuestPhotoArea(card, quest, {
+      translate: t,
+      createTagBadge: createLogTagBadge,
+      canDelete,
+      onPreview: openPhotoPreview,
+      onDelete: safeAction((photo) => createPhotoMutationActions(appApi, photo, {
+        confirmDelete: () => window.confirm(t('この写真を削除してよかですか？')),
+        reload: loadFolderContent,
+      }).remove(), '写真削除'),
+      onFiles: (files) => rebuildUploadDrafts(files, quest.questId),
+    });
+
+    const commentWrap = createQuestCommentsSection(quest, {
+      translate: t,
+      formatDateTime,
+      canDelete,
+      onDelete: safeAction(commentActions.remove, 'コメント削除'),
+      onAdd: safeAction(commentActions.add, 'コメント追加'),
+    });
     card.appendChild(commentWrap);
     if (currentFolderMode() === 'quest') {
       const latestAt = quest.latestCommentAt || '';
       const latestBy = quest.latestCommentBy || '';
       const latestIncoming = latestAt && latestBy && latestBy !== state.userKey ? latestAt : '';
-      if (latestIncoming) markAsRead(questReadKey(quest.questId), latestIncoming);
+      if (latestIncoming) commentReadController.markAsRead(questReadKey(quest.questId), latestIncoming);
     }
     els.questList.appendChild(card);
   });
   if (state.uploadTargetQuestId) renderUploadDrafts();
   renderLogTagSummary();
+  renderRentalComparison();
 }
 
 async function renderPhotos() {
@@ -3206,6 +1348,7 @@ async function renderPhotos() {
   syncSearchControls();
   const photos = state.photos || [];
   renderLogTagSummary(photosForCurrentSummary());
+  renderRentalComparison(photosForCurrentSummary());
   if (!photos.length) {
     const archived = state.selectedFolderArchive || null;
     const emptyText =
@@ -3216,282 +1359,89 @@ async function renderPhotos() {
     return;
   }
   for (const photo of photos) {
-    const card = el('div', { class: 'photo-card' });
-
-    const codeRow = el('div', { class: 'photo-card-meta-row' });
-    codeRow.appendChild(el('strong', {}, photo.photoCode || 'P---'));
-    codeRow.appendChild(createLogTagBadge(photo.logTag));
-    card.appendChild(codeRow);
-
-    const img = el('img', {
-      class: 'photo-card-image',
-      src: photo.viewUrl || '',
-      alt: photo.fileName || photo.photoId,
-      loading: 'lazy',
+    const photoActions = createPhotoMutationActions(appApi, photo, {
+      confirmDelete: () => window.confirm(t('この写真を削除してよかですか？')),
+      beforeUpdate: () => preserveCurrentView(photo.photoId),
+      reload: loadPhotos,
     });
-    img.onclick = () => {
-      openPhotoPreview(photo);
-    };
-    img.onkeydown = (event) => {
-      if (!event || (event.key !== 'Enter' && event.key !== ' ')) return;
-      event.preventDefault();
-      openPhotoPreview(photo);
-    };
-    img.tabIndex = 0;
-    img.setAttribute('role', 'button');
-    img.setAttribute('aria-label', tf('{name} を全体表示', { name: photo.fileName || photo.photoId }));
-    card.appendChild(img);
-
-    card.appendChild(el('div', { class: 'muted' }, tf('投稿: {name}', { name: photo.createdByName })));
-
-    const photoEditWrap = el('div', { class: 'inline-edit js-photo-edit-wrap hidden' });
-    if (canDelete(photo)) {
-      const actions = el('div', { class: 'comment-actions' });
-      const editPhotoBtn = el(
-        'button',
-        { class: 'icon-btn js-edit-photo', type: 'button', title: t('タグ修正') },
-        `✎ ${t('タグ')}`
-      );
-      const delBtn = el(
-        'button',
-        { class: 'icon-btn danger js-del-photo', type: 'button', title: t('写真削除') },
-        '🗑'
-      );
-      actions.appendChild(editPhotoBtn);
-      actions.appendChild(delBtn);
-      card.appendChild(actions);
-    }
-    card.appendChild(photoEditWrap);
+    const photoCommentActions = createPhotoCommentMutationActions(appApi, photo, {
+      confirmDelete: () => window.confirm(t('このコメントを削除してよかですか？')),
+      beforeEdit: () => preserveCurrentView(photo.photoId),
+      reload: loadPhotos,
+    });
+    const { card, editWrap: photoEditWrap } = createPhotoCardShell(photo, {
+      translate: t, createTagBadge: createLogTagBadge, canEdit: canDelete(photo),
+      ariaLabel: tf('{name} を全体表示', { name: photo.fileName || photo.photoId }),
+      onPreview: openPhotoPreview,
+    });
 
     const latestAt = photo.latestCommentAt || '';
     const latestBy = photo.latestCommentBy || '';
-    let latestIncomingCommentAt = latestAt && latestBy && latestBy !== state.userKey ? latestAt : '';
+    const latestIncomingCommentAt = latestAt && latestBy && latestBy !== state.userKey ? latestAt : '';
     const unread = isUnread(photo.photoId, latestIncomingCommentAt);
 
-    const accordion = el('details', { class: 'comments-accordion' });
-    const summary = el('summary', { class: 'comments-summary' });
-    summary.appendChild(el('span', { class: 'accordion-marker', 'aria-hidden': 'true' }, '▶'));
-    const commentLabel = el('span', {}, t('コメント'));
-    summary.appendChild(commentLabel);
-    if (unread) summary.appendChild(el('span', { class: 'unread-badge' }, t('未読')));
-    accordion.appendChild(summary);
-
-    const commentWrap = el('div', { class: 'comments' });
-    commentWrap.appendChild(el('div', { class: 'muted' }, t('開いたら読み込みます')));
-    let commentsLoaded = false;
-
+    const {
+      accordion, summary, commentLabel, commentWrap, textArea, addButton: addBtn,
+    } = createPhotoCommentsAccordion({ unread, translate: t });
     const renderLoadedComments = (comments) => {
       commentWrap.innerHTML = '';
       comments.forEach((comment) => {
-        const stamp = comment.updatedAt ? t('修正') : t('投稿');
-        const stampAt = comment.updatedAt || comment.createdAt;
-
-        const row = el('div', { class: 'comment' });
-        const meta = el('div', { class: 'comment-meta' });
-        meta.appendChild(
-          el('span', { class: 'comment-meta-text' }, `${stamp} ${formatDateTime(stampAt)} ${comment.createdByName}`)
-        );
-        row.appendChild(meta);
-        row.appendChild(el('div', { class: 'comment-text' }, comment.text));
-
-        if (canDelete(comment)) {
-          const actions = el('div', { class: 'comment-actions' });
-          const editBtn = el('button', { class: 'icon-btn', type: 'button', title: t('コメント修正') }, '✎');
-          const deleteBtn = el('button', { class: 'icon-btn danger', type: 'button', title: t('コメント削除') }, '🗑');
-
-          editBtn.onclick = async () => {
-            if (row.querySelector('.js-comment-editor')) return;
-            const editor = el('div', { class: 'inline-edit js-comment-editor' });
-            const ta = el('textarea', { class: 'js-edit-text', rows: '3', style: 'flex:1' });
-            ta.value = comment.text || '';
-            const saveBtn = el('button', { class: 'js-save-edit', type: 'button' }, t('保存'));
-            const cancelBtn = el('button', { class: 'js-cancel-edit danger', type: 'button' }, t('取消'));
-            editor.appendChild(ta);
-            editor.appendChild(saveBtn);
-            editor.appendChild(cancelBtn);
-            row.appendChild(editor);
-
-            saveBtn.onclick = async () => {
-              const nextText = ta.value.trim();
-              if (!nextText) return;
-              preserveCurrentView(photo.photoId);
-              await api(`/photos/${photo.photoId}/comments/${comment.commentId}`, {
-                method: 'PUT',
-                body: JSON.stringify({ text: nextText }),
-              });
-              await loadPhotos();
-            };
-
-            cancelBtn.onclick = () => {
-              editor.remove();
-            };
-          };
-
-          deleteBtn.onclick = async () => {
-            if (!window.confirm(t('このコメントを削除してよかですか？'))) return;
-            await api(`/photos/${photo.photoId}/comments/${comment.commentId}`, { method: 'DELETE' });
-            await loadPhotos();
-          };
-
-          actions.appendChild(editBtn);
-          actions.appendChild(deleteBtn);
-          row.appendChild(actions);
-        }
-
-        commentWrap.appendChild(row);
+        commentWrap.appendChild(createPhotoCommentRow(comment, {
+          translate: t,
+          formatDateTime,
+          editable: canDelete(comment),
+          onEdit: photoCommentActions.edit,
+          onDelete: photoCommentActions.remove,
+        }));
       });
     };
-    accordion.appendChild(commentWrap);
-
-    const addRow = el('div', { class: 'row', style: 'margin-top:8px;' });
-    const textArea = el('textarea', {
-      class: 'js-comment-text',
-      placeholder: t('コメント'),
-      rows: '2',
-      style: 'flex:1',
-    });
-    const addBtn = el('button', { class: 'js-add-comment', type: 'button' }, t('追加'));
-    addRow.appendChild(textArea);
-    addRow.appendChild(addBtn);
-    accordion.appendChild(addRow);
-
-    if (state.openAccordions.has(photo.photoId)) {
-      accordion.open = true;
-    }
-    accordion.addEventListener('toggle', async () => {
-      if (accordion.open) {
-        state.openAccordions.add(photo.photoId);
-        if (!commentsLoaded) {
-          commentWrap.innerHTML = '';
-          commentWrap.appendChild(el('div', { class: 'muted' }, t('読み込み中...')));
-          const comments = await loadComments(photo.photoId);
-          commentsLoaded = true;
-          commentLabel.textContent = tf('コメント ({count})', { count: comments.length });
-          latestIncomingCommentAt = getLatestIncomingCommentAt(comments);
-          renderLoadedComments(comments);
-        }
-        markAsRead(photo.photoId, latestIncomingCommentAt);
-        const badge = summary.querySelector('.unread-badge');
-        if (badge) badge.remove();
-      } else {
-        state.openAccordions.delete(photo.photoId);
-      }
-      if (state.selectedFolder) {
-        await refreshFolderUnread([state.selectedFolder.folderId]);
-        renderFolders();
-      }
+    bindPhotoCommentsAccordionLifecycle({
+      accordion, summary, commentWrap, commentLabel, photoId: photo.photoId,
+      initiallyOpen: state.openAccordions.has(photo.photoId), translate: t,
+      formatCommentLabel: (count) => tf('コメント ({count})', { count }),
+      loadComments: () => loadComments(photo.photoId),
+      getLatestIncoming: (comments) => commentReadController.latestIncoming(comments),
+      renderComments: renderLoadedComments,
+      onOpenChange: (open) => open ? state.openAccordions.add(photo.photoId) : state.openAccordions.delete(photo.photoId),
+      onRead: (latest) => commentReadController.markAsRead(photo.photoId, latest),
+      onAfterToggle: () => commentReadController.refreshSelectedFolder(),
     });
 
-    let isAddingComment = false;
-    addBtn.onclick = async () => {
-      const text = textArea.value.trim();
-      if (isAddingComment || !text) return;
-      isAddingComment = true;
-      addBtn.disabled = true;
-      textArea.disabled = true;
-      try {
+    addBtn.onclick = createPhotoCommentAddHandler(appApi, photo, {
+      getText: () => textArea.value,
+      setBusy: (busy) => { addBtn.disabled = busy; textArea.disabled = busy; },
+      beforeAdd: () => {
         state.openAccordions.add(photo.photoId);
         state.restoreScrollY = window.scrollY;
-        await api(`/photos/${photo.photoId}/comments`, {
-          method: 'POST',
-          body: JSON.stringify({ text }),
-        });
-        await loadPhotos();
-      } catch (error) {
-        addBtn.disabled = false;
-        textArea.disabled = false;
-        isAddingComment = false;
-        throw error;
-      }
-    };
+      },
+      reload: loadPhotos,
+    });
 
-    const delBtn = card.querySelector('.js-del-photo');
-    const editPhotoBtn = card.querySelector('.js-edit-photo');
-    if (editPhotoBtn) {
-      editPhotoBtn.onclick = async () => {
-        if (!photoEditWrap.classList.contains('hidden')) return;
-        photoEditWrap.classList.remove('hidden');
-        photoEditWrap.innerHTML = '';
-        const input = createLogTagSelect(photo.logTag);
-        const saveBtn = el('button', { class: 'js-photo-name-save', type: 'button' }, t('保存'));
-        const cancelBtn = el('button', { class: 'js-photo-name-cancel danger', type: 'button' }, t('取消'));
-        photoEditWrap.appendChild(input);
-        photoEditWrap.appendChild(saveBtn);
-        photoEditWrap.appendChild(cancelBtn);
+    bindPhotoCardEditing({
+      card, editWrap: photoEditWrap, photo, translate: t, createTagSelect: createLogTagSelect,
+      onSave: (_photo, nextLogTag) => photoActions.updateLogTag(nextLogTag),
+      onDelete: photoActions.remove,
+    });
 
-        saveBtn.onclick = async () => {
-          const nextLogTag = normalizeLogTag(input.value, '');
-          if (!nextLogTag) return;
-          preserveCurrentView(photo.photoId);
-          await api(`/photos/${photo.photoId}`, {
-            method: 'PUT',
-            body: JSON.stringify({ logTag: nextLogTag }),
-          });
-          await loadPhotos();
-        };
-
-        cancelBtn.onclick = () => {
-          photoEditWrap.classList.add('hidden');
-          photoEditWrap.innerHTML = '';
-        };
-      };
-    }
-
-    if (delBtn) {
-      delBtn.onclick = async () => {
-        if (!window.confirm(t('この写真を削除してよかですか？'))) return;
-        await api(`/photos/${photo.photoId}`, { method: 'DELETE' });
-        await loadPhotos();
-      };
-    }
-
-    card.appendChild(accordion);
-    card.appendChild(
-      el('div', { class: 'muted', style: 'margin-top: 6px;' }, unread ? t('未読コメントがあります') : t('未読コメントなし'))
-    );
+    appendPhotoCardComments(card, accordion, unread, t);
     els.photoList.appendChild(card);
   }
 }
 
-if (els.loginBtn) {
-  els.loginBtn.onclick = safeAction(async () => {
-    await startLogin();
-  }, 'ログイン');
-}
-
-if (els.signupBtn) {
-  els.signupBtn.onclick = safeAction(async () => {
-    await startSignup();
-  }, '新規登録');
-}
-
-if (els.resetUserBtn) {
-  els.resetUserBtn.onclick = safeAction(async () => {
-    const current = state.userName || '';
-    const next = window.prompt(t('新しい表示名を入力してください。'), current);
-    if (next === null) {
-      closeMenu();
-      return;
-    }
-    const displayName = next.trim();
-    if (!displayName) {
-      window.alert(t('表示名は必須です。'));
-      closeMenu();
-      return;
-    }
-    await saveDisplayName(displayName);
-    state.userName = displayName;
-    if (els.currentName) {
-      els.currentName.textContent = state.userName;
-    }
-    renderTopStorageGraph();
-    showToast(t('表示名を更新しました。'));
-    closeMenu();
-  }, '名前変更');
-}
-
-if (els.logoutBtn) {
-  els.logoutBtn.onclick = () => {
+bindAuthControlEvents(els, {
+  onLogin: safeAction(startLogin, 'ログイン'),
+  onSignup: safeAction(startSignup, '新規登録'),
+  onResetUser: safeAction(createDisplayNameChangeHandler(appApi, state, {
+    promptName: (current) => window.prompt(t('新しい表示名を入力してください。'), current),
+    onInvalid: () => window.alert(t('表示名は必須です。')),
+    onSaved: () => {
+      if (els.currentName) els.currentName.textContent = state.userName;
+      renderTopStorageGraph();
+      showToast(t('表示名を更新しました。'));
+    },
+    onFinished: closeMenu,
+  }), '名前変更'),
+  onLogout: () => {
     resetRoomContext();
     clearAuth();
     closeMenu();
@@ -3501,453 +1451,163 @@ if (els.logoutBtn) {
     closeHelpModal();
     closeExportOptionsModal();
     closePhotoPreviewModal();
-
     if (hasCognitoConfig()) {
-      const logoutUrl = new URL(`https://${COGNITO_DOMAIN}.auth.${COGNITO_REGION}.amazoncognito.com/logout`);
-      logoutUrl.searchParams.set('client_id', COGNITO_CLIENT_ID);
-      logoutUrl.searchParams.set('logout_uri', COGNITO_REDIRECT_URI);
-      window.location.href = logoutUrl.toString();
+      window.location.href = cognitoClient.logoutUrl();
       return;
     }
-
     showAuthSetup();
-  };
-}
+  },
+});
 
-if (els.roomCreateCloseBtn) {
-  els.roomCreateCloseBtn.onclick = () => {
-    closeRoomCreateModal();
-  };
-}
+bindModalDismissEvents(els, [
+  { modalKey: 'roomCreateModal', closeKey: 'roomCreateCloseBtn', close: closeRoomCreateModal },
+  { modalKey: 'folderCreateModal', closeKey: 'folderCreateCloseBtn', close: closeFolderCreateModal },
+  { modalKey: 'folderPasswordModal', closeKey: 'folderPasswordCloseBtn', close: closeFolderPasswordModal },
+  { modalKey: 'helpModal', closeKey: 'helpCloseBtn', close: closeHelpModal },
+  { modalKey: 'developerModal', closeKey: 'developerCloseBtn', close: closeDeveloperModal },
+  { modalKey: 'photoPreviewModal', closeKey: 'photoPreviewCloseBtn', close: closePhotoPreviewModal },
+  { modalKey: 'lowStorageModal', closeKey: 'lowStorageCloseBtn', close: closeLowStorageModal },
+  { modalKey: 'exportOptionsModal', closeKey: 'exportOptionsCloseBtn', close: closeExportOptionsModal },
+]);
 
-if (els.roomCreateModal) {
-  els.roomCreateModal.onclick = (e) => {
-    if (e && e.target === els.roomCreateModal) {
-      closeRoomCreateModal();
-    }
-  };
-}
-
-if (els.folderCreateCloseBtn) {
-  els.folderCreateCloseBtn.onclick = () => {
-    closeFolderCreateModal();
-  };
-}
-
-if (els.folderCreateModal) {
-  els.folderCreateModal.onclick = (e) => {
-    if (e && e.target === els.folderCreateModal) {
-      closeFolderCreateModal();
-    }
-  };
-}
-
-if (els.folderPasswordCloseBtn) {
-  els.folderPasswordCloseBtn.onclick = () => {
-    closeFolderPasswordModal();
-  };
-}
-
-if (els.folderPasswordModal) {
-  els.folderPasswordModal.onclick = (e) => {
-    if (e && e.target === els.folderPasswordModal) {
-      closeFolderPasswordModal();
-    }
-  };
-}
-
-if (els.helpCloseBtn) {
-  els.helpCloseBtn.onclick = () => {
-    closeHelpModal();
-  };
-}
-
-if (els.helpModal) {
-  els.helpModal.onclick = (e) => {
-    if (e && e.target === els.helpModal) {
-      closeHelpModal();
-    }
-  };
-}
-
-if (els.developerCloseBtn) {
-  els.developerCloseBtn.onclick = () => {
-    closeDeveloperModal();
-  };
-}
-
-if (els.developerModal) {
-  els.developerModal.onclick = (e) => {
-    if (e && e.target === els.developerModal) {
-      closeDeveloperModal();
-    }
-  };
-}
-
-if (els.photoPreviewCloseBtn) {
-  els.photoPreviewCloseBtn.onclick = () => {
-    closePhotoPreviewModal();
-  };
-}
-
-if (els.photoPreviewModal) {
-  els.photoPreviewModal.onclick = (e) => {
-    if (e && e.target === els.photoPreviewModal) {
-      closePhotoPreviewModal();
-    }
-  };
-}
-
-if (els.lowStorageCloseBtn) {
-  els.lowStorageCloseBtn.onclick = () => {
-    closeLowStorageModal();
-  };
-}
-
-if (els.lowStorageModal) {
-  els.lowStorageModal.onclick = (e) => {
-    if (e && e.target === els.lowStorageModal) {
-      closeLowStorageModal();
-    }
-  };
-}
-
-if (els.exportOptionsCloseBtn) {
-  els.exportOptionsCloseBtn.onclick = () => {
-    closeExportOptionsModal();
-  };
-}
-
-if (els.exportOptionsModal) {
-  els.exportOptionsModal.onclick = (e) => {
-    if (e && e.target === els.exportOptionsModal) {
-      closeExportOptionsModal();
-    }
-  };
-}
-
-if (els.exportLoadingCloseBtn) {
-  els.exportLoadingCloseBtn.onclick = () => {
-    closeExportLoadingModal();
-  };
-}
-
-if (els.exportDownloadBtn) {
-  els.exportDownloadBtn.onclick = () => {
-    triggerExportDownload();
-  };
-}
-
-if (els.exportOpenTabBtn) {
-  els.exportOpenTabBtn.onclick = () => {
-    openExportInNewTab();
-  };
-}
-
-if (els.exportCopyLinkBtn) {
-  els.exportCopyLinkBtn.onclick = safeAction(async () => {
-    await copyExportLink();
-  }, '出力リンクコピー');
-}
-
-if (els.exportHighBtn) {
-  els.exportHighBtn.onclick = safeAction(async () => {
+bindExportControlEvents(els, {
+  onCloseLoading: closeExportLoadingModal,
+  onDownload: triggerExportDownload,
+  onOpenTab: openExportInNewTab,
+  onCopyLink: safeAction(copyExportLink, '出力リンクコピー'),
+  onHighQuality: safeAction(async () => {
     closeExportOptionsModal();
     await requestFolderExport('pptx_high');
-  }, '高画質PPT出力');
-}
-
-if (els.exportLightBtn) {
-  els.exportLightBtn.onclick = safeAction(async () => {
+  }, '高画質PPT出力'),
+  onLightweight: safeAction(async () => {
     closeExportOptionsModal();
     await requestFolderExport('pptx_light');
-  }, '軽量PPT出力');
-}
-
-if (els.exportPdfBtn) {
-  els.exportPdfBtn.onclick = safeAction(async () => {
+  }, '軽量PPT出力'),
+  onPdf: safeAction(async () => {
     closeExportOptionsModal();
     await requestFolderExport('pdf');
-  }, 'PDF出力');
-}
+  }, 'PDF出力'),
+});
 
-if (els.leaveRoomBtn) {
-  els.leaveRoomBtn.onclick = safeAction(async () => {
-    try {
-      const me = await api('/team/me', { method: 'GET' });
-      if (me && me.isAdmin) {
-        window.alert(t('管理者は脱退できません。お部屋管理から「お部屋を削除（全データ）」を実行してください。'));
-        closeMenu();
-        return;
-      }
-    } catch (_) {
-      // If /team/me fails, keep old behavior.
-    }
-    window.alert(t('メンバーをやめると、このお部屋には招待URLなしでは再参加できません。'));
-    const ok = window.confirm(t('本当にメンバーをやめますか？'));
-    if (!ok) {
-      closeMenu();
-      return;
-    }
-    // "脱退" means: mark membership as left, and clear active room selection.
-    try {
-      await api('/team/leave', { method: 'POST' });
-    } catch (_) {
-      // Ignore; local "leave" still proceeds.
-    }
-    resetRoomContext();
-    closeMenu();
-    showRoomSetup();
-    await loadMyRooms();
-  }, '脱退');
-}
+const leaveRoomHandler = createRoomLeaveHandler(appApi, {
+      onAdminBlocked: () => window.alert(managementUi.leaveAdminBlocked()),
+      onWarning: () => window.alert(managementUi.leaveWarning()),
+      confirmLeave: () => window.confirm(managementUi.confirmLeave()),
+      closeMenu, resetRoom: resetRoomContext, showSetup: showRoomSetup, reloadRooms: loadMyRooms,
+});
 
-if (els.refreshMyRoomsBtn) {
-  els.refreshMyRoomsBtn.onclick = safeAction(async () => {
-    await loadMyRooms();
-  }, '一覧更新');
-}
+bindManagementControlEvents(els, {
+  onLeaveRoom: safeAction(leaveRoomHandler, '脱退'),
+});
 
-if (els.createRoomMenuBtn) {
-  els.createRoomMenuBtn.onclick = safeAction(async () => {
-    closeMenu();
-    openRoomCreateModal();
-  }, 'お部屋作成');
-}
+bindManagementControlEvents(els, {
+  onRefreshRooms: safeAction(loadMyRooms, '一覧更新'),
+  onOpenRoomCreate: safeAction(async () => { closeMenu(); openRoomCreateModal(); }, 'お部屋作成'),
+  onOpenFolderCreate: safeAction(async () => { closeMenu(); openFolderCreateModal(); }, 'コンテナ登録'),
+  onOpenFolderPassword: safeAction(async () => { closeMenu(); openFolderPasswordModal(); }, 'コンテナパスワード'),
+  onOpenDeveloperDashboard: safeAction(openDeveloperDashboard, '開発者ダッシュボード'),
+  onOpenHelpMenu: safeAction(async () => { closeMenu(); openHelpModal(); }, '使い方表示'),
+  onOpenHelpUser: safeAction(openHelpModal, '使い方表示'),
+});
 
-if (els.openFolderCreateBtn) {
-  els.openFolderCreateBtn.onclick = safeAction(async () => {
-    closeMenu();
-    openFolderCreateModal();
-  }, 'コンテナ登録');
-}
+const createRoomHandler = createRoomCreationHandler(appApi, state, () => els.roomCreateName?.value, {
+      onInvalid: () => window.alert(roomCreationUi.invalid()),
+      closeAdmin: closeTeamAdminPanel, resetRoom: resetRoomContext, showApp,
+      onCreated: (roomName) => { closeRoomCreateModal(); window.alert(roomCreationUi.created(roomName)); },
+      describeError: asMessage,
+      onExistingRoom: () => window.alert(roomCreationUi.existingRoom()),
+      onNameConflict: () => window.alert(roomCreationUi.nameConflict()),
+      onError: (error) => window.alert(roomCreationUi.error(error)),
+});
 
-if (els.openFolderPasswordBtn) {
-  els.openFolderPasswordBtn.onclick = safeAction(async () => {
-    closeMenu();
-    openFolderPasswordModal();
-  }, 'コンテナパスワード');
-}
+const createInitialRoomHandler = createRoomCreationHandler(appApi, state, () => els.createRoomName.value, {
+    before: clearError,
+    onInvalid: () => showError(roomCreationUi.invalid()),
+    closeAdmin: closeTeamAdminPanel, resetRoom: resetRoomContext, showApp,
+    onCreated: (roomName) => window.alert(roomCreationUi.created(roomName)),
+    describeError: asMessage,
+    onExistingRoom: () => window.alert(roomCreationUi.existingRoom()),
+    onNameConflict: () => window.alert(roomCreationUi.nameConflict()),
+    onError: (error) => showError(roomCreationUi.error(error)),
+});
 
-if (els.developerDashboardBtn) {
-  els.developerDashboardBtn.onclick = safeAction(async () => {
-    await openDeveloperDashboard();
-  }, '開発者ダッシュボード');
-}
+const createFolderHandler = createFolderCreationHandler(appApi, () => ({
+  title: els.folderTitle.value, mode: els.folderMode?.value, password: els.folderPassword?.value,
+}), {
+    normalizeMode: normalizeFolderMode,
+    onInvalid: () => {
+      if (els.folderTitleError) { els.folderTitleError.textContent = folderCreationUi.invalid(); els.folderTitleError.classList.remove('hidden'); }
+      if (els.folderTitle) els.folderTitle.focus();
+    },
+    onValid: () => els.folderTitleError?.classList.add('hidden'),
+    getPlanLimit: (error) => { const body = parseApiErrorBody(error); return body?.code === 'FREE_PLAN_FOLDER_LIMIT_EXCEEDED' ? body : null; },
+    onPlanLimit: (body) => window.alert(folderCreationUi.planLimit(body)),
+    onCreated: (created) => {
+      els.folderTitle.value = '';
+      if (els.folderMode) els.folderMode.value = 'photo';
+      if (els.folderPassword) els.folderPassword.value = '';
+      closeFolderCreateModal();
+      showToast(folderCreationUi.created(created));
+    },
+    reloadFolders: loadFolders, selectFolder: selectFolderById,
+});
 
-if (els.helpMenuBtn) {
-  els.helpMenuBtn.onclick = safeAction(async () => {
-    closeMenu();
-    openHelpModal();
-  }, '使い方表示');
-}
+bindMutationControlEvents(els, {
+  onCreateRoom: safeAction(createRoomHandler, 'お部屋作成'),
+  onCreateInitialRoom: createInitialRoomHandler,
+  onCreateFolder: safeAction(createFolderHandler, 'コンテナ登録'),
+});
 
-if (els.helpUserLink) {
-  els.helpUserLink.onclick = safeAction(async () => {
-    openHelpModal();
-  }, '使い方表示');
-}
-
-if (els.roomCreateSubmitBtn) {
-  els.roomCreateSubmitBtn.onclick = safeAction(async () => {
-    const roomName = String(els.roomCreateName?.value || '').trim();
-    if (!roomName) {
-      window.alert(t('お部屋名を入力してください。'));
-      return;
-    }
-    try {
-      await createRoomAndEnter(roomName);
-      closeRoomCreateModal();
-      window.alert(tf('お部屋：{roomName} が作成されました。', { roomName }));
-    } catch (error) {
-      const message = asMessage(error);
-      if (message.includes('409')) {
-        if (message.includes('already has a room')) {
-          window.alert(t('すでに自分のお部屋を作成済みです（自分の部屋は1人1部屋）。'));
-        } else {
-          window.alert(t('同じ部屋名は作成できません。別の部屋名にしてください。'));
-        }
-        return;
-      }
-      window.alert(tf('お部屋作成失敗: {message}', { message }));
-    }
-  }, 'お部屋作成');
-}
-
-async function createRoomAndEnter(roomName) {
-  const value = String(roomName || '').trim();
-  if (!value) throw new Error(t('お部屋名を入力してください。'));
-  await api('/rooms/create', {
-    method: 'POST',
-    body: JSON.stringify({ roomName: value }),
-  });
-  // Creating a room implicitly changes the active room; clear room-scoped UI state.
-  closeTeamAdminPanel();
-  resetRoomContext();
-  state.roomName = value;
-  showApp();
-}
-
-els.createRoomBtn.onclick = async () => {
-  clearError();
-  const roomName = (els.createRoomName.value || '').trim();
-  if (!roomName) {
-    showError(t('お部屋名を入力してください。'));
-    return;
-  }
-  try {
-    await createRoomAndEnter(roomName);
-    window.alert(tf('お部屋：{roomName} が作成されました。', { roomName }));
-  } catch (error) {
-    const message = asMessage(error);
-    if (message.includes('409')) {
-      if (message.includes('already has a room')) {
-        window.alert(t('すでに自分のお部屋を作成済みです（自分の部屋は1人1部屋）。'));
-      } else {
-        window.alert(t('同じ部屋名は作成できません。別の部屋名にしてください。'));
-      }
-    } else {
-      showError(tf('お部屋作成失敗: {message}', { message }));
-    }
-  }
-};
-
-els.createFolderBtn.onclick = safeAction(async () => {
-  const title = els.folderTitle.value.trim();
-  if (!title) {
-    if (els.folderTitleError) {
-      els.folderTitleError.textContent = t('コンテナ番号を入力してください。');
-      els.folderTitleError.classList.remove('hidden');
-    }
-    if (els.folderTitle) els.folderTitle.focus();
-    return;
-  }
-  if (els.folderTitleError) els.folderTitleError.classList.add('hidden');
-  const folderPassword = String(els.folderPassword?.value || '').trim();
-  const mode = normalizeFolderMode(els.folderMode?.value);
-  let created;
-  try {
-    created = await api('/folders', {
-      method: 'POST',
-      body: JSON.stringify({ title, mode, folderPassword: folderPassword || null }),
-    });
-  } catch (error) {
-    const body = parseApiErrorBody(error);
-    if (body?.code === 'FREE_PLAN_FOLDER_LIMIT_EXCEEDED') {
-      window.alert(body.message || t('フリープランではコンテナは2つまでです。有料プランで無制限になります。'));
-      return;
-    }
-    throw error;
-  }
-  els.folderTitle.value = '';
-  if (els.folderMode) els.folderMode.value = 'photo';
-  if (els.folderPassword) els.folderPassword.value = '';
-  closeFolderCreateModal();
-  showToast(tf('コンテナ：{title} を登録しました。', { title: created.title }));
-  await loadFolders();
-  await selectFolderById(created.folderId);
-}, 'コンテナ登録');
-
-if (els.uploadBtn) {
-  els.uploadBtn.onclick = safeAction(async () => {
+bindMutationControlEvents(els, {
+  onUpload: safeAction(async () => {
     if (state.isUploading) return;
     await uploadFiles();
-  }, '写真アップロード');
-}
+  }, '写真アップロード'),
+  onCreateQuest: safeAction(async () => {
+    await runQuestCreation(state, els, {
+      text: els.questText?.value,
+      createQuest: (folderId, text) => appApi.createQuest(folderId, text),
+      onCreated: loadQuests,
+    });
+  }, 'クエスト作成'),
+  onExport: safeAction(async () => {
+    if (!state.selectedFolder) {
+      window.alert(t('先にコンテナを選択してください。'));
+      return;
+    }
+    closeMenu();
+    openExportOptionsModal();
+  }, 'PPT出力'),
+});
 
-if (els.photoFiles) {
-  els.photoFiles.addEventListener('change', (event) => {
+bindUploadControlEvents(els, {
+  onFilesChange: (event) => {
     const files = Array.from(event.target.files || []);
     rebuildUploadDrafts(files);
-  });
-}
-
-if (els.folderTitle) {
-  els.folderTitle.addEventListener('input', () => {
+  },
+  onFolderTitleInput: () => {
     if (els.folderTitle.value.trim() && els.folderTitleError) {
       els.folderTitleError.classList.add('hidden');
     }
-  });
-}
-
-if (els.questSort) {
-  els.questSort.addEventListener('change', (event) => {
+  },
+  onQuestSortChange: (event) => {
     state.questSort = event.target.value || 'status';
     renderQuests();
-  });
-}
+  },
+  onApplyBulkComment: applyBulkComment,
+  onCancelDrafts: cancelUploadDrafts,
+});
 
-if (els.createQuestBtn) {
-  els.createQuestBtn.onclick = safeAction(async () => {
-    if (state.isCreatingQuest) return;
-    if (!state.selectedFolder) return;
-    const text = String(els.questText?.value || '').trim();
-    if (!text) return;
-    const folderId = state.selectedFolder.folderId;
-    state.isCreatingQuest = true;
-    els.createQuestBtn.disabled = true;
-    if (els.questText) els.questText.disabled = true;
-    try {
-      await api(`/folders/${folderId}/quests`, {
-        method: 'POST',
-        headers: { ...folderPasswordHeader(folderId) },
-        body: JSON.stringify({ text }),
-      });
-      if (els.questText) els.questText.value = '';
-      await loadQuests();
-    } finally {
-      state.isCreatingQuest = false;
-      els.createQuestBtn.disabled = false;
-      if (els.questText) els.questText.disabled = false;
-    }
-  }, 'クエスト作成');
-}
-
-if (els.applyCommentBulkBtn) {
-  els.applyCommentBulkBtn.onclick = () => {
-    applyBulkComment();
-  };
-}
-
-if (els.cancelUploadDraftsBtn) {
-  els.cancelUploadDraftsBtn.onclick = () => {
-    cancelUploadDrafts();
-  };
-}
-
-els.exportBtn.onclick = safeAction(async () => {
-  if (!state.selectedFolder) {
-    window.alert(t('先にコンテナを選択してください。'));
-    return;
-  }
-  closeMenu();
-  openExportOptionsModal();
-}, 'PPT出力');
-
-if (els.teamAdminBtn && els.teamAdminCard) {
-  els.teamAdminBtn.onclick = safeAction(async () => {
-    els.teamAdminCard.classList.toggle('hidden');
-    closeMenu();
-    setTeamAdminMode(!els.teamAdminCard.classList.contains('hidden'));
-    await loadAdminPanel();
-  }, 'お部屋管理');
-}
-
-if (els.teamAdminBackBtn && els.teamAdminCard) {
-  els.teamAdminBackBtn.onclick = () => {
-    els.teamAdminCard.classList.add('hidden');
-    setTeamAdminMode(false);
-  };
-}
+bindManagementControlEvents(els, {
+  onOpenTeamAdmin: safeAction(() => teamAdminController.toggle(), 'お部屋管理'),
+  onCloseTeamAdmin: () => teamAdminController.close(),
+});
 
 async function startSubscriptionCheckout(plan) {
   const base = window.location.origin + window.location.pathname;
   const successUrl = `${base}?subscription=success&plan=${encodeURIComponent(plan)}&session_id={CHECKOUT_SESSION_ID}`;
   const cancelUrl = base;
-  const res = await api('/team/subscription/checkout', {
-    method: 'POST',
-    body: JSON.stringify({ plan, successUrl, cancelUrl }),
-  });
+  const res = await appApi.startSubscriptionCheckout({ plan, successUrl, cancelUrl });
   if (res && res.url) {
     window.location.href = res.url;
     return;
@@ -3956,268 +1616,132 @@ async function startSubscriptionCheckout(plan) {
 }
 
 async function changeSubscriptionPlan(targetPlan) {
-  const mode = String(state.billing?.billingMode || 'prepaid').toLowerCase();
-  const currentPlan = String(state.billing?.subscription?.currentPlan || 'FREE').toUpperCase();
-  const currentRank = subscriptionPlanRank(currentPlan);
-  const targetRank = subscriptionPlanRank(targetPlan);
-  if (!targetRank) throw new Error(t('プランが不正です。'));
-  if (mode !== 'subscription' || currentRank === 0) {
-    if (!window.confirm(subscriptionPlanChangeConfirmText(currentPlan, targetPlan, 'checkout'))) return;
-    await startSubscriptionCheckout(targetPlan);
-    return;
-  }
-  if (currentRank === targetRank) return;
-
-  const action = targetRank > currentRank ? 'upgrade' : 'downgrade';
-  if (!window.confirm(subscriptionPlanChangeConfirmText(currentPlan, targetPlan, action))) return;
-  await api('/team/subscription/change', {
-    method: 'POST',
-    body: JSON.stringify({ action, targetPlan }),
+  return runSubscriptionPlanChange(state, targetPlan, {
+    planRank: subscriptionPlanRank,
+    confirmChange: ({ currentPlan, targetPlan: nextPlan, action }) =>
+      window.confirm(subscriptionPlanChangeConfirmText(currentPlan, nextPlan, action)),
+    startCheckout: startSubscriptionCheckout,
+    changeSubscription: (change) => appApi.changeSubscription(change),
+    reload: async () => { await loadTeamMe(); await loadAdminPanel(); },
+    onChanged: ({ action, targetPlan: nextPlan }) => {
+      window.alert(subscriptionPlanUi.successText(nextPlan, action));
+    },
+    invalidPlanError: () => new Error(t('プランが不正です。')),
   });
-  await loadTeamMe();
-  await loadAdminPanel();
-
-  const label = planToDisplayLabel(targetPlan);
-  if (action === 'upgrade') {
-    window.alert(tf('{plan}へ変更しました。差額はStripeで即時請求されます。', { plan: label }));
-  } else {
-    window.alert(tf('{plan}へ変更しました。', { plan: label }));
-  }
 }
 
-if (els.subscribeBasicBtn) els.subscribeBasicBtn.onclick = safeAction(() => changeSubscriptionPlan('BASIC'), 'プラン変更');
-if (els.subscribePlusBtn) els.subscribePlusBtn.onclick = safeAction(() => changeSubscriptionPlan('PLUS'), 'プラン変更');
-if (els.subscribeProBtn) els.subscribeProBtn.onclick = safeAction(() => changeSubscriptionPlan('PRO'), 'プラン変更');
-if (els.subscribeFreeBtn) {
-  els.subscribeFreeBtn.onclick = safeAction(async () => {
-    const ok = window.confirm(freePlanReturnConfirmText());
-    if (!ok) return;
-    try {
-      await api('/team/subscription/change', { method: 'POST', body: JSON.stringify({ action: 'free' }) });
-    } catch (error) {
+bindBillingControlEvents(els, {
+  onBasic: safeAction(() => changeSubscriptionPlan('BASIC'), 'プラン変更'),
+  onPlus: safeAction(() => changeSubscriptionPlan('PLUS'), 'プラン変更'),
+  onPro: safeAction(() => changeSubscriptionPlan('PRO'), 'プラン変更'),
+  onFree: safeAction(() => runFreePlanChange({
+    confirmChange: () => window.confirm(freePlanReturnConfirmText()),
+    changeSubscription: (change) => appApi.changeSubscription(change),
+    getRequirements: (error) => {
       const body = parseApiErrorBody(error);
-      if (body?.code === 'FREE_PLAN_REQUIREMENTS_NOT_MET') {
-        window.alert(freePlanRequirementDialogText(body.constraints || {}));
-        return;
-      }
-      throw error;
-    }
-    await loadTeamMe();
-    await loadFolders();
-    await loadAdminPanel();
-    window.alert(freePlanReturnSuccessText());
-  }, 'フリープラン変更');
-}
-if (els.lowStorageChargeBtn) {
-  els.lowStorageChargeBtn.onclick = safeAction(async () => {
-    closeLowStorageModal();
-    if (els.teamAdminCard && els.teamAdminCard.classList.contains('hidden')) {
-      els.teamAdminCard.classList.remove('hidden');
-      setTeamAdminMode(true);
-      await loadAdminPanel();
-    }
-    const usage = Number(state.billing?.usageBytes || 0);
-    const gib = 1024 * 1024 * 1024;
-    const recommended = usage > 5 * gib ? 'PRO' : usage > gib ? 'PLUS' : 'BASIC';
-    await changeSubscriptionPlan(recommended);
-  }, '容量チャージ');
-}
-
-if (els.deleteTeamBtn) {
-  els.deleteTeamBtn.onclick = safeAction(async () => {
-    const ok = window.confirm(
-      t('このお部屋を削除すると、コンテナ/写真/コメント/課金情報が全て削除され、Stripeの定期課金も即時停止されます。よかですか？')
-    );
-    if (!ok) return;
-    const ok2 = window.confirm(t('本当によかですか？（取り消せません）'));
-    if (!ok2) return;
-    await api('/team/delete', { method: 'POST' });
-    window.alert(t('お部屋を削除しました。'));
-    resetRoomContext();
-    showRoomSetup();
-  }, 'お部屋削除');
-}
-
-if (els.accountDeleteBtn) {
-  els.accountDeleteBtn.onclick = safeAction(async () => {
-    // Guard by all memberships: if user owns any room, account deletion must be blocked.
-    const ownedRoom = await getOwnedRoomForGuard();
-    if (ownedRoom) {
-      await showOwnerDeleteGuard(ownedRoom);
-      closeMenu();
-      return;
-    }
-    const ok = window.confirm(t('アカウントを削除すると、このユーザーでは今後ログインできません。よかですか？'));
-    if (!ok) return;
-    const ok2 = window.confirm(t('本当によかですか？（アカウント削除後は取り消せません）'));
-    if (!ok2) return;
-    try {
-      await api('/account/delete', { method: 'POST', body: JSON.stringify({}) });
-    } catch (error) {
-      const msg = asMessage(error);
-      if (msg.includes('room owner must delete team first')) {
-        window.alert(t('作成者は先に「お部屋を削除（全データ）」を実行してください。'));
-        closeMenu();
-        return;
-      }
-      throw error;
-    }
-    window.alert(t('アカウントを削除しました。'));
-    closeMenu();
-    resetRoomContext();
-    clearAuth();
-    showAuthSetup();
-  }, '削除');
-}
-
-if (els.folderDeleteBtn) {
-  els.folderDeleteBtn.onclick = safeAction(async () => {
-    if (!state.selectedFolder) return;
-    const ok = window.confirm(t('このコンテナを削除すると、写真とコメントも消えます。よかですか？'));
-    if (!ok) return;
-    const folderId = state.selectedFolder.folderId;
-    await api(`/folders/${folderId}`, { method: 'DELETE', headers: { ...folderPasswordHeader(folderId) } });
-    window.alert(t('コンテナを削除しました。'));
-    state.selectedFolder = null;
-    state.searchPhotos = [];
-    els.folderDetail.classList.add('hidden');
-    await loadFolders();
-    await loadTeamMe();
-    await loadAdminPanel();
-  }, 'コンテナ削除');
-}
-
-if (els.setFolderPasswordBtn) {
-  els.setFolderPasswordBtn.onclick = safeAction(async () => {
-    if (!state.selectedFolder) return;
-    const folderId = state.selectedFolder.folderId;
-    const next = String(els.folderPasswordSet?.value || '').trim();
-    await api(`/folders/${folderId}/password`, {
-      method: 'PUT',
-      headers: { ...folderPasswordHeader(folderId) },
-      body: JSON.stringify({ folderPassword: next }),
-    });
-    if (next) state.folderPasswordById[folderId] = next;
-    else delete state.folderPasswordById[folderId];
-    if (els.folderPasswordSet) els.folderPasswordSet.value = '';
-    closeFolderPasswordModal();
-    showToast(t('コンテナの鍵を更新しました。'));
-    await loadFolders();
-  }, '鍵設定');
-}
-
-window.addEventListener('unhandledrejection', (event) => {
-  showError(tf('予期しないエラー: {message}', { message: asMessage(event.reason) }));
+      return body?.code === 'FREE_PLAN_REQUIREMENTS_NOT_MET' ? body.constraints || {} : null;
+    },
+    showRequirements: (constraints) => window.alert(freePlanRequirementDialogText(constraints)),
+    reload: async () => { await loadTeamMe(); await loadFolders(); await loadAdminPanel(); },
+    onChanged: () => window.alert(freePlanReturnSuccessText()),
+  }), 'フリープラン変更'),
+  onLowStorageCharge: safeAction(() => lowStorageController.charge({
+    closeModal: closeLowStorageModal,
+    openAdmin: () => teamAdminController.open({ load: false }),
+    loadAdmin: loadAdminPanel,
+    changePlan: changeSubscriptionPlan,
+  }), '容量チャージ'),
 });
 
-window.addEventListener('error', (event) => {
-  showError(tf('実行エラー: {message}', { message: asMessage(event.error || event.message) }));
+const deleteRoomHandler = createRoomDeleteHandler(appApi, {
+      confirmDelete: () => window.confirm(managementUi.confirmRoomDelete()),
+      confirmFinal: () => window.confirm(managementUi.confirmRoomDeleteFinal()),
+      onDeleted: () => window.alert(managementUi.roomDeleted()),
+      resetRoom: resetRoomContext,
+      showSetup: showRoomSetup,
+});
+const deleteAccountHandler = createAccountDeleteHandler(appApi, {
+      getOwnedRoom: getOwnedRoomForGuard,
+      onOwnerBlocked: showOwnerDeleteGuard,
+      confirmDelete: () => window.confirm(managementUi.confirmAccountDelete()),
+      confirmFinal: () => window.confirm(managementUi.confirmAccountDeleteFinal()),
+      isOwnerConflict: (error) => asMessage(error).includes('room owner must delete team first'),
+      onOwnerConflict: () => window.alert(managementUi.accountOwnerConflict()),
+      onDeleted: () => window.alert(managementUi.accountDeleted()),
+      closeMenu, resetRoom: resetRoomContext, clearAuth, showAuth: showAuthSetup,
 });
 
-window.addEventListener('resize', () => {
-  syncTopStorageGraphWidth();
+bindMutationControlEvents(els, {
+  onDeleteTeam: safeAction(deleteRoomHandler, 'お部屋削除'),
+  onDeleteAccount: safeAction(deleteAccountHandler, '削除'),
+});
+const deleteFolderHandler = createFolderDeleteHandler(appApi, state, () => state.selectedFolder, {
+      confirmDelete: () => window.confirm(folderManagementUi.confirmDelete()),
+      onDeleted: () => {
+        window.alert(folderManagementUi.deleted());
+        clearFolderSelectionState(state, {
+          clearDrafts: clearUploadDrafts,
+          hideDetail: () => els.folderDetail.classList.add('hidden'),
+          renderArchive: renderPhotoArchiveNote,
+        });
+      },
+      reloadFolders: loadFolders,
+      reloadTeam: loadTeamMe,
+      reloadPanel: loadAdminPanel,
+});
+const updateFolderPasswordHandler = createFolderPasswordHandler(appApi, state, () => ({
+  folderId: state.selectedFolder?.folderId,
+  password: els.folderPasswordSet?.value,
+}), {
+      onUpdated: () => {
+        if (els.folderPasswordSet) els.folderPasswordSet.value = '';
+        closeFolderPasswordModal();
+        showToast(folderManagementUi.passwordUpdated());
+      },
+      reloadFolders: loadFolders,
 });
 
-if (els.menuBtn && els.menuPanel) {
-  els.menuBtn.onclick = (event) => {
-    event.stopPropagation();
-    els.menuPanel.classList.toggle('hidden');
-  };
-  document.addEventListener('click', (event) => {
-    if (!els.menuPanel.contains(event.target) && event.target !== els.menuBtn) {
-      els.menuPanel.classList.add('hidden');
-    }
-  });
-}
-
-document.querySelectorAll('[data-menu-group]').forEach((group) => {
-  group.addEventListener('toggle', () => {
-    if (!group.open) return;
-    document.querySelectorAll('[data-menu-group]').forEach((other) => {
-      if (other !== group) other.open = false;
-    });
-  });
+bindMutationControlEvents(els, {
+  onDeleteFolder: safeAction(deleteFolderHandler, 'コンテナ削除'),
+  onSetFolderPassword: safeAction(updateFolderPasswordHandler, '鍵設定'),
 });
 
-if (els.currentFolderSelect) {
-  els.currentFolderSelect.addEventListener('change', async (event) => {
-    await safeAction(async () => {
-      const folderId = event.target.value;
-      await selectFolderById(folderId);
-    }, 'コンテナ選択')();
-  });
-}
+bindGlobalAppEvents({
+  elements: els,
+  onUnhandledRejection: (event) => showError(appErrorUi.unhandled(event.reason)),
+  onError: (event) => showError(appErrorUi.runtime(event.error || event.message)),
+  onResize: syncTopStorageGraphWidth,
+});
 
-if (els.currentRoomSelect) {
-  els.currentRoomSelect.addEventListener('change', async (event) => {
-    const nextRoomId = String(event.target.value || '');
-    const previousRoomId = String(state.roomId || '');
-    if (!nextRoomId || nextRoomId === previousRoomId) {
-      renderRoomSelect();
-      return;
-    }
-    const room = state.availableRooms.find((item) => String(item.roomId || '') === nextRoomId);
-    if (!room || String(room.memberStatus || '').toLowerCase() === 'disabled') {
-      renderRoomSelect();
-      return;
-    }
-    const ok = window.confirm(t('現在のお部屋を切り替えます。よろしいですか？'));
-    if (!ok) {
-      renderRoomSelect();
-      return;
-    }
-    await safeAction(async () => {
-      try {
-        await switchRoomById(room.roomId, room.roomName);
-      } catch (error) {
-        renderRoomSelect();
-        throw error;
-      }
-    }, 'お部屋切替')();
-  });
-}
-
-if (els.recordTabBtn) {
-  els.recordTabBtn.onclick = () => {
-    setFolderDetailTab('record');
-  };
-}
-
-if (els.searchTabBtn) {
-  els.searchTabBtn.onclick = safeAction(async () => {
+bindAppControlEvents(els, {
+  onFolderChange: safeAction((event) => selectFolderById(event.target.value), 'コンテナ選択'),
+  onRoomChange: safeAction((event) => runRoomChange(state, event.target.value, {
+    confirmSwitch: () => window.confirm(t('現在のお部屋を切り替えます。よろしいですか？')),
+    renderRoomSelect,
+    switchRoom: switchRoomById,
+  }), 'お部屋切替'),
+  onRecordTab: () => setFolderDetailTab('record'),
+  onSearchTab: safeAction(async () => {
     setFolderDetailTab('search');
     await runPhotoSearch();
-  }, '検索タブ切替');
-}
-
-if (els.searchScopeFolderBtn) {
-  els.searchScopeFolderBtn.onclick = safeAction(async () => {
-    state.photoSearchScope = 'folder';
-    state.roomSearchNextToken = null;
+  }, '検索タブ切替'),
+  onSearchScopeFolder: safeAction(async () => {
+    folderDetailController.setSearchScope('folder');
     await runPhotoSearch();
-  }, '検索範囲切替');
-}
-
-if (els.searchScopeRoomBtn) {
-  els.searchScopeRoomBtn.onclick = safeAction(async () => {
-    state.photoSearchScope = 'room';
+  }, '検索範囲切替'),
+  onSearchScopeRoom: safeAction(async () => {
+    folderDetailController.setSearchScope('room');
     await runPhotoSearch();
-  }, '検索範囲切替');
-}
-
-if (els.photoSearchBtn) {
-  els.photoSearchBtn.onclick = safeAction(async () => {
+  }, '検索範囲切替'),
+  onPhotoSearch: safeAction(async () => {
     await runPhotoSearch();
-  }, '写真検索');
-}
-
-if (els.logTagFilter) {
-  els.logTagFilter.onchange = safeAction(async () => {
+  }, '写真検索'),
+  onLogTagChange: safeAction(async () => {
     await runPhotoSearch();
-  }, 'タグ検索');
-}
-
-initUser().catch((error) => {
-  console.error(error);
-  showError(tf('初期化失敗: {message}', { message: asMessage(error) }));
+  }, 'タグ検索'),
 });
+
+startAppInitialization(initUser, { onError: (error) => {
+  console.error(error);
+  showError(appErrorUi.initialization(error));
+} });

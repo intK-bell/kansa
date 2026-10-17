@@ -3154,14 +3154,19 @@
 
   const currentLanguage = detectLanguage();
   const dictionary = TRANSLATIONS[currentLanguage] || {};
+  const marketProfile = window.KANSA_MARKET || null;
 
   function translateText(text) {
     const value = String(text || '');
     const compact = value.trim();
     if (!compact) return value;
-    const translated = dictionary[compact];
-    if (!translated) return value;
-    return value.replace(compact, translated);
+    const translated = dictionary[compact] || compact;
+    const marketTranslated =
+      marketProfile && typeof marketProfile.translate === 'function'
+        ? marketProfile.translate(compact, currentLanguage, translated)
+        : translated;
+    if (marketTranslated === compact) return value;
+    return value.replace(compact, marketTranslated);
   }
 
   function formatText(key, values = {}) {

@@ -140,6 +140,13 @@ sam deploy
 
 本番・開発環境の接続先は `frontend/config.js` で設定します。
 
+`frontend/index.html`と`frontend/demo.html`は、`frontend/app-shell.template.html`から生成します。画面構造を変更するときはテンプレートを編集し、次を実行してください。
+
+```bash
+node scripts/generate_frontend_pages.mjs
+node scripts/check_frontend_sync.mjs
+```
+
 - `apiBase`
 - `photoBucket`
 - `cognitoRegion`
@@ -153,6 +160,16 @@ Backendデプロイ後、CloudFormation Outputsの次の値を設定へ反映し
 - `PhotoBucketName`
 - `CognitoHostedUiDomain`
 - `CognitoUserPoolClientId`
+
+### 賃貸向けデモモード
+
+既存の港湾向けデータとAPIを変えず、表示だけを賃貸住宅の入退去・原状回復向けに切り替えられます。
+
+```text
+https://<frontend-host>/index.html?market=rental
+```
+
+画面上部の「表示モード」から `港湾版` と `賃貸デモ` を切り替えることもできます。賃貸デモでは、既存タグ値を互換利用して `搬入 → 入居時`、`搬出 → 退去時`、`シール → 設備`、`損傷 → 傷・汚れ` と表示し、入居時・退去時の写真比較パネルを追加します。
 
 ## API認証
 
