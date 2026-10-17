@@ -121,6 +121,10 @@ export function collectAppElements(root = document) {
     elements[key] = node;
   });
   elements.teamAdminCard = root.querySelector('#team-admin');
+  elements.subscribeFreeBtn = root.querySelector('#subscribe-free');
+  elements.subscribeBasicBtn = root.querySelector('#subscribe-basic');
+  elements.subscribePlusBtn = root.querySelector('#subscribe-plus');
+  elements.subscribeProBtn = root.querySelector('#subscribe-pro');
   elements.appHeaderControls = root.querySelector('.app-header-controls');
   return elements;
 }

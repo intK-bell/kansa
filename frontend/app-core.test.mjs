@@ -582,6 +582,10 @@ test('collects shared DOM references from element IDs', () => {
     { id: 'photo-list' },
     { id: 'developer-modal' },
     { id: 'team-admin' },
+    { id: 'subscribe-free' },
+    { id: 'subscribe-basic' },
+    { id: 'subscribe-plus' },
+    { id: 'subscribe-pro' },
   ];
   const controls = { className: 'app-header-controls' };
   const root = {
@@ -589,13 +593,19 @@ test('collects shared DOM references from element IDs', () => {
     querySelector: (selector) => {
       if (selector === '.app-header-controls') return controls;
       if (selector === '#team-admin') return nodes[3];
+      if (selector === '#subscribe-free') return nodes[4];
+      if (selector === '#subscribe-basic') return nodes[5];
+      if (selector === '#subscribe-plus') return nodes[6];
+      if (selector === '#subscribe-pro') return nodes[7];
       return null;
     },
   };
 
   assert.deepEqual(collectAppElements(root), {
     currentRoomSelect: nodes[0], photoList: nodes[1], developerModal: nodes[2], teamAdmin: nodes[3],
-    teamAdminCard: nodes[3], appHeaderControls: controls,
+    subscribeFree: nodes[4], subscribeBasic: nodes[5], subscribePlus: nodes[6], subscribePro: nodes[7],
+    teamAdminCard: nodes[3], subscribeFreeBtn: nodes[4], subscribeBasicBtn: nodes[5],
+    subscribePlusBtn: nodes[6], subscribeProBtn: nodes[7], appHeaderControls: controls,
   });
 });
 
