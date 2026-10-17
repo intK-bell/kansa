@@ -47,14 +47,35 @@
 
   var appButton = document.getElementById("to-app");
   var legalButton = document.getElementById("to-legal");
+  var marketSelect = document.getElementById("landing-market-select");
+  var market = (window.KANSA_MARKET && window.KANSA_MARKET.id) || params.get("market") || "port";
   var demoButtons = [
     document.getElementById("to-demo-top"),
     document.getElementById("to-demo-bottom"),
   ];
 
+  function hrefWithMarket(path) {
+    var url = new URL(path, window.location.href);
+    url.searchParams.set("market", market);
+    return url.pathname + url.search + url.hash;
+  }
+
+  if (marketSelect) {
+    marketSelect.value = market;
+    marketSelect.addEventListener("change", function (event) {
+      if (window.KANSA_MARKET && typeof window.KANSA_MARKET.select === "function") {
+        window.KANSA_MARKET.select(event.target.value);
+        return;
+      }
+      var url = new URL(window.location.href);
+      url.searchParams.set("market", event.target.value);
+      window.location.assign(url.toString());
+    });
+  }
+
   if (appButton) {
     appButton.addEventListener("click", function () {
-      window.location.href = "./index.html";
+      window.location.href = hrefWithMarket("./index.html");
     });
   }
 
@@ -67,7 +88,7 @@
   demoButtons.forEach(function (button) {
     if (button) {
       button.addEventListener("click", function () {
-        window.location.href = "./demo.html";
+        window.location.href = hrefWithMarket("./demo.html");
       });
     }
   });
