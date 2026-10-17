@@ -120,6 +120,7 @@ export function collectAppElements(root = document) {
     const key = node.id.replace(/-([a-z0-9])/g, (_, char) => char.toUpperCase());
     elements[key] = node;
   });
+  elements.teamAdminCard = root.querySelector('#team-admin');
   elements.appHeaderControls = root.querySelector('.app-header-controls');
   return elements;
 }

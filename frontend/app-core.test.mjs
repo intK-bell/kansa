@@ -581,15 +581,21 @@ test('collects shared DOM references from element IDs', () => {
     { id: 'current-room-select' },
     { id: 'photo-list' },
     { id: 'developer-modal' },
+    { id: 'team-admin' },
   ];
   const controls = { className: 'app-header-controls' };
   const root = {
     querySelectorAll: (selector) => selector === '[id]' ? nodes : [],
-    querySelector: (selector) => selector === '.app-header-controls' ? controls : null,
+    querySelector: (selector) => {
+      if (selector === '.app-header-controls') return controls;
+      if (selector === '#team-admin') return nodes[3];
+      return null;
+    },
   };
 
   assert.deepEqual(collectAppElements(root), {
-    currentRoomSelect: nodes[0], photoList: nodes[1], developerModal: nodes[2], appHeaderControls: controls,
+    currentRoomSelect: nodes[0], photoList: nodes[1], developerModal: nodes[2], teamAdmin: nodes[3],
+    teamAdminCard: nodes[3], appHeaderControls: controls,
   });
 });
 
